@@ -1,7 +1,7 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.5.3'
-    id 'io.spring.dependency-management' version '1.1.6'
+    id 'org.springframework.boot' version '3.5.16'
+    id 'io.spring.dependency-management' version '1.1.7'
 }
 
 group = 'com.example'
@@ -34,19 +34,19 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'  // SQLite/Postgres persistence
 
     // SQLite driver + Hibernate community dialect (dev/local default)
-    runtimeOnly   'org.xerial:sqlite-jdbc:3.46.1.0'
-    implementation 'org.hibernate.orm:hibernate-community-dialects:6.6.18.Final'
+    runtimeOnly   'org.xerial:sqlite-jdbc:3.53.4.0'
+    implementation 'org.hibernate.orm:hibernate-community-dialects:6.6.56.Final'
 
     // Postgres driver (production) — version managed by the Boot BOM so CVE
     // patches arrive with framework bumps instead of a stale pin.
     runtimeOnly   'org.postgresql:postgresql'
 
     // OpenAPI / Swagger UI at /swagger-ui.html
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.9.0'
 
     // Phase 1 safety: rate limiting + bucket cache + migrations
     implementation 'com.bucket4j:bucket4j-core:8.10.1'
-    implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
+    implementation 'com.github.ben-manes.caffeine:caffeine:3.2.4'
     implementation 'org.flywaydb:flyway-core'
     // Flyway 10+ moved per-vendor support into separate modules. Required for
     // Postgres because flyway-core no longer ships the Postgres parser.
@@ -62,14 +62,14 @@ dependencies {
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
     // Utilities
-    implementation 'org.apache.commons:commons-lang3:3.14.0'
-    implementation 'commons-io:commons-io:2.16.1'
+    implementation 'org.apache.commons:commons-lang3:3.20.0'
+    implementation 'commons-io:commons-io:2.22.0'
 
     // Lombok (optional but handy)
-    compileOnly 'org.projectlombok:lombok:1.18.34'
-    annotationProcessor 'org.projectlombok:lombok:1.18.34'
-    testCompileOnly 'org.projectlombok:lombok:1.18.34'
-    testAnnotationProcessor 'org.projectlombok:lombok:1.18.34'
+    compileOnly 'org.projectlombok:lombok:1.18.46'
+    annotationProcessor 'org.projectlombok:lombok:1.18.46'
+    testCompileOnly 'org.projectlombok:lombok:1.18.46'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.46'
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
@@ -79,8 +79,8 @@ dependencies {
     testRuntimeOnly   'com.h2database:h2'
 
     // Testcontainers — Postgres integration tests (real DB, real migrations)
-    testImplementation 'org.testcontainers:postgresql:1.20.4'
-    testImplementation 'org.testcontainers:junit-jupiter:1.20.4'
+    testImplementation 'org.testcontainers:postgresql:1.21.4'
+    testImplementation 'org.testcontainers:junit-jupiter:1.21.4'
 
     // MockWebServer — provider streaming + non-streaming wire tests
     testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
