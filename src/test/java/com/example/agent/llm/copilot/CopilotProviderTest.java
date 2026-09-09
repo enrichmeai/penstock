@@ -60,7 +60,7 @@ class CopilotProviderTest {
                 "system",
                 List.of(ChatMessage.user("hi")),
                 List.of(),
-                null))
+                (String) null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("GITHUB_COPILOT_TOKEN");
     }

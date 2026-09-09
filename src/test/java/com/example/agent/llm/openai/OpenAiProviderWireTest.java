@@ -3,8 +3,10 @@ package com.example.agent.llm.openai;
 import com.example.agent.config.AgentMetrics;
 import com.example.agent.config.AgentProperties;
 import com.example.agent.llm.CompletionResult;
+import com.example.agent.llm.LlmCallContext;
 import com.example.agent.model.ChatMessage;
 import com.example.agent.model.ToolCall;
+import com.example.agent.tools.ConfiguredCredentialResolver;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import okhttp3.mockwebserver.MockResponse;
@@ -16,12 +18,23 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class OpenAiProviderWireTest {
 
+    private static final String TEXT_RESPONSE = "{"
+            + "\"choices\":[{"
+            + "\"message\":{\"role\":\"assistant\",\"content\":\"Hello world\"},"
+            + "\"finish_reason\":\"stop\""
+            + "}],"
+            + "\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":5,\"total_tokens\":17}"
+            + "}";
+
     private MockWebServer server;
+    private AgentProperties props;
     private OpenAiProvider provider;
 
     @BeforeEach
@@ -29,17 +42,23 @@ class OpenAiProviderWireTest {
         server = new MockWebServer();
         server.start();
 
-        AgentProperties props = new AgentProperties();
+        props = new AgentProperties();
         AgentProperties.OpenAi cfg = props.getLlm().getOpenai();
         cfg.setApiKey("test-key");
         cfg.setBaseUrl(server.url("/").toString().replaceAll("/$", ""));
         cfg.setModel("gpt-4o");
+        props.getCredentials().setPerUser(Map.of("openai", Map.of("alice", "alice-virtual-key")));
 
-        provider = new OpenAiProvider(
+        provider = provider(props);
+    }
+
+    private static OpenAiProvider provider(AgentProperties props) {
+        return new OpenAiProvider(
                 props,
                 WebClient.builder(),
                 new ObjectMapper(),
-                new AgentMetrics(new SimpleMeterRegistry()));
+                new AgentMetrics(new SimpleMeterRegistry()),
+                new ConfiguredCredentialResolver(props));
     }
 
     @AfterEach
@@ -47,19 +66,13 @@ class OpenAiProviderWireTest {
         server.shutdown();
     }
 
+    private static MockResponse json(String body) {
+        return new MockResponse().setHeader("Content-Type", "application/json").setBody(body);
+    }
+
     @Test
     void completeReturnsTextResponse() throws Exception {
-        String body = "{"
-                + "\"choices\":[{"
-                + "\"message\":{\"role\":\"assistant\",\"content\":\"Hello world\"},"
-                + "\"finish_reason\":\"stop\""
-                + "}],"
-                + "\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":5,\"total_tokens\":17}"
-                + "}";
-
-        server.enqueue(new MockResponse()
-                .setHeader("Content-Type", "application/json")
-                .setBody(body));
+        server.enqueue(json(TEXT_RESPONSE));
 
         CompletionResult result = provider.complete(
                 "system",
@@ -74,6 +87,9 @@ class OpenAiProviderWireTest {
 
         RecordedRequest req = server.takeRequest();
         assertThat(req.getPath()).isEqualTo("/v1/chat/completions");
+        // Session-only entry point: no user known, so the configured key; no request ID to send.
+        assertThat(req.getHeader("Authorization")).isEqualTo("Bearer test-key");
+        assertThat(req.getHeader("X-Request-Id")).isNull();
     }
 
     @Test
@@ -94,9 +110,7 @@ class OpenAiProviderWireTest {
                 + "\"usage\":{\"prompt_tokens\":7,\"completion_tokens\":11,\"total_tokens\":18}"
                 + "}";
 
-        server.enqueue(new MockResponse()
-                .setHeader("Content-Type", "application/json")
-                .setBody(body));
+        server.enqueue(json(body));
 
         CompletionResult result = provider.complete(
                 "system",
@@ -111,5 +125,65 @@ class OpenAiProviderWireTest {
         assertThat(call.arguments()).containsEntry("path", "foo.txt");
         assertThat(result.usage().inputTokens()).isEqualTo(7);
         assertThat(result.usage().outputTokens()).isEqualTo(11);
+    }
+
+    @Test
+    void perUserGatewayKeyIsChosenOverTheConfiguredKeyAndTheRequestIdTravels() throws Exception {
+        server.enqueue(json(TEXT_RESPONSE));
+
+        provider.complete("system", List.of(ChatMessage.user("hi")), List.of(),
+                new LlmCallContext("alice", "session-3", "req-77"));
+
+        RecordedRequest req = server.takeRequest();
+        assertThat(req.getHeader("Authorization")).isEqualTo("Bearer alice-virtual-key");
+        assertThat(req.getHeader("X-Request-Id")).isEqualTo("req-77");
+    }
+
+    @Test
+    void usersWithoutTheirOwnKeyFallBackToTheConfiguredKey() throws Exception {
+        server.enqueue(json(TEXT_RESPONSE));
+
+        provider.complete("system", List.of(ChatMessage.user("hi")), List.of(),
+                new LlmCallContext("bob", "session-4", "req-78"));
+
+        RecordedRequest req = server.takeRequest();
+        assertThat(req.getHeader("Authorization")).isEqualTo("Bearer test-key");
+        assertThat(req.getHeader("X-Request-Id")).isEqualTo("req-78");
+    }
+
+    @Test
+    void noCredentialAtAllIsAConfigurationErrorBeforeAnyCall() {
+        props.getLlm().getOpenai().setApiKey(null);
+        OpenAiProvider noServiceKey = provider(props);
+
+        assertThatThrownBy(() -> noServiceKey.complete("system", List.of(ChatMessage.user("hi")), List.of(),
+                new LlmCallContext("bob", "session-5", null)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("agent.credentials.per-user.openai.bob")
+                .hasMessageContaining("OPENAI_API_KEY");
+        assertThat(server.getRequestCount()).isZero();
+    }
+
+    @Test
+    void perUserKeyAloneIsEnoughWithNoServiceKeyConfigured() throws Exception {
+        props.getLlm().getOpenai().setApiKey(null);
+        server.enqueue(json(TEXT_RESPONSE));
+
+        provider(props).complete("system", List.of(ChatMessage.user("hi")), List.of(),
+                new LlmCallContext("alice", "session-6", null));
+
+        assertThat(server.takeRequest().getHeader("Authorization")).isEqualTo("Bearer alice-virtual-key");
+    }
+
+    @Test
+    void aLiteLlmStyleBaseUrlComposesToTheV1CompletionsPath() throws Exception {
+        // LiteLLM is addressed as http://litellm:4000 and serves /v1/chat/completions; a
+        // trailing slash on the base URL must not double the slash or lose the path.
+        props.getLlm().getOpenai().setBaseUrl(server.url("/").toString());
+        server.enqueue(json(TEXT_RESPONSE));
+
+        provider(props).complete("system", List.of(ChatMessage.user("hi")), List.of(), "session-7");
+
+        assertThat(server.takeRequest().getPath()).isEqualTo("/v1/chat/completions");
     }
 }

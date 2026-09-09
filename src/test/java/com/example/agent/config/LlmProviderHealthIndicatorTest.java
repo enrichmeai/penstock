@@ -234,4 +234,28 @@ class LlmProviderHealthIndicatorTest {
         assertThat(health.getStatus().getCode()).isEqualTo("DOWN");
         assertThat(health.getDetails()).containsEntry("provider", "copilot");
     }
+
+    @Test
+    void openAiWithOnlyPerUserGatewayKeysReturnsUp() {
+        // A deployment where every employee carries a virtual key may have no service key.
+        LlmProvider provider = new StubLlmProvider("openai");
+        AgentProperties props = createProperties("openai", null, null);
+        props.getCredentials().setPerUser(java.util.Map.of("openai", java.util.Map.of("alice", "alice-virtual-key")));
+        LlmProviderHealthIndicator indicator = new LlmProviderHealthIndicator(provider, props, new com.example.agent.llm.ToolCallFormatObserver());
+
+        assertThat(indicator.health().getStatus().getCode()).isEqualTo("UP");
+    }
+
+    @Test
+    void openAiWithBlankPerUserKeysAndNoServiceKeyReturnsDown() {
+        LlmProvider provider = new StubLlmProvider("openai");
+        AgentProperties props = createProperties("openai", null, null);
+        props.getCredentials().setPerUser(java.util.Map.of("openai", java.util.Map.of("alice", "")));
+        LlmProviderHealthIndicator indicator = new LlmProviderHealthIndicator(provider, props, new com.example.agent.llm.ToolCallFormatObserver());
+
+        Health health = indicator.health();
+
+        assertThat(health.getStatus().getCode()).isEqualTo("DOWN");
+        assertThat(health.getDetails()).containsEntry("reason", "OpenAI API key not configured");
+    }
 }

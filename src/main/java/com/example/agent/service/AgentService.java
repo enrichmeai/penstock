@@ -2,8 +2,10 @@ package com.example.agent.service;
 
 import com.example.agent.config.AgentProperties;
 import com.example.agent.llm.CompletionResult;
+import com.example.agent.llm.LlmCallContext;
 import com.example.agent.llm.LlmProvider;
 import com.example.agent.model.*;
+import com.example.agent.tools.ToolContext;
 import com.example.agent.tools.ToolRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,14 +53,23 @@ public class AgentService {
 
     /** Synchronous: runs the full loop, returns all new messages. */
     public List<ChatMessage> chat(Session session, String userInput) {
+        return chat(session, userInput, TurnContext.none());
+    }
+
+    /**
+     * Synchronous, with what the inbound request carried: its request ID (sent on every
+     * outbound call this turn makes) and the caller's own bearer (for tools that act as
+     * the signed-in user). Identity itself travels on the session.
+     */
+    public List<ChatMessage> chat(Session session, String userInput, TurnContext turn) {
         List<ChatMessage> produced = new ArrayList<>();
-        runTurn(session, userInput, produced::add, NO_TOKEN);
+        runTurn(session, userInput, turn, produced::add, NO_TOKEN);
         return produced;
     }
 
     /** Streaming: invokes {@code onMessage} for every message as it's produced. */
     public void chatStreaming(Session session, String userInput, Consumer<ChatMessage> onMessage) {
-        runTurn(session, userInput, onMessage, NO_TOKEN);
+        runTurn(session, userInput, TurnContext.none(), onMessage, NO_TOKEN);
     }
 
     /**
@@ -71,15 +82,31 @@ public class AgentService {
                               String userInput,
                               Consumer<ChatMessage> onMessage,
                               Consumer<String> onToken) {
-        runTurn(session, userInput, onMessage, onToken);
+        runTurn(session, userInput, TurnContext.none(), onMessage, onToken);
+    }
+
+    /** {@link #chatStreaming(Session, String, Consumer, Consumer)} with the inbound request's context. */
+    public void chatStreaming(Session session,
+                              String userInput,
+                              TurnContext turn,
+                              Consumer<ChatMessage> onMessage,
+                              Consumer<String> onToken) {
+        runTurn(session, userInput, turn, onMessage, onToken);
     }
 
     private static final Consumer<String> NO_TOKEN = s -> {};
 
     private void runTurn(Session session,
                          String userInput,
+                         TurnContext turn,
                          Consumer<ChatMessage> emit,
                          Consumer<String> onToken) {
+        // Everything downstream needs about the caller, resolved here once: the
+        // provider gets identity and request ID (never the inbound bearer); tools
+        // get the same plus the bearer, for the one mode that forwards it.
+        LlmCallContext llmContext = new LlmCallContext(session.getUserId(), session.getId(), turn.requestId());
+        ToolContext toolContext = new ToolContext(session.getUserId(), session.getId(), turn.requestId(), turn.bearer());
+
         ChatMessage userMsg = ChatMessage.user(userInput);
         appendAndEmit(session, userMsg, emit);
 
@@ -115,13 +142,13 @@ public class AgentService {
                                 props.getLlm().getSystemPrompt(),
                                 windowedHist,
                                 tools.specs(),
-                                session.getId(),
+                                llmContext,
                                 onToken)
                         : llm.complete(
                                 props.getLlm().getSystemPrompt(),
                                 windowedHist,
                                 tools.specs(),
-                                session.getId());
+                                llmContext);
             } catch (RuntimeException | Error e) {
                 if (auditLogger != null) {
                     auditLogger.llmCall(session.getUserId(), session.getId(), llm.name(), 0, 0, false);
@@ -166,7 +193,7 @@ public class AgentService {
             List<ToolResult> results = new ArrayList<>();
             for (ToolCall call : assistant.toolCalls()) {
                 log.info("LLM invoked tool: {} args={}", call.name(), call.arguments());
-                results.add(tools.invoke(call, session.getId(), session.getUserId()));
+                results.add(tools.invoke(call, toolContext));
             }
             appendAndEmit(session, ChatMessage.tool(results), emit);
         }

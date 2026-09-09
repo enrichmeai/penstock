@@ -127,19 +127,33 @@ public class SecurityConfig {
         return new ProviderManager(provider);
     }
 
-    @Bean
-    @ConditionalOnProperty(prefix = "agent.auth", name = "mode", havingValue = "oidc")
-    public JwtDecoder jwtDecoder() {
-        AgentProperties.Oidc oidc = props.getAuth().getOidc();
+    /**
+     * The first thing oidc mode checks at startup, and the failure a mis-nested
+     * {@code oidc:} block in application.yml produced: the documented
+     * {@code AGENT_OIDC_ISSUER_URI} bound nothing under {@code agent.auth}.
+     * Separate from {@link #jwtDecoder()} so {@code RelaxedEnvBindingTest} can run
+     * the exact check against the real configuration file without building a
+     * decoder — {@link JwtDecoders#fromIssuerLocation} fetches the issuer's
+     * discovery document eagerly.
+     */
+    static String requireIssuerUri(AgentProperties.Oidc oidc) {
         if (oidc.getIssuerUri() == null || oidc.getIssuerUri().isBlank()) {
             throw new IllegalStateException(
                     "agent.auth.mode=oidc requires agent.auth.oidc.issuer-uri to be set.");
         }
-        NimbusJwtDecoder decoder = JwtDecoders.fromIssuerLocation(oidc.getIssuerUri());
+        return oidc.getIssuerUri();
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "agent.auth", name = "mode", havingValue = "oidc")
+    public JwtDecoder jwtDecoder() {
+        AgentProperties.Oidc oidc = props.getAuth().getOidc();
+        String issuerUri = requireIssuerUri(oidc);
+        NimbusJwtDecoder decoder = JwtDecoders.fromIssuerLocation(issuerUri);
 
         List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
         validators.add(new JwtTimestampValidator(Duration.ofSeconds(oidc.getClockSkewSeconds())));
-        validators.add(new JwtIssuerValidator(oidc.getIssuerUri()));
+        validators.add(new JwtIssuerValidator(issuerUri));
         if (oidc.getAudience() != null && !oidc.getAudience().isBlank()) {
             validators.add(jwt -> jwt.getAudience() != null && jwt.getAudience().contains(oidc.getAudience())
                     ? OAuth2TokenValidatorResult.success()

@@ -72,18 +72,20 @@ agent:
     # No shipped default: unset (or the historical "change-me") means a random
     # password is generated and logged at startup — see SecurityConfig.
     password: ${AGENT_AUTH_PASSWORD:}
+    # ---- OIDC-mode (production) ----
+    # Nested under auth: — AgentProperties.Auth.oidc and SecurityConfig read
+    # agent.auth.oidc.*. RelaxedEnvBindingTest pins that AGENT_OIDC_* lands here.
+    oidc:
+      issuer-uri:       ${AGENT_OIDC_ISSUER_URI:}
+      audience:         ${AGENT_OIDC_AUDIENCE:}
+      principal-claim:  ${AGENT_OIDC_PRINCIPAL_CLAIM:sub}
+      clock-skew-seconds: ${AGENT_OIDC_CLOCK_SKEW_SECONDS:30}
 
   cors:
     # Comma-separated origins granted CORS WITH credentials; "*" allows any
     # origin WITHOUT credentials; empty (default) = no cross-origin access.
     # The bundled UI is served same-origin and needs none of this.
     allowed-origins: ${AGENT_CORS_ALLOWED_ORIGINS:}
-    # ---- OIDC-mode (production) ----
-    oidc:
-      issuer-uri:       ${AGENT_OIDC_ISSUER_URI:}
-      audience:         ${AGENT_OIDC_AUDIENCE:}
-      principal-claim:  ${AGENT_OIDC_PRINCIPAL_CLAIM:sub}
-      clock-skew-seconds: ${AGENT_OIDC_CLOCK_SKEW_SECONDS:30}
 
   sse:
     core-pool-size: 4
@@ -212,11 +214,21 @@ agent:
       token: ${JIRA_API_TOKEN:}
 
     # The agent's own pod. Blank disables the tool.
-    # The credential is this agent's, not its user's: the pod resolves it to this
-    # application's WebID, so a grant to the agent is a grant to it alone.
+    # By default the credential is this agent's, not its user's: the pod resolves it
+    # to this application's WebID, so a grant to the agent is a grant to it alone.
     cistern:
       base-url: ${CISTERN_BASE_URL:}
       token: ${CISTERN_AGENT_TOKEN:}
+      # Whose credential the pod sees — service | per-user | forward
+      # (CredentialMode). Env: AGENT_TOOLS_CISTERN_CREDENTIALMODE.
+      credential-mode: service
+
+  # Per-user outbound credentials — none provisioned by default. Property form keeps
+  # the user id verbatim (bracket it if it contains '@' or similar); the env form
+  # lower-cases it, cannot express '@' or '-', and the prefix must be PERUSER:
+  #   agent.credentials.per-user.openai.alice: sk-...      (gateway key for alice)
+  #   AGENT_CREDENTIALS_PERUSER_OPENAI_ALICE=sk-...        (same, from the environment)
+  #   agent.credentials.per-user.cistern.alice: ...        (with credential-mode: per-user)
 
 logging:
   level:

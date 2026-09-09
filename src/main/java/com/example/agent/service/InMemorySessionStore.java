@@ -4,6 +4,7 @@ import com.example.agent.config.CurrentUser;
 import com.example.agent.controller.dto.SessionSummary;
 import com.example.agent.model.ChatMessage;
 import com.example.agent.model.Session;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +26,12 @@ public class InMemorySessionStore implements SessionStore {
         this(null);   // anonymous mode for unit tests without Spring
     }
 
+    /**
+     * The constructor Spring must use. With two constructors and no annotation Spring
+     * picks the no-arg one, which left every session stamped "anonymous" in memory mode
+     * and visible to every caller — {@code MemoryModeOwnershipIT} pins the fix.
+     */
+    @Autowired
     public InMemorySessionStore(CurrentUser currentUser) {
         this.currentUser = currentUser;
     }
