@@ -3,6 +3,7 @@ package com.example.agent.config;
 import com.example.agent.tools.CredentialMode;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.MapPropertySource;
@@ -15,6 +16,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Environment variables bind through Spring Boot's relaxed rules. For a bean property the
@@ -51,6 +53,16 @@ class RelaxedEnvBindingTest {
 
     private static void bound(Map<String, String> env, Consumer<AgentProperties> assertions) {
         withEnvironment(env).run(ctx -> assertions.accept(ctx.getBean(AgentProperties.class)));
+    }
+
+    /**
+     * The same environment, but with the real {@code application.yml} loaded — for the
+     * names that exist only as {@code ${ENV:default}} placeholders in that file.
+     */
+    private static void boundThroughYml(Map<String, String> env, Consumer<AgentProperties> assertions) {
+        withEnvironment(env)
+                .withInitializer(new ConfigDataApplicationContextInitializer())
+                .run(ctx -> assertions.accept(ctx.getBean(AgentProperties.class)));
     }
 
     // ---------- agent.tools.cistern.credential-mode ----------
@@ -134,5 +146,57 @@ class RelaxedEnvBindingTest {
                 .withUserConfiguration(Cfg.class)
                 .run(ctx -> assertThat(ctx.getBean(AgentProperties.class).getCredentials().getPerUser().get("openai"))
                         .containsOnlyKeys("aliceexample.com"));
+    }
+
+    // ---------- agent.auth.oidc.* — placeholders that live only in application.yml ----------
+
+    private static final String ISSUER = "http://keycloak:8080/realms/cistern";
+
+    @Test
+    void oidcSettingsBindFromTheDocumentedEnvNamesThroughApplicationYml() {
+        // Found when the real stack booted: the oidc: block sat under cors: in
+        // application.yml, so these placeholders defined agent.cors.oidc.* and
+        // AgentProperties.Auth.oidc saw nothing.
+        boundThroughYml(Map.of(
+                "AGENT_AUTH_MODE", "oidc",
+                "AGENT_OIDC_ISSUER_URI", ISSUER,
+                "AGENT_OIDC_AUDIENCE", "penstock",
+                "AGENT_OIDC_PRINCIPAL_CLAIM", "preferred_username",
+                "AGENT_OIDC_CLOCK_SKEW_SECONDS", "45"), props -> {
+            AgentProperties.Auth auth = props.getAuth();
+            assertThat(auth.getMode()).isEqualTo("oidc");
+            assertThat(auth.getOidc().getIssuerUri()).isEqualTo(ISSUER);
+            assertThat(auth.getOidc().getAudience()).isEqualTo("penstock");
+            assertThat(auth.getOidc().getPrincipalClaim()).isEqualTo("preferred_username");
+            assertThat(auth.getOidc().getClockSkewSeconds()).isEqualTo(45L);
+        });
+    }
+
+    @Test
+    void oidcModeWithTheDocumentedIssuerEnvPassesTheStartupCheck() {
+        // The exact precondition SecurityConfig.jwtDecoder() runs first at boot in oidc
+        // mode, against the real application.yml and the real env mapping. The decoder
+        // itself is not built — JwtDecoders.fromIssuerLocation fetches the issuer's
+        // discovery document eagerly, and this test fetches nothing.
+        boundThroughYml(Map.of("AGENT_AUTH_MODE", "oidc", "AGENT_OIDC_ISSUER_URI", ISSUER),
+                props -> assertThat(SecurityConfig.requireIssuerUri(props.getAuth().getOidc())).isEqualTo(ISSUER));
+    }
+
+    @Test
+    void oidcModeWithoutAnIssuerStillFailsTheStartupCheckWithTheDocumentedMessage() {
+        boundThroughYml(Map.of("AGENT_AUTH_MODE", "oidc"),
+                props -> assertThatThrownBy(() -> SecurityConfig.requireIssuerUri(props.getAuth().getOidc()))
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessageContaining("agent.auth.oidc.issuer-uri"));
+    }
+
+    @Test
+    void oidcDefaultsThroughApplicationYml() {
+        boundThroughYml(Map.of(), props -> {
+            assertThat(props.getAuth().getMode()).isEqualTo("basic");
+            assertThat(props.getAuth().getOidc().getIssuerUri()).isEmpty();
+            assertThat(props.getAuth().getOidc().getPrincipalClaim()).isEqualTo("sub");
+            assertThat(props.getAuth().getOidc().getClockSkewSeconds()).isEqualTo(30L);
+        });
     }
 }
