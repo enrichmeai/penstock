@@ -6,6 +6,8 @@ import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
+
 /**
  * Custom health indicator for the LLM provider.
  *
@@ -20,6 +22,9 @@ import org.springframework.stereotype.Component;
  */
 @Component("llmProvider")
 public class LlmProviderHealthIndicator implements HealthIndicator {
+
+    /** Service name under agent.credentials.per-user for the OpenAI-compatible provider. */
+    private static final String OPENAI_CREDENTIAL_SERVICE = "openai";
 
     private final LlmProvider provider;
     private final AgentProperties props;
@@ -75,11 +80,15 @@ public class LlmProviderHealthIndicator implements HealthIndicator {
     }
 
     /**
-     * OpenAI is usable if its API key is non-blank.
+     * OpenAI is usable if its service API key is non-blank, or at least one user has a
+     * gateway key of their own (agent.credentials.per-user.openai.*) — a deployment where
+     * every employee carries a virtual key may legitimately have no service key at all.
      */
     private boolean isOpenAiConfigUsable() {
         String apiKey = props.getLlm().getOpenai().getApiKey();
-        return apiKey != null && !apiKey.isBlank();
+        if (apiKey != null && !apiKey.isBlank()) return true;
+        Map<String, String> perUser = props.getCredentials().getPerUser().get(OPENAI_CREDENTIAL_SERVICE);
+        return perUser != null && perUser.values().stream().anyMatch(k -> k != null && !k.isBlank());
     }
 
     /**

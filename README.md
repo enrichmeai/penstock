@@ -279,7 +279,13 @@ overridden with env vars or `--agent.*=value` command-line flags.
 | `agent.llm.copilot.base-url` | `https://api.githubcopilot.com` | `COPILOT_BASE_URL` | Override for enterprise gateways. |
 | `agent.llm.copilot.model` | `gpt-4o` | `COPILOT_MODEL` | Any Copilot-exposed model (gpt-4o, claude-3-5-sonnet, o1-mini, …). |
 | `agent.llm.anthropic.api-key` | — | `ANTHROPIC_API_KEY` | |
-| `agent.llm.openai.api-key` | — | `OPENAI_API_KEY` | |
+| `agent.llm.openai.api-key` | — | `OPENAI_API_KEY` | Service key. A per-user key (below) takes precedence for that user. |
+| `agent.llm.openai.base-url` | `https://api.openai.com` | — | Origin only; `/v1/chat/completions` is appended. A LiteLLM gateway is `http://litellm:4000`. |
+| `agent.credentials.per-user.openai.<userId>` | — | `AGENT_CREDENTIALS_PERUSER_OPENAI_<USERID>` | Gateway key for one user. The env form lower-cases the user id; see [Acting as the signed-in user](#acting-as-the-signed-in-user). |
+| `agent.tools.cistern.base-url` | — | `CISTERN_BASE_URL` | The pod. Blank disables the `pod` tool. |
+| `agent.tools.cistern.token` | — | `CISTERN_AGENT_TOKEN` | The agent's own pod credential. |
+| `agent.tools.cistern.credential-mode` | `service` | `AGENT_TOOLS_CISTERN_CREDENTIALMODE` | `service` \| `per-user` \| `forward` — whose credential the pod sees. |
+| `agent.credentials.per-user.cistern.<userId>` | — | `AGENT_CREDENTIALS_PERUSER_CISTERN_<USERID>` | Pod credential for one user, used in `per-user` mode. |
 | `agent.llm.ollama.base-url` | `http://localhost:11434` | `OLLAMA_BASE_URL` | |
 | `agent.tools.shell.enabled` | `true` | — | |
 | `agent.tools.shell.timeout-seconds` | `60` | — | Per-command timeout. |
@@ -376,6 +382,43 @@ export AGENT_OIDC_AUDIENCE=penstock
 
 The principal then comes from the token (`AGENT_OIDC_PRINCIPAL_CLAIM`, default `sub`) and
 is what every LLM call and tool invocation is attributed to.
+
+## Acting as the signed-in user
+
+Two outbound calls can carry the signed-in user's own credential instead of the agent's:
+the `pod` tool's calls to a Cistern pod, and the model calls behind the `openai` provider.
+Every outbound call on a turn also carries the inbound `X-Request-Id`, so the pod's receipt,
+a gateway's log and this service's `audit_events` all name the same request.
+
+**Whose credential the pod sees** is `agent.tools.cistern.credential-mode`
+(env `AGENT_TOOLS_CISTERN_CREDENTIALMODE`):
+
+| Mode | Credential presented | Pod sees | When it has none |
+| --- | --- | --- | --- |
+| `service` (default) | `agent.tools.cistern.token` | the agent's WebID | error |
+| `per-user` | `agent.credentials.per-user.cistern.<userId>` | the user | falls back to `agent.tools.cistern.token` |
+| `forward` | the bearer token the user signed in with (`agent.auth.mode=oidc`) | the user | refuses — the agent never substitutes its own credential |
+
+`forward` needs a caller who authenticated with a bearer token; Basic auth and anonymous
+callers get a refusal from the tool, not a quiet switch to the agent's identity. The token
+is held for the length of the turn and is never persisted or logged.
+
+**A per-user model gateway key** is `agent.credentials.per-user.openai.<userId>`: when the
+`openai` provider makes a call for that user it authenticates with their key, and users
+without one use `agent.llm.openai.api-key`. Point `agent.llm.openai.base-url` at a
+LiteLLM gateway (`http://litellm:4000`; the provider appends `/v1/chat/completions`) and
+each employee's calls arrive under their own virtual key.
+
+The `<userId>` is the principal name the session is stamped with — the
+`agent.auth.oidc.principal-claim` value under OIDC — and is matched exactly. From properties
+or YAML the key is kept verbatim (`agent.credentials.per-user.openai.Bob`); a key with a
+character outside letters, digits, `-` and `.` is written in brackets
+(`agent.credentials.per-user.openai.[alice@example.com]`). From the environment it is
+lower-cased and an inner underscore becomes a dot: `AGENT_CREDENTIALS_PERUSER_OPENAI_BOB=sk-x`
+provisions user `bob`, so a principal with upper case, `@` or `-` in it must be configured in
+properties, not the environment. The prefix is `PERUSER` — `AGENT_CREDENTIALS_PER_USER_…`
+binds nothing, silently, because map entries are matched from the environment side where
+the hyphen has already been removed.
 
 ## Licence
 

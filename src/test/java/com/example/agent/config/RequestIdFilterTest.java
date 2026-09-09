@@ -250,4 +250,19 @@ class RequestIdFilterTest {
         }
         return null;
     }
+
+    @Test
+    void requestIdIsExposedAsARequestAttributeForTheRestOfTheRequest() throws ServletException, IOException {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/chat");
+        request.addHeader(RequestIdFilter.REQUEST_ID_HEADER, "req-attr-1");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        String[] seenInChain = new String[1];
+        FilterChain chain = (req, res) ->
+                seenInChain[0] = (String) req.getAttribute(RequestIdFilter.REQUEST_ID_ATTRIBUTE);
+
+        filter.doFilterInternal(request, response, chain);
+
+        assertEquals("req-attr-1", seenInChain[0],
+                "a controller reads the ID from the request, not from thread-local MDC");
+    }
 }

@@ -2,13 +2,17 @@ package com.example.agent.llm.openai;
 
 import com.example.agent.config.AgentMetrics;
 import com.example.agent.config.AgentProperties;
+import com.example.agent.config.RequestIdFilter;
 import com.example.agent.llm.CompletionResult;
+import com.example.agent.llm.LlmCallContext;
 import com.example.agent.llm.LlmProvider;
+import com.example.agent.model.BearerToken;
 import com.example.agent.model.ChatMessage;
 import com.example.agent.model.Role;
 import com.example.agent.model.TokenUsage;
 import com.example.agent.model.ToolCall;
 import com.example.agent.model.ToolResult;
+import com.example.agent.tools.CredentialResolver;
 import com.example.agent.tools.ToolSpec;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,42 +33,85 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
- * OpenAI Chat Completions API implementation.
+ * OpenAI Chat Completions API implementation — also the provider for anything that speaks
+ * the same protocol, such as a LiteLLM gateway ({@code base-url: http://litellm:4000}).
  *
  * Docs: https://platform.openai.com/docs/api-reference/chat
+ *
+ * <p>Authentication is per request, not a client-wide default header: each call carries the
+ * gateway key provisioned for the acting user ({@code agent.credentials.per-user.openai.<userId>},
+ * via {@link CredentialResolver}) and falls back to the configured service key. Each call
+ * also carries the inbound {@code X-Request-Id}, which LiteLLM ignores but a gateway log can
+ * join to this service's audit trail.
  */
 @Component
 @ConditionalOnProperty(name = "agent.llm.provider", havingValue = "openai")
 public class OpenAiProvider implements LlmProvider {
 
+    /** Service name under agent.credentials.per-user. */
+    private static final String SERVICE = "openai";
+    private static final String CHAT_COMPLETIONS_PATH = "/v1/chat/completions";
+    private static final Duration CALL_TIMEOUT = Duration.ofMinutes(5);
+
     private final AgentProperties.OpenAi cfg;
     private final WebClient webClient;
     private final ObjectMapper mapper;
     private final AgentMetrics metrics;
+    private final CredentialResolver credentials;
 
     public OpenAiProvider(AgentProperties props,
                           WebClient.Builder webClientBuilder,
                           ObjectMapper mapper,
-                          AgentMetrics metrics) {
+                          AgentMetrics metrics,
+                          CredentialResolver credentials) {
         this.cfg = props.getLlm().getOpenai();
         this.mapper = mapper;
         this.metrics = metrics;
+        this.credentials = credentials;
         this.webClient = webClientBuilder
                 .baseUrl(cfg.getBaseUrl())
-                .defaultHeader(HttpHeaders.AUTHORIZATION,
-                        "Bearer " + (cfg.getApiKey() == null ? "" : cfg.getApiKey()))
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .build();
     }
 
     @Override public String name() { return "openai"; }
 
+    /**
+     * The key this call authenticates with: the user's own gateway key when one is
+     * provisioned, otherwise the service key. Neither is ever logged.
+     */
+    private BearerToken credentialFor(LlmCallContext context) {
+        return BearerToken.of(credentials == null ? null : credentials.resolve(SERVICE, context.userId()))
+                .or(() -> BearerToken.of(cfg.getApiKey()))
+                .orElseThrow(() -> new IllegalStateException(
+                        "No OpenAI credential for user '" + context.userId() + "'. Set env var OPENAI_API_KEY "
+                        + "or agent.llm.openai.api-key, or a per-user key at "
+                        + "agent.credentials.per-user.openai." + context.userId() + "."));
+    }
+
+    /**
+     * A POST to the completions path carrying this call's credential and request ID. Built
+     * per attempt — the retry path must not reuse one mutable spec.
+     */
+    private WebClient.RequestBodySpec completionsRequest(BearerToken credential, LlmCallContext context) {
+        return webClient.post()
+                .uri(CHAT_COMPLETIONS_PATH)
+                .headers(h -> {
+                    h.set(HttpHeaders.AUTHORIZATION, credential.authorizationHeaderValue());
+                    if (context.requestId() != null) {
+                        h.set(RequestIdFilter.REQUEST_ID_HEADER, context.requestId());
+                    }
+                });
+    }
+
     @Override
     public CompletionResult complete(String systemPrompt, List<ChatMessage> history, List<ToolSpec> tools, String sessionId) {
-        if (cfg.getApiKey() == null || cfg.getApiKey().isBlank()) {
-            throw new IllegalStateException(
-                    "OPENAI_API_KEY is not configured. Set env var OPENAI_API_KEY or agent.llm.openai.api-key.");
-        }
+        return complete(systemPrompt, history, tools, LlmCallContext.forSession(sessionId));
+    }
+
+    @Override
+    public CompletionResult complete(String systemPrompt, List<ChatMessage> history, List<ToolSpec> tools, LlmCallContext context) {
+        BearerToken credential = credentialFor(context);   // fail fast, before any call
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", cfg.getModel());
@@ -76,12 +123,11 @@ public class OpenAiProvider implements LlmProvider {
 
         JsonNode response;
         try {
-            response = com.example.agent.llm.LlmRetry.call(name(), () -> webClient.post()
-                    .uri("/v1/chat/completions")
+            response = com.example.agent.llm.LlmRetry.call(name(), () -> completionsRequest(credential, context)
                     .bodyValue(body)
                     .retrieve()
                     .bodyToMono(JsonNode.class)
-                    .timeout(Duration.ofMinutes(5))
+                    .timeout(CALL_TIMEOUT)
                     .block());
         } catch (Exception e) {
             metrics.recordLlmCall(name(), false, 0, 0);
@@ -99,10 +145,16 @@ public class OpenAiProvider implements LlmProvider {
                                               List<ToolSpec> tools,
                                               String sessionId,
                                               Consumer<String> onToken) {
-        if (cfg.getApiKey() == null || cfg.getApiKey().isBlank()) {
-            throw new IllegalStateException(
-                    "OPENAI_API_KEY is not configured. Set env var OPENAI_API_KEY or agent.llm.openai.api-key.");
-        }
+        return completeStreaming(systemPrompt, history, tools, LlmCallContext.forSession(sessionId), onToken);
+    }
+
+    @Override
+    public CompletionResult completeStreaming(String systemPrompt,
+                                              List<ChatMessage> history,
+                                              List<ToolSpec> tools,
+                                              LlmCallContext context,
+                                              Consumer<String> onToken) {
+        BearerToken credential = credentialFor(context);   // fail fast, before any call
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", cfg.getModel());
@@ -122,13 +174,12 @@ public class OpenAiProvider implements LlmProvider {
         // re-emit already-delivered tokens via onToken. Matches Anthropic and
         // Copilot streaming behaviour. See ADR 0003 + spec 0001.
         try {
-            webClient.post()
-                    .uri("/v1/chat/completions")
+            completionsRequest(credential, context)
                     .accept(MediaType.TEXT_EVENT_STREAM)
                     .bodyValue(body)
                     .retrieve()
                     .bodyToFlux(String.class)
-                    .timeout(Duration.ofMinutes(5))
+                    .timeout(CALL_TIMEOUT)
                     .toStream()
                     .forEach(line -> handleStreamEvent(line, textBuf, toolBufs, usageRef, onToken));
         } catch (Exception e) {

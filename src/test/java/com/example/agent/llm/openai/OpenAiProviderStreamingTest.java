@@ -37,11 +37,32 @@ class OpenAiProviderStreamingTest {
         cfg.setBaseUrl(server.url("/").toString().replaceAll("/$", ""));
         cfg.setModel("gpt-4o");
 
+        props.getCredentials().setPerUser(java.util.Map.of("openai", java.util.Map.of("alice", "alice-virtual-key")));
+
         provider = new OpenAiProvider(
                 props,
                 WebClient.builder(),
                 new ObjectMapper(),
-                new AgentMetrics(new SimpleMeterRegistry()));
+                new AgentMetrics(new SimpleMeterRegistry()),
+                new com.example.agent.tools.ConfiguredCredentialResolver(props));
+    }
+
+    @Test
+    void theStreamingPathCarriesThePerUserKeyAndTheRequestId() throws Exception {
+        String sse = String.join("\n\n",
+                "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"}}]}",
+                "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}",
+                "data: [DONE]",
+                "");
+        server.enqueue(new MockResponse().setHeader("Content-Type", "text/event-stream").setBody(sse));
+
+        provider.completeStreaming("system", List.of(ChatMessage.user("hi")), List.of(),
+                new com.example.agent.llm.LlmCallContext("alice", "session-9", "req-stream-1"), t -> {});
+
+        RecordedRequest req = server.takeRequest();
+        assertThat(req.getPath()).isEqualTo("/v1/chat/completions");
+        assertThat(req.getHeader("Authorization")).isEqualTo("Bearer alice-virtual-key");
+        assertThat(req.getHeader("X-Request-Id")).isEqualTo("req-stream-1");
     }
 
     @AfterEach

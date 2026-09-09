@@ -74,11 +74,22 @@ public class ToolRegistry {
      * invoking thread (the agent loop runs on pooled threads without one).
      */
     public ToolResult invoke(ToolCall call, String sessionId, String userId) {
+        return invoke(call, new ToolContext(userId, sessionId));
+    }
+
+    /**
+     * Invoke a tool with a fully resolved {@link ToolContext} — identity plus what
+     * the request that started the turn carried (its request ID, and the caller's
+     * bearer for tools that act as the signed-in user). The agent loop uses this
+     * form; the context is handed to the tool as is and attributed in the audit log.
+     */
+    public ToolResult invoke(ToolCall call, ToolContext context) {
         Tool t = tools.get(call.name());
         if (t == null) {
             return ToolResult.error(call.id(), "Unknown tool: " + call.name());
         }
-        ToolContext context = new ToolContext(userId, sessionId);
+        String userId = context.userId();
+        String sessionId = context.sessionId();
         long start = System.nanoTime();
         try {
             ToolResult r = t.execute(call.id(), call.arguments() == null ? Map.of() : call.arguments(), context);

@@ -1,6 +1,8 @@
 package com.example.agent.controller;
 
 import com.example.agent.config.AgentMetrics;
+import com.example.agent.config.CurrentUser;
+import com.example.agent.config.RequestIdFilter;
 import com.example.agent.config.SseEmitterRegistry;
 import com.example.agent.controller.dto.ChatRequest;
 import com.example.agent.controller.dto.ChatResponse;
@@ -10,6 +12,7 @@ import com.example.agent.model.ChatMessage;
 import com.example.agent.model.Session;
 import com.example.agent.service.AgentService;
 import com.example.agent.service.SessionStore;
+import com.example.agent.service.TurnContext;
 import com.example.agent.tools.ToolRegistry;
 import com.example.agent.tools.ToolSpec;
 import jakarta.validation.Valid;
@@ -43,6 +46,7 @@ public class AgentController {
     private final AsyncTaskExecutor streamExecutor;
     private final AgentMetrics metrics;
     private final SseEmitterRegistry sseRegistry;
+    private final CurrentUser currentUser;
 
     public AgentController(AgentService agent,
                            SessionStore sessions,
@@ -50,7 +54,8 @@ public class AgentController {
                            LlmProvider provider,
                            @Qualifier("sseTaskExecutor") AsyncTaskExecutor streamExecutor,
                            AgentMetrics metrics,
-                           SseEmitterRegistry sseRegistry) {
+                           SseEmitterRegistry sseRegistry,
+                           CurrentUser currentUser) {
         this.agent = agent;
         this.sessions = sessions;
         this.tools = tools;
@@ -58,6 +63,17 @@ public class AgentController {
         this.streamExecutor = streamExecutor;
         this.metrics = metrics;
         this.sseRegistry = sseRegistry;
+        this.currentUser = currentUser;
+    }
+
+    /**
+     * What this request carried that the turn will need after it leaves this thread: the
+     * request ID the filter resolved, and the bearer the caller authenticated with, if
+     * any. Read here, on the request thread, and passed explicitly — the agent loop and
+     * the SSE executor cannot see either.
+     */
+    private TurnContext turnContext(String requestId) {
+        return new TurnContext(requestId, currentUser.bearer());
     }
 
     @GetMapping("/health")
@@ -75,12 +91,14 @@ public class AgentController {
     }
 
     @PostMapping("/chat")
-    public ChatResponse chat(@Valid @RequestBody ChatRequest req) {
+    public ChatResponse chat(@Valid @RequestBody ChatRequest req,
+                             @RequestAttribute(name = RequestIdFilter.REQUEST_ID_ATTRIBUTE, required = false)
+                             String requestId) {
         Session session = req.sessionId() == null || req.sessionId().isBlank()
                 ? agent.createSession()
                 : agent.requireSession(req.sessionId());
 
-        List<ChatMessage> produced = agent.chat(session, req.message());
+        List<ChatMessage> produced = agent.chat(session, req.message(), turnContext(requestId));
         return new ChatResponse(
                 session.getId(),
                 session.getTitle(),
@@ -101,7 +119,9 @@ public class AgentController {
      * Client consumes with fetch() + ReadableStream (EventSource can't do POST).
      */
     @PostMapping(path = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter chatStream(@Valid @RequestBody ChatRequest req) {
+    public SseEmitter chatStream(@Valid @RequestBody ChatRequest req,
+                                 @RequestAttribute(name = RequestIdFilter.REQUEST_ID_ATTRIBUTE, required = false)
+                                 String requestId) {
         SseEmitter emitter = sseRegistry.register(new SseEmitter(10 * 60 * 1000L));   // 10 min
 
         Session session;
@@ -120,7 +140,9 @@ public class AgentController {
         final Session captured = session;
         // The task runs on a pooled thread with no request context: carry the
         // MDC (requestId/userId/sessionId) over so the stream's logs stay
-        // attributable. Identity for persistence/audit travels via the Session.
+        // attributable. Identity for persistence/audit travels via the Session;
+        // the request ID and the caller's bearer travel via the TurnContext.
+        final TurnContext turn = turnContext(requestId);
         final Map<String, String> mdc = MDC.getCopyOfContextMap();
         streamExecutor.execute(() -> {
             if (mdc != null) MDC.setContextMap(mdc);
@@ -128,7 +150,7 @@ public class AgentController {
             try {
                 emitter.send(SseEmitter.event().name("session").data(sessionPayload(captured)));
 
-                agent.chatStreaming(captured, req.message(),
+                agent.chatStreaming(captured, req.message(), turn,
                         msg -> {
                             try {
                                 emitter.send(SseEmitter.event().name("message").data(msg));

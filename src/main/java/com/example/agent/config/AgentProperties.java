@@ -1,5 +1,6 @@
 package com.example.agent.config;
 
+import com.example.agent.tools.CredentialMode;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.List;
@@ -196,8 +197,19 @@ public class AgentProperties {
         public void setMaxTokens(int maxTokens) { this.maxTokens = maxTokens; }
     }
 
+    /**
+     * OpenAI Chat Completions, or anything that speaks it — a LiteLLM gateway, for one.
+     *
+     * <p>{@link #apiKey} is the service key, used for any user without a key of their own.
+     * A per-user gateway key ({@code agent.credentials.per-user.openai.<userId>}) takes
+     * precedence for that user's calls; see {@link Credentials}.
+     */
     public static class OpenAi {
         private String apiKey;
+        /**
+         * Origin only, no path: the provider appends {@code /v1/chat/completions}. A
+         * LiteLLM gateway is {@code http://litellm:4000}; a trailing slash is tolerated.
+         */
         private String baseUrl = "https://api.openai.com";
         private String model = "gpt-4o";
         private int maxTokens = 4096;
@@ -293,21 +305,33 @@ public class AgentProperties {
     /**
      * The Cistern pod this agent may reach, and the credential it reaches it with.
      *
-     * <p>The credential is the <em>agent's own</em>, not its user's. Cistern resolves it to a
-     * WebID belonging to this application, so a grant written for this agent is a grant to it
-     * alone — and revoking it stops this agent without touching anyone else. That is the point
-     * of pointing the agent at a pod rather than at a directory.
+     * <p>By default the credential is the <em>agent's own</em>, not its user's. Cistern
+     * resolves it to a WebID belonging to this application, so a grant written for this agent
+     * is a grant to it alone — and revoking it stops this agent without touching anyone else.
+     * That is the point of pointing the agent at a pod rather than at a directory.
+     * {@link #credentialMode} changes whose credential is presented; see {@link CredentialMode}.
      */
     public static class Cistern {
         /** e.g. http://localhost:3737 — the pod's base URL. */
         private String baseUrl = "";
         /** This agent's own service credential, as configured in the pod. */
         private String token = "";
+        /**
+         * Whose credential the pod tool presents. Environment form:
+         * {@code AGENT_TOOLS_CISTERN_CREDENTIALMODE} (relaxed binding removes the hyphen);
+         * the legacy spelling {@code AGENT_TOOLS_CISTERN_CREDENTIAL_MODE} binds as well, as
+         * it does for any bean property. {@code RelaxedEnvBindingTest} pins both.
+         */
+        private CredentialMode credentialMode = CredentialMode.SERVICE;
 
         public String getBaseUrl() { return baseUrl; }
         public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
         public String getToken() { return token; }
         public void setToken(String token) { this.token = token; }
+        public CredentialMode getCredentialMode() { return credentialMode; }
+        public void setCredentialMode(CredentialMode credentialMode) {
+            this.credentialMode = credentialMode == null ? CredentialMode.SERVICE : credentialMode;
+        }
     }
 
     public static class Storage {
@@ -363,10 +387,31 @@ public class AgentProperties {
     }
 
     /**
-     * Per-user outbound credentials for tools that talk to external systems:
-     * {@code agent.credentials.per-user.<service>.<userId> = token}. A user
-     * with no entry falls back to the tool's own service credential (the
-     * default, documented v1 posture). See {@code CredentialResolver}.
+     * Per-user outbound credentials for tools and providers that talk to external
+     * systems: {@code agent.credentials.per-user.<service>.<userId> = token}. A user
+     * with no entry falls back to the service credential (the default, documented v1
+     * posture). See {@code CredentialResolver}. Services in use: {@code cistern} (when
+     * {@link Cistern#credentialMode} is {@code per-user}) and {@code openai} (a per-user
+     * gateway key for the OpenAI-compatible provider).
+     *
+     * <p>The user ID is the principal name the session was stamped with — the
+     * {@code agent.auth.oidc.principal-claim} value under OIDC. As a map key it is
+     * matched exactly, and how it is bound depends on where it came from:
+     * <ul>
+     *   <li>Properties and YAML keep the key verbatim — upper case, digits, {@code -} and
+     *       {@code .} included: {@code agent.credentials.per-user.openai.Bob=sk-x} binds user
+     *       {@code Bob}. Any other character ({@code @}, say) is dropped from an unbracketed
+     *       key, so such a key is written in brackets:
+     *       {@code agent.credentials.per-user.openai.[alice@example.com]=sk-x}.</li>
+     *   <li>The environment lower-cases it: {@code AGENT_CREDENTIALS_PERUSER_OPENAI_BOB=sk-x}
+     *       binds user {@code bob}, never {@code BOB} or {@code Bob}. An underscore inside the
+     *       user segment becomes a dot ({@code ..._OPENAI_BOB_SMITH} binds {@code bob.smith}),
+     *       so a principal containing {@code @}, {@code -} or upper case cannot be expressed
+     *       from the environment at all — configure those in properties or YAML. And unlike a
+     *       bean property, the prefix has exactly one spelling: {@code AGENT_CREDENTIALS_PER_USER_...}
+     *       binds nothing, silently.</li>
+     * </ul>
+     * {@code RelaxedEnvBindingTest} pins all of this.
      */
     public static class Credentials {
         private Map<String, Map<String, String>> perUser = new java.util.HashMap<>();

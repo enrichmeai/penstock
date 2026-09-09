@@ -157,4 +157,30 @@ class ToolRegistryTest {
         assertTrue(result.content().contains("Status expected:<200> but was:<405>"), result.content());
         assertTrue(result.content().contains("BUILD FAILED"), result.content());
     }
+
+    @Test
+    void invokeWithAContextHandsItToTheToolUnchanged() {
+        // The request ID and the caller's bearer are resolved at the HTTP boundary and
+        // must reach the tool as given — a tool acting as the signed-in user depends on it.
+        java.util.concurrent.atomic.AtomicReference<ToolContext> seen =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        Tool tool = new Tool() {
+            @Override public String name() { return "ctx_capture"; }
+            @Override public String description() { return "captures context"; }
+            @Override public Map<String, Object> inputSchema() { return Map.of(); }
+            @Override public ToolResult execute(String id, Map<String, Object> args, ToolContext context) {
+                seen.set(context);
+                return ToolResult.ok(id, "ok");
+            }
+        };
+        ToolRegistry registry = new ToolRegistry(List.of(tool), new AgentProperties());
+        ToolContext given = new ToolContext("alice", "sess-2", "req-9",
+                com.example.agent.model.BearerToken.of("eyJ.alice"));
+
+        registry.invoke(new ToolCall("c3", "ctx_capture", Map.of()), given);
+
+        assertSame(given, seen.get());
+        assertEquals("req-9", seen.get().requestId());
+        assertEquals("eyJ.alice", seen.get().bearer().orElseThrow().secret());
+    }
 }

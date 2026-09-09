@@ -217,4 +217,98 @@ class AgentServiceTest {
 
         assertEquals("finished", second.get(second.size() - 1).text());
     }
+
+    /**
+     * The turn context resolved at the HTTP boundary reaches both halves of the loop, and
+     * each half gets exactly what it may know: the provider sees identity and request ID,
+     * the tool sees those plus the caller's bearer. Covers both the streaming and the
+     * non-streaming provider entry points.
+     */
+    @Test
+    void turnContextReachesTheProviderAndTheTools() {
+        for (boolean streaming : new boolean[] {false, true}) {
+            java.util.concurrent.atomic.AtomicReference<ToolContext> toolSaw = new java.util.concurrent.atomic.AtomicReference<>();
+            java.util.concurrent.atomic.AtomicReference<com.example.agent.llm.LlmCallContext> providerSaw =
+                    new java.util.concurrent.atomic.AtomicReference<>();
+            Tool probe = new Tool() {
+                @Override public String name() { return "probe"; }
+                @Override public String description() { return "probe"; }
+                @Override public Map<String, Object> inputSchema() { return Map.of(); }
+                @Override public ToolResult execute(String id, Map<String, Object> args, ToolContext context) {
+                    toolSaw.set(context);
+                    return ToolResult.ok(id, "probed");
+                }
+            };
+            AgentProperties props = new AgentProperties();
+            props.getLlm().setStreamingEnabled(streaming);
+            ToolRegistry registry = new ToolRegistry(List.of(probe), props);
+            LlmProvider scripted = new LlmProvider() {
+                @Override public String name() { return "scripted"; }
+                @Override public CompletionResult complete(String sys, List<ChatMessage> hist, List<ToolSpec> tools, String sessionId) {
+                    throw new AssertionError("the loop must use the context-carrying entry points");
+                }
+                @Override public CompletionResult complete(String sys, List<ChatMessage> hist, List<ToolSpec> tools,
+                                                           com.example.agent.llm.LlmCallContext context) {
+                    return answer(hist, context);
+                }
+                @Override public CompletionResult completeStreaming(String sys, List<ChatMessage> hist, List<ToolSpec> tools,
+                                                                    com.example.agent.llm.LlmCallContext context, Consumer<String> onToken) {
+                    return answer(hist, context);
+                }
+                private CompletionResult answer(List<ChatMessage> hist, com.example.agent.llm.LlmCallContext context) {
+                    providerSaw.set(context);
+                    if (hist.get(hist.size() - 1).role() == Role.USER) {
+                        return new CompletionResult(ChatMessage.assistant("probing",
+                                List.of(new ToolCall("tc1", "probe", Map.of()))), new TokenUsage(1, 1));
+                    }
+                    return new CompletionResult(ChatMessage.assistantText("done"), new TokenUsage(1, 1));
+                }
+            };
+            AgentService svc = new AgentService(scripted, registry, props, new InMemorySessionStore());
+            Session s = new Session("alice");
+            TurnContext turn = new TurnContext("req-123", com.example.agent.model.BearerToken.of("eyJ.alice"));
+
+            svc.chat(s, "go", turn);
+
+            assertEquals("alice", providerSaw.get().userId(), "streaming=" + streaming);
+            assertEquals(s.getId(), providerSaw.get().sessionId());
+            assertEquals("req-123", providerSaw.get().requestId());
+            assertEquals("alice", toolSaw.get().userId());
+            assertEquals(s.getId(), toolSaw.get().sessionId());
+            assertEquals("req-123", toolSaw.get().requestId());
+            assertEquals("eyJ.alice", toolSaw.get().bearer().orElseThrow().secret());
+        }
+    }
+
+    @Test
+    void aTurnWithoutARequestContextCarriesNothingExtra() {
+        java.util.concurrent.atomic.AtomicReference<ToolContext> toolSaw = new java.util.concurrent.atomic.AtomicReference<>();
+        Tool probe = new Tool() {
+            @Override public String name() { return "probe"; }
+            @Override public String description() { return "probe"; }
+            @Override public Map<String, Object> inputSchema() { return Map.of(); }
+            @Override public ToolResult execute(String id, Map<String, Object> args, ToolContext context) {
+                toolSaw.set(context);
+                return ToolResult.ok(id, "probed");
+            }
+        };
+        AgentProperties props = new AgentProperties();
+        ToolRegistry registry = new ToolRegistry(List.of(probe), props);
+        LlmProvider scripted = new LlmProvider() {
+            @Override public String name() { return "scripted"; }
+            @Override public CompletionResult complete(String sys, List<ChatMessage> hist, List<ToolSpec> tools, String sessionId) {
+                if (hist.get(hist.size() - 1).role() == Role.USER) {
+                    return new CompletionResult(ChatMessage.assistant("probing",
+                            List.of(new ToolCall("tc1", "probe", Map.of()))), new TokenUsage(1, 1));
+                }
+                return new CompletionResult(ChatMessage.assistantText("done"), new TokenUsage(1, 1));
+            }
+        };
+        AgentService svc = new AgentService(scripted, registry, props, new InMemorySessionStore());
+
+        svc.chat(new Session("alice"), "go");
+
+        assertNull(toolSaw.get().requestId());
+        assertTrue(toolSaw.get().bearer().isEmpty());
+    }
 }
