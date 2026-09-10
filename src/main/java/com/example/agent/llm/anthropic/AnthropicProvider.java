@@ -4,6 +4,7 @@ import com.example.agent.config.AgentMetrics;
 import com.example.agent.config.AgentProperties;
 import com.example.agent.llm.CompletionResult;
 import com.example.agent.llm.LlmProvider;
+import com.example.agent.llm.LlmRetry;
 import com.example.agent.model.ChatMessage;
 import com.example.agent.model.Role;
 import com.example.agent.model.TokenUsage;
@@ -16,6 +17,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -130,6 +133,14 @@ public class AnthropicProvider implements LlmProvider {
                     .timeout(Duration.ofMinutes(5))
                     .doOnNext(json -> handleSseEvent(json, state, onToken))
                     .blockLast();
+        } catch (WebClientResponseException e) {
+            // Typed here because this path bypasses LlmRetry: a 429 is the gateway's
+            // refusal whichever path carried it, and must not reach the caller raw.
+            metrics.recordLlmCall(name(), false, 0, 0);
+            throw LlmRetry.failure(name(), e);
+        } catch (WebClientRequestException e) {
+            metrics.recordLlmCall(name(), false, 0, 0);
+            throw LlmRetry.unreachable(name(), e);
         } catch (Exception e) {
             metrics.recordLlmCall(name(), false, 0, 0);
             throw e;

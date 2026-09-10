@@ -31,6 +31,13 @@ public class AuditLogger {
 
     private static final Logger log = LoggerFactory.getLogger(AuditLogger.class);
 
+    /** Keys of an {@code llm_call} event's {@code detail}. */
+    private static final String LLM_DETAIL_PROVIDER = "provider";
+    private static final String LLM_DETAIL_INPUT_TOKENS = "inputTokens";
+    private static final String LLM_DETAIL_OUTPUT_TOKENS = "outputTokens";
+    private static final String LLM_DETAIL_OK = "ok";
+    private static final String LLM_DETAIL_REASON = "reason";
+
     private final AuditEventRepository repo;
     private final ObjectMapper mapper;
 
@@ -92,6 +99,19 @@ public class AuditLogger {
      */
     @Async
     public void llmCall(String userId, String sessionId, String provider, int inputTokens, int outputTokens, boolean ok) {
+        llmCall(userId, sessionId, provider, inputTokens, outputTokens, ok, null);
+    }
+
+    /**
+     * {@link #llmCall(String, String, String, int, int, boolean)} with why the call failed.
+     *
+     * @param reason recorded in {@code detail.reason} when {@code ok} is false, so a refused
+     *               call (budget, rate limit) is told apart from a failed one without reading
+     *               server logs; ignored when {@code ok} is true, absent when null
+     */
+    @Async
+    public void llmCall(String userId, String sessionId, String provider, int inputTokens, int outputTokens,
+                        boolean ok, LlmFailureReason reason) {
         if (repo == null) {
             log.debug("Audit repository not available; skipping llm_call event");
             return;
@@ -99,10 +119,13 @@ public class AuditLogger {
 
         try {
             Map<String, Object> detail = new LinkedHashMap<>();
-            detail.put("provider", provider);
-            detail.put("inputTokens", inputTokens);
-            detail.put("outputTokens", outputTokens);
-            detail.put("ok", ok);
+            detail.put(LLM_DETAIL_PROVIDER, provider);
+            detail.put(LLM_DETAIL_INPUT_TOKENS, inputTokens);
+            detail.put(LLM_DETAIL_OUTPUT_TOKENS, outputTokens);
+            detail.put(LLM_DETAIL_OK, ok);
+            if (!ok && reason != null) {
+                detail.put(LLM_DETAIL_REASON, reason.wire());
+            }
 
             String detailJson = mapper.writeValueAsString(detail);
             AuditEventEntity event = new AuditEventEntity(
@@ -116,15 +139,6 @@ public class AuditLogger {
         } catch (Exception e) {
             log.warn("Failed to log llm_call event", e);
         }
-    }
-
-    /**
-     * {@link #llmCall(String, String, String, int, int, boolean)} with why the call failed.
-     */
-    @Async
-    public void llmCall(String userId, String sessionId, String provider, int inputTokens, int outputTokens,
-                        boolean ok, LlmFailureReason reason) {
-        llmCall(userId, sessionId, provider, inputTokens, outputTokens, ok);
     }
 
     private static String normalise(String userId) {

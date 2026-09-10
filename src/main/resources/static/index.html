@@ -72,6 +72,10 @@
     .tool-args { color: var(--muted); white-space: pre-wrap; margin-bottom: 4px; font-size: 11px; }
     .tool-result { white-space: pre-wrap; color: var(--text); max-height: 400px; overflow-y: auto; }
 
+    /* A refusal is an answer, not a failure: the gateway (or the pod owner) said no. */
+    .role.refusal { color: var(--warn); }
+    .bubble.refusal { background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--warn); }
+
     #composer { padding: 14px 24px 20px; border-top: 1px solid var(--border); background: var(--panel); }
     #composer form { display: flex; gap: 10px; max-width: 900px; }
     #composer textarea { flex: 1; background: var(--panel2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 10px 12px; resize: none; font-family: inherit; font-size: 14px; min-height: 42px; max-height: 200px; }
@@ -419,6 +423,18 @@ async function onSend(ev) {
         }
         els.messages.scrollTop = els.messages.scrollHeight;
       } else if (event === 'error') {
+        if (data.code === 'gateway_refused') {
+          // The AI gateway's decision (budget, rate limit) — not a failure of this
+          // service, and the turn is over. The sentence is the server's catalogue text.
+          if (!thinkingRemoved) { thinking.remove(); thinkingRemoved = true; }
+          if (liveBubble) { liveBubble.parentElement.remove(); liveBubble = null; liveText = ''; }
+          const node = document.createElement('div');
+          node.className = 'msg role-assistant';
+          node.innerHTML = `<div class="role refusal">Gateway refusal · ${esc(data.reason)}</div><div class="bubble refusal">${esc(data.error)}</div>`;
+          els.messages.appendChild(node);
+          els.messages.scrollTop = els.messages.scrollHeight;
+          break;
+        }
         throw new Error(data.error || 'stream error');
       }
     }
@@ -484,7 +500,7 @@ document.getElementById('audit-session').addEventListener('click', async () => {
     const ok = d.ok === false ? ' style="color:#e66"' : '';
     const what = ev.eventType === 'tool_call'
       ? `tool <b>${esc(d.tool)}</b> · ${d.ok ? 'ok' : 'failed'} · ${esc(d.contentBytes ?? 0)} bytes`
-      : `llm <b>${esc(d.provider)}</b> · ${d.ok ? 'ok' : 'failed'} · ${esc(d.inputTokens ?? 0)} in / ${esc(d.outputTokens ?? 0)} out`;
+      : `llm <b>${esc(d.provider)}</b> · ${d.ok ? 'ok' : 'failed' + (d.reason ? ' (' + esc(d.reason) + ')' : '')} · ${esc(d.inputTokens ?? 0)} in / ${esc(d.outputTokens ?? 0)} out`;
     return `<div style="display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;">
       <span style="opacity:.6;white-space:nowrap">${esc(t)}</span>
       <span${ok}>${what}</span></div>`;

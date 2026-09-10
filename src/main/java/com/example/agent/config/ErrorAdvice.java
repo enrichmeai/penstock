@@ -3,6 +3,8 @@ package com.example.agent.config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import com.example.agent.llm.GatewayRefusedException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -115,6 +117,23 @@ class ErrorAdvice {
         log.warn("[{}] Bad state: {}", requestId, ex.getMessage(), ex);
         ApiError error = ApiError.of(message, ApiErrorCode.BAD_STATE, requestId);
         return ResponseEntity.badRequest().body(error);
+    }
+
+    /**
+     * 429 Too Many Requests: the model gateway refused the call — a budget or a rate limit,
+     * decided upstream before any model ran. Not an internal error: nothing here failed, and
+     * the caller is owed the decision and its reason. The gateway's Retry-After is passed
+     * through when it sent one. The message is the catalogue's ({@link GatewayRefusedException}
+     * is {@link SafeMessage}); the gateway's own text stays in the log.
+     */
+    @ExceptionHandler(GatewayRefusedException.class)
+    public ResponseEntity<ApiError> handleGatewayRefused(GatewayRefusedException ex) {
+        String requestId = getRequestId();
+        log.warn("[{}] Gateway refused the model call: {} (upstream {} {})",
+                requestId, ex.refusal(), ex.upstreamStatus(), ex.upstream());
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS);
+        ex.retryAfter().ifPresent(wait -> response.header(HttpHeaders.RETRY_AFTER, Long.toString(wait.toSeconds())));
+        return response.body(ApiError.gatewayRefused(ex.getMessage(), ex.refusal(), requestId));
     }
 
     /**

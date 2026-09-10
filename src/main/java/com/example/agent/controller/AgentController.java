@@ -1,12 +1,15 @@
 package com.example.agent.controller;
 
 import com.example.agent.config.AgentMetrics;
+import com.example.agent.config.ApiError;
+import com.example.agent.config.ApiErrorCode;
 import com.example.agent.config.CurrentUser;
 import com.example.agent.config.RequestIdFilter;
 import com.example.agent.config.SseEmitterRegistry;
 import com.example.agent.controller.dto.ChatRequest;
 import com.example.agent.controller.dto.ChatResponse;
 import com.example.agent.controller.dto.SessionSummary;
+import com.example.agent.llm.GatewayRefusedException;
 import com.example.agent.llm.LlmProvider;
 import com.example.agent.model.ChatMessage;
 import com.example.agent.model.Session;
@@ -38,6 +41,23 @@ import java.util.Map;
 public class AgentController {
 
     private static final Logger log = LoggerFactory.getLogger(AgentController.class);
+
+    private static final long STREAM_TIMEOUT_MILLIS = 10 * 60 * 1000L;   // 10 min
+
+    /** The events a chat stream emits; see {@link #chatStream}. */
+    private enum SseEvent {
+        SESSION("session"), MESSAGE("message"), TOKEN("token"), DONE("done"), ERROR("error");
+
+        private final String wire;
+
+        SseEvent(String wire) {
+            this.wire = wire;
+        }
+
+        String wire() {
+            return wire;
+        }
+    }
 
     private final AgentService agent;
     private final SessionStore sessions;
@@ -113,8 +133,14 @@ public class AgentController {
      *
      *   event: session    data: { "sessionId":"...", "title":"..." }
      *   event: message    data: { ...ChatMessage JSON... }
+     *   event: token      data: { "text": "..." }
      *   event: done       data: { "ok": true }
-     *   event: error      data: { "error": "..." }
+     *   event: error      data: { ...ApiError JSON: "error", "code", "requestId", "reason"? ... }
+     *
+     * The error event is the same {@link ApiError} the REST endpoints return, so a client
+     * branches on {@code code} in one place. {@code code: gateway_refused} (with {@code reason})
+     * is the model gateway's decision, not a stream failure: it ends the stream normally, no
+     * {@code done} follows, and nothing in this service failed.
      *
      * Client consumes with fetch() + ReadableStream (EventSource can't do POST).
      */
@@ -122,7 +148,7 @@ public class AgentController {
     public SseEmitter chatStream(@Valid @RequestBody ChatRequest req,
                                  @RequestAttribute(name = RequestIdFilter.REQUEST_ID_ATTRIBUTE, required = false)
                                  String requestId) {
-        SseEmitter emitter = sseRegistry.register(new SseEmitter(10 * 60 * 1000L));   // 10 min
+        SseEmitter emitter = sseRegistry.register(new SseEmitter(STREAM_TIMEOUT_MILLIS));
 
         Session session;
         try {
@@ -130,8 +156,10 @@ public class AgentController {
                     ? agent.createSession()
                     : agent.requireSession(req.sessionId());
         } catch (RuntimeException ex) {
+            ApiErrorCode code = ex instanceof SessionNotFoundException ? ApiErrorCode.NOT_FOUND : ApiErrorCode.INTERNAL_ERROR;
             try {
-                emitter.send(SseEmitter.event().name("error").data(Map.of("error", ex.getMessage())));
+                emitter.send(SseEmitter.event().name(SseEvent.ERROR.wire())
+                        .data(ApiError.of(ex.getMessage(), code, requestId)));
                 emitter.complete();
             } catch (IOException ignore) {}
             return emitter;
@@ -148,32 +176,42 @@ public class AgentController {
             if (mdc != null) MDC.setContextMap(mdc);
             metrics.sseStreamStarted();
             try {
-                emitter.send(SseEmitter.event().name("session").data(sessionPayload(captured)));
+                emitter.send(SseEmitter.event().name(SseEvent.SESSION.wire()).data(sessionPayload(captured)));
 
                 agent.chatStreaming(captured, req.message(), turn,
                         msg -> {
                             try {
-                                emitter.send(SseEmitter.event().name("message").data(msg));
+                                emitter.send(SseEmitter.event().name(SseEvent.MESSAGE.wire()).data(msg));
                             } catch (IOException ioe) {
                                 throw new RuntimeException(ioe);
                             }
                         },
                         delta -> {
                             try {
-                                emitter.send(SseEmitter.event().name("token").data(Map.of("text", delta)));
+                                emitter.send(SseEmitter.event().name(SseEvent.TOKEN.wire()).data(Map.of("text", delta)));
                             } catch (IOException ioe) {
                                 throw new RuntimeException(ioe);
                             }
                         });
 
-                emitter.send(SseEmitter.event().name("session").data(sessionPayload(captured)));
-                emitter.send(SseEmitter.event().name("done").data(Map.of("ok", true)));
+                emitter.send(SseEmitter.event().name(SseEvent.SESSION.wire()).data(sessionPayload(captured)));
+                emitter.send(SseEmitter.event().name(SseEvent.DONE.wire()).data(Map.of("ok", true)));
+                emitter.complete();
+            } catch (GatewayRefusedException refused) {
+                // The gateway's decision, not a stream failure: the same body the REST
+                // endpoint returns, then a normal completion — the turn ended with an answer.
+                log.warn("[{}] Gateway refused the model call: {}", requestId, refused.refusal());
+                try {
+                    emitter.send(SseEmitter.event().name(SseEvent.ERROR.wire())
+                            .data(ApiError.gatewayRefused(refused.getMessage(), refused.refusal(), requestId)));
+                } catch (IOException ignore) {}
                 emitter.complete();
             } catch (Exception e) {
                 log.warn("SSE stream failed", e);
                 try {
-                    emitter.send(SseEmitter.event().name("error")
-                            .data(Map.of("error", e.getMessage() == null ? e.toString() : e.getMessage())));
+                    emitter.send(SseEmitter.event().name(SseEvent.ERROR.wire())
+                            .data(ApiError.of(e.getMessage() == null ? e.toString() : e.getMessage(),
+                                    ApiErrorCode.INTERNAL_ERROR, requestId)));
                 } catch (IOException ignore) {}
                 emitter.completeWithError(e);
             } finally {

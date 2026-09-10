@@ -10,11 +10,23 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * Simple retry-with-exponential-backoff for LLM calls. Retries on:
- *   - HTTP 429 (rate-limited)
- *   - HTTP 5xx (server errors)
- *   - Network-level IO errors (connect reset, etc)
- * Does NOT retry on 4xx-other (bad request, auth, etc) since those are programmatic errors.
+ * Retry-with-exponential-backoff for LLM calls, and the one place an upstream failure gets
+ * its type. Retries:
+ * <ul>
+ *   <li>HTTP 429 when the gateway's refusal can clear with time — a rate limit, or a 429 this
+ *       service cannot classify — honouring {@code Retry-After};</li>
+ *   <li>HTTP 5xx;</li>
+ *   <li>network-level errors (connect refused, reset).</li>
+ * </ul>
+ * Does not retry a 429 the gateway marks as an exhausted budget: backoff cannot clear it and
+ * only delays telling the user. Does not retry other 4xx, which are programmatic errors.
+ *
+ * <p>What escapes is always an {@link LlmProviderException}: {@link GatewayRefusedException}
+ * for a 429, {@link ProviderErrorException} for any other status, and
+ * {@link ProviderUnreachableException} when no response came at all. Streaming paths cannot
+ * retry without re-emitting delivered tokens, so they do not go through {@link #call}; they
+ * type what they catch with {@link #failure} and {@link #unreachable} instead, so a 429 is the
+ * same refusal whichever path carried it.
  */
 public final class LlmRetry {
 
@@ -23,6 +35,7 @@ public final class LlmRetry {
     private static final int DEFAULT_MAX_ATTEMPTS = 3;
     private static final Duration DEFAULT_INITIAL_DELAY = Duration.ofMillis(500);
     private static final int BACKOFF_MULTIPLIER = 2;
+    private static final int TOO_MANY_REQUESTS = 429;
 
     private LlmRetry() {}
 
@@ -41,36 +54,53 @@ public final class LlmRetry {
      */
     public static <T> T call(String providerName, Supplier<T> action,
                              int maxAttempts, Duration initialDelay, Consumer<Duration> sleeper) {
-        RuntimeException last = null;
         Duration delay = initialDelay;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 return action.get();
             } catch (WebClientResponseException ex) {
-                int status = ex.getStatusCode().value();
-                boolean retryable = status == 429 || status >= 500;
-                if (!retryable || attempt == maxAttempts) {
-                    throw new RuntimeException(providerName + " API error " + status
-                            + ": " + ex.getResponseBodyAsString(), ex);
+                LlmProviderException failure = failure(providerName, ex);
+                if (!retryable(failure, ex) || attempt == maxAttempts) {
+                    throw failure;
                 }
-                // Honor Retry-After header when present
                 Duration backoff = RetryAfter.parse(ex.getHeaders()).orElse(delay);
-                log.warn("{} API {} (attempt {}/{}), sleeping {}ms",
-                        providerName, status, attempt, maxAttempts, backoff.toMillis());
+                log.warn(LlmMessage.RETRYING_AFTER_STATUS.format(
+                        providerName, ex.getStatusCode().value(), attempt, maxAttempts, backoff.toMillis()));
                 sleeper.accept(backoff);
                 delay = delay.multipliedBy(BACKOFF_MULTIPLIER);
-                last = ex;
             } catch (WebClientRequestException ex) {
                 if (attempt == maxAttempts) {
-                    throw new RuntimeException(providerName + " network error: " + ex.getMessage(), ex);
+                    throw unreachable(providerName, ex);
                 }
-                log.warn("{} network error (attempt {}/{}): {}", providerName, attempt, maxAttempts, ex.getMessage());
+                log.warn(LlmMessage.RETRYING_AFTER_NETWORK_ERROR.format(
+                        providerName, attempt, maxAttempts, ex.getMessage()));
                 sleeper.accept(delay);
                 delay = delay.multipliedBy(BACKOFF_MULTIPLIER);
-                last = ex;
             }
         }
-        throw last == null ? new IllegalStateException("retry exhausted") : last;
+        throw new IllegalStateException(LlmMessage.RETRY_EXHAUSTED.format(providerName, maxAttempts));
+    }
+
+    /**
+     * Types a response the provider answered with: a 429 is the gateway's refusal, read off the
+     * body; any other error status is a provider error.
+     */
+    public static LlmProviderException failure(String providerName, WebClientResponseException ex) {
+        return ex.getStatusCode().value() == TOO_MANY_REQUESTS
+                ? GatewayRefusedException.from(providerName, ex)
+                : new ProviderErrorException(providerName, ex);
+    }
+
+    /** Types the absence of a response. */
+    public static LlmProviderException unreachable(String providerName, WebClientRequestException ex) {
+        return new ProviderUnreachableException(providerName, ex);
+    }
+
+    private static boolean retryable(LlmProviderException failure, WebClientResponseException ex) {
+        if (failure instanceof GatewayRefusedException refused) {
+            return refused.refusal().isRetryable();
+        }
+        return ex.getStatusCode().is5xxServerError();
     }
 
     private static void sleep(Duration d) {
