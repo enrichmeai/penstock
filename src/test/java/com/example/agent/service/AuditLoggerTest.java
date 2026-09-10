@@ -34,7 +34,7 @@ public class AuditLoggerTest {
     @Test
     public void testToolCall_Success() {
         // Act
-        auditLogger.toolCall("alice", "session-1", "read_file", Map.of("path", "/etc/passwd"), true, 1024);
+        auditLogger.toolCall("alice", "session-1", "read_file", Map.of("path", "/etc/passwd"), ToolOutcome.OK, 1024);
 
         // Assert
         assertEquals(1, mockRepo.saved.size());
@@ -51,7 +51,7 @@ public class AuditLoggerTest {
     @Test
     public void testToolCall_Failure() {
         // Act
-        auditLogger.toolCall("alice", "session-1", "write_file", Map.of("path", "/restricted"), false, 0);
+        auditLogger.toolCall("alice", "session-1", "write_file", Map.of("path", "/restricted"), ToolOutcome.ERROR, 0);
 
         // Assert
         assertEquals(1, mockRepo.saved.size());
@@ -119,7 +119,7 @@ public class AuditLoggerTest {
         AuditLogger auditLoggerNoRepo = new AuditLogger(null, mapper);
 
         // Act: should not throw
-        auditLoggerNoRepo.toolCall("alice", "session-1", "test_tool", Map.of(), true, 0);
+        auditLoggerNoRepo.toolCall("alice", "session-1", "test_tool", Map.of(), ToolOutcome.OK, 0);
         auditLoggerNoRepo.llmCall("alice", "session-1", "anthropic", 0, 0, true);
 
         // Assert: nothing saved
@@ -129,7 +129,7 @@ public class AuditLoggerTest {
     @Test
     public void testSessionIdNull() {
         // Act
-        auditLogger.toolCall("alice", null, "bash", Map.of("cmd", "echo hello"), true, 100);
+        auditLogger.toolCall("alice", null, "bash", Map.of("cmd", "echo hello"), ToolOutcome.OK, 100);
 
         // Assert
         assertEquals(1, mockRepo.saved.size());
@@ -142,7 +142,7 @@ public class AuditLoggerTest {
     public void testNullUser_RecordedAsAnonymous() {
         // A null/blank user (e.g. a caller that never resolved one) must never
         // NPE and is attributed to "anonymous".
-        auditLogger.toolCall(null, "session-1", "bash", Map.of(), true, 0);
+        auditLogger.toolCall(null, "session-1", "bash", Map.of(), ToolOutcome.OK, 0);
         auditLogger.llmCall("  ", "session-1", "anthropic", 1, 2, true);
 
         assertEquals(2, mockRepo.saved.size());

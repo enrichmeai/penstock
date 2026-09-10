@@ -42,6 +42,13 @@ public class AuditLogger {
         this.mapper = mapper;
     }
 
+    /** Keys of a {@code tool_call} event's {@code detail}. */
+    private static final String TOOL_DETAIL_TOOL = "tool";
+    private static final String TOOL_DETAIL_ARGS = "args";
+    private static final String TOOL_DETAIL_OUTCOME = "outcome";
+    private static final String TOOL_DETAIL_OK = "ok";
+    private static final String TOOL_DETAIL_CONTENT_BYTES = "contentBytes";
+
     /**
      * Log a tool call event.
      *
@@ -49,11 +56,14 @@ public class AuditLogger {
      * @param sessionId ID of the session (may be null)
      * @param toolName name of the tool invoked
      * @param args tool arguments
-     * @param ok true if the tool succeeded
+     * @param outcome how the call ended. {@code detail.outcome} ({@code OK|REFUSED|ERROR}) is the
+     *                field of record; {@code detail.ok} is kept for older readers and is true only
+     *                for {@code OK} — a refusal is the far system's decision, not a success
      * @param contentBytes size of the tool output
      */
     @Async
-    public void toolCall(String userId, String sessionId, String toolName, Map<String, Object> args, boolean ok, int contentBytes) {
+    public void toolCall(String userId, String sessionId, String toolName, Map<String, Object> args,
+                         ToolOutcome outcome, int contentBytes) {
         if (repo == null) {
             log.debug("Audit repository not available; skipping tool_call event");
             return;
@@ -61,10 +71,11 @@ public class AuditLogger {
 
         try {
             Map<String, Object> detail = new LinkedHashMap<>();
-            detail.put("tool", toolName);
-            detail.put("args", args);
-            detail.put("ok", ok);
-            detail.put("contentBytes", contentBytes);
+            detail.put(TOOL_DETAIL_TOOL, toolName);
+            detail.put(TOOL_DETAIL_ARGS, args);
+            detail.put(TOOL_DETAIL_OUTCOME, outcome);
+            detail.put(TOOL_DETAIL_OK, outcome == ToolOutcome.OK);
+            detail.put(TOOL_DETAIL_CONTENT_BYTES, contentBytes);
 
             String detailJson = mapper.writeValueAsString(detail);
             AuditEventEntity event = new AuditEventEntity(
@@ -78,13 +89,6 @@ public class AuditLogger {
         } catch (Exception e) {
             log.warn("Failed to log tool_call event", e);
         }
-    }
-
-    /** {@link #toolCall(String, String, String, Map, boolean, int)} by outcome. */
-    @Async
-    public void toolCall(String userId, String sessionId, String toolName, Map<String, Object> args,
-                         ToolOutcome outcome, int contentBytes) {
-        toolCall(userId, sessionId, toolName, args, outcome != ToolOutcome.ERROR, contentBytes);
     }
 
     /**

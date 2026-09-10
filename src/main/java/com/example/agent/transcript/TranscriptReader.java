@@ -145,11 +145,16 @@ public class TranscriptReader {
     private ToolResult parseToolResult(String json) {
         try {
             Map<String, Object> m = mapper.readValue(json, new TypeReference<>() {});
-            String callId = (String) m.get("callId");
-            String content = (String) m.get("content");
-            Object err = m.get("isError");
+            String callId = (String) m.get(TranscriptWriter.RESULT_CALL_ID);
+            String content = (String) m.get(TranscriptWriter.RESULT_CONTENT);
+            Object err = m.get(TranscriptWriter.RESULT_IS_ERROR);
             boolean isError = err instanceof Boolean && (Boolean) err;
-            return new ToolResult(callId, content == null ? "" : content, isError ? ToolOutcome.ERROR : ToolOutcome.OK);
+            // A transcript written before outcomes existed has only the flag.
+            Object named = m.get(TranscriptWriter.RESULT_OUTCOME);
+            ToolOutcome outcome = named instanceof String name
+                    ? ToolOutcome.valueOf(name)
+                    : (isError ? ToolOutcome.ERROR : ToolOutcome.OK);
+            return new ToolResult(callId, content == null ? "" : content, outcome);
         } catch (RuntimeException ex) {
             throw ex;
         } catch (Exception ex) {

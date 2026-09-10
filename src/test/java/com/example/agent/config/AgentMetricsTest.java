@@ -75,7 +75,7 @@ class AgentMetricsTest {
         AgentMetrics metrics = new AgentMetrics(registry);
 
         // Record a successful tool call
-        metrics.recordToolCall("read_file", true, 150);
+        metrics.recordToolCall("read_file", ToolOutcome.OK, 150);
 
         // Check tool_calls_total counter
         Counter callCounter = registry.find("tool_calls_total")
@@ -100,7 +100,7 @@ class AgentMetricsTest {
         AgentMetrics metrics = new AgentMetrics(registry);
 
         // Record a failed tool call
-        metrics.recordToolCall("write_file", false, 75);
+        metrics.recordToolCall("write_file", ToolOutcome.ERROR, 75);
 
         // Check tool_calls_total for error outcome
         Counter callCounter = registry.find("tool_calls_total")
@@ -196,9 +196,9 @@ class AgentMetricsTest {
         AgentMetrics metrics = new AgentMetrics(registry);
 
         // Record multiple tool calls
-        metrics.recordToolCall("read_file", true, 100);
-        metrics.recordToolCall("read_file", true, 200);
-        metrics.recordToolCall("read_file", false, 50);
+        metrics.recordToolCall("read_file", ToolOutcome.OK, 100);
+        metrics.recordToolCall("read_file", ToolOutcome.OK, 200);
+        metrics.recordToolCall("read_file", ToolOutcome.ERROR, 50);
 
         Timer timer = registry.find("tool_call_duration_ms")
                 .tag("tool", "read_file")
