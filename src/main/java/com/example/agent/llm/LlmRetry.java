@@ -6,6 +6,7 @@ import org.springframework.web.reactive.function.client.WebClientRequestExceptio
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.time.Duration;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -19,14 +20,27 @@ public final class LlmRetry {
 
     private static final Logger log = LoggerFactory.getLogger(LlmRetry.class);
 
+    private static final int DEFAULT_MAX_ATTEMPTS = 3;
+    private static final Duration DEFAULT_INITIAL_DELAY = Duration.ofMillis(500);
+    private static final int BACKOFF_MULTIPLIER = 2;
+
     private LlmRetry() {}
 
     public static <T> T call(String providerName, Supplier<T> action) {
-        return call(providerName, action, 3, Duration.ofMillis(500));
+        return call(providerName, action, DEFAULT_MAX_ATTEMPTS, DEFAULT_INITIAL_DELAY);
     }
 
     public static <T> T call(String providerName, Supplier<T> action,
                              int maxAttempts, Duration initialDelay) {
+        return call(providerName, action, maxAttempts, initialDelay, LlmRetry::sleep);
+    }
+
+    /**
+     * @param sleeper how to wait between attempts — {@link Thread#sleep} in production; a test
+     *                passes a recorder so a gateway's {@code Retry-After: 60} is asserted, not slept
+     */
+    public static <T> T call(String providerName, Supplier<T> action,
+                             int maxAttempts, Duration initialDelay, Consumer<Duration> sleeper) {
         RuntimeException last = null;
         Duration delay = initialDelay;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -40,30 +54,23 @@ public final class LlmRetry {
                             + ": " + ex.getResponseBodyAsString(), ex);
                 }
                 // Honor Retry-After header when present
-                String retryAfter = ex.getHeaders().getFirst("Retry-After");
-                Duration backoff = parseRetryAfter(retryAfter).orElse(delay);
+                Duration backoff = RetryAfter.parse(ex.getHeaders()).orElse(delay);
                 log.warn("{} API {} (attempt {}/{}), sleeping {}ms",
                         providerName, status, attempt, maxAttempts, backoff.toMillis());
-                sleep(backoff);
-                delay = delay.multipliedBy(2);
+                sleeper.accept(backoff);
+                delay = delay.multipliedBy(BACKOFF_MULTIPLIER);
                 last = ex;
             } catch (WebClientRequestException ex) {
                 if (attempt == maxAttempts) {
                     throw new RuntimeException(providerName + " network error: " + ex.getMessage(), ex);
                 }
                 log.warn("{} network error (attempt {}/{}): {}", providerName, attempt, maxAttempts, ex.getMessage());
-                sleep(delay);
-                delay = delay.multipliedBy(2);
+                sleeper.accept(delay);
+                delay = delay.multipliedBy(BACKOFF_MULTIPLIER);
                 last = ex;
             }
         }
         throw last == null ? new IllegalStateException("retry exhausted") : last;
-    }
-
-    private static java.util.Optional<Duration> parseRetryAfter(String v) {
-        if (v == null || v.isBlank()) return java.util.Optional.empty();
-        try { return java.util.Optional.of(Duration.ofSeconds(Long.parseLong(v.trim()))); }
-        catch (NumberFormatException ignore) { return java.util.Optional.empty(); }
     }
 
     private static void sleep(Duration d) {

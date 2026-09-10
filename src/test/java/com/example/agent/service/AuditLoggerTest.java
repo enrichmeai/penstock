@@ -1,5 +1,6 @@
 package com.example.agent.service;
 
+import com.example.agent.llm.LlmFailureReason;
 import com.example.agent.service.persistence.AuditEventEntity;
 import com.example.agent.service.persistence.AuditEventRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -85,6 +86,25 @@ public class AuditLoggerTest {
         AuditEventEntity event = mockRepo.saved.get(0);
         assertEquals("llm_call", event.getEventType());
         assertTrue(event.getDetailJson().contains("false"));
+    }
+
+    @Test
+    public void testLlmCall_FailureCarriesTheReason() throws Exception {
+        auditLogger.llmCall("bob", "session-1", "openai", 0, 0, false, LlmFailureReason.BUDGET_EXCEEDED);
+
+        assertEquals(1, mockRepo.saved.size());
+        Map<?, ?> detail = mapper.readValue(mockRepo.saved.get(0).getDetailJson(), Map.class);
+        assertEquals(false, detail.get("ok"));
+        assertEquals("budget_exceeded", detail.get("reason"), detail.toString());
+    }
+
+    @Test
+    public void testLlmCall_SuccessCarriesNoReason() throws Exception {
+        auditLogger.llmCall("bob", "session-1", "openai", 10, 5, true, null);
+
+        Map<?, ?> detail = mapper.readValue(mockRepo.saved.get(0).getDetailJson(), Map.class);
+        assertEquals(true, detail.get("ok"));
+        assertFalse(detail.containsKey("reason"), detail.toString());
     }
 
     @Test

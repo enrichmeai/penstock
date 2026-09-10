@@ -3,6 +3,9 @@ package com.example.agent.llm.openai;
 import com.example.agent.config.AgentMetrics;
 import com.example.agent.config.AgentProperties;
 import com.example.agent.llm.CompletionResult;
+import com.example.agent.llm.GatewayRefusal;
+import com.example.agent.llm.GatewayRefusedException;
+import com.example.agent.llm.LiteLlmFixtures;
 import com.example.agent.model.ChatMessage;
 import com.example.agent.model.ToolCall;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class OpenAiProviderStreamingTest {
 
@@ -68,6 +72,34 @@ class OpenAiProviderStreamingTest {
     @AfterEach
     void tearDown() throws Exception {
         server.shutdown();
+    }
+
+    /**
+     * With streaming on (the default), every model call takes this path and never sees
+     * LlmRetry — so the refusal must be typed here too, or the demo's 429 stays a 500.
+     */
+    @Test
+    void aBudgetRefusalOnTheStreamingPathIsTypedWithoutARetry() throws Exception {
+        server.enqueue(LiteLlmFixtures.load(LiteLlmFixtures.BUDGET_EXCEEDED).asMockResponse());
+
+        assertThatThrownBy(() -> provider.completeStreaming("system", List.of(ChatMessage.user("hi")), List.of(),
+                new com.example.agent.llm.LlmCallContext("bob", "session-10", "req-stream-2"), t -> {}))
+                .isInstanceOfSatisfying(GatewayRefusedException.class, refused ->
+                        assertThat(refused.refusal()).isEqualTo(GatewayRefusal.BUDGET_EXCEEDED));
+        assertThat(server.getRequestCount()).isEqualTo(1);
+    }
+
+    @Test
+    void aRateLimitOnTheStreamingPathIsTypedWithItsRetryAfterAndNotRetried() throws Exception {
+        server.enqueue(LiteLlmFixtures.load(LiteLlmFixtures.RATE_LIMITED).asMockResponse());
+
+        assertThatThrownBy(() -> provider.completeStreaming("system", List.of(ChatMessage.user("hi")), List.of(),
+                new com.example.agent.llm.LlmCallContext("bob", "session-11", "req-stream-3"), t -> {}))
+                .isInstanceOfSatisfying(GatewayRefusedException.class, refused -> {
+                    assertThat(refused.refusal()).isEqualTo(GatewayRefusal.RATE_LIMITED);
+                    assertThat(refused.retryAfter()).contains(java.time.Duration.ofSeconds(60));
+                });
+        assertThat(server.getRequestCount()).as("a mid-stream retry would re-emit tokens; none is made").isEqualTo(1);
     }
 
     @Test

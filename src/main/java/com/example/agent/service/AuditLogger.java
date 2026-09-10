@@ -1,6 +1,7 @@
 package com.example.agent.service;
 
 import com.example.agent.config.CurrentUser;
+import com.example.agent.llm.LlmFailureReason;
 import com.example.agent.service.persistence.AuditEventEntity;
 import com.example.agent.service.persistence.AuditEventRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -115,6 +116,15 @@ public class AuditLogger {
         } catch (Exception e) {
             log.warn("Failed to log llm_call event", e);
         }
+    }
+
+    /**
+     * {@link #llmCall(String, String, String, int, int, boolean)} with why the call failed.
+     */
+    @Async
+    public void llmCall(String userId, String sessionId, String provider, int inputTokens, int outputTokens,
+                        boolean ok, LlmFailureReason reason) {
+        llmCall(userId, sessionId, provider, inputTokens, outputTokens, ok);
     }
 
     private static String normalise(String userId) {

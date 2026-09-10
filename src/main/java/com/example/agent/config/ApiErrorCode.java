@@ -10,6 +10,8 @@ public enum ApiErrorCode {
     BAD_REQUEST("bad_request"),
     BAD_STATE("bad_state"),
     FORBIDDEN("forbidden"),
+    /** The model gateway refused the call (budget, rate limit); see {@code reason}. HTTP 429. */
+    GATEWAY_REFUSED("gateway_refused"),
     INTERNAL_ERROR("internal_error"),
     NOT_FOUND("not_found"),
     UNAUTHENTICATED("unauthenticated"),

@@ -1,0 +1,27 @@
+# LiteLLM refusing a chat completion because the caller's team budget is exhausted.
+#
+# Captured 2026-09-10 from the running enrichmeai/governed-ai-demo stack: LiteLLM open build,
+# ghcr.io/berriai/litellm:main-latest (image sha256:35db95db70f9e9ffe202514292194d0927e40f21
+# 3b77f865565f377265d128cf), the request beat 5 makes on Bob's virtual key. Everything below
+# this comment block is the response verbatim, headers included. Not edited; never invent one.
+#
+# Capture command (in governed-ai-demo, stack up via ./up.sh):
+#   . lib/kit.sh; . gateway-keys.env
+#   curl -sf -X POST "$LITELLM_BASE/team/update" -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+#     -H 'Content-Type: application/json' -d '{"team_id":"support","max_budget":0.000001}'
+#   curl -s -D - -X POST "$LITELLM_BASE/v1/chat/completions" \
+#     -H "Authorization: Bearer $AGENT_CREDENTIALS_PERUSER_OPENAI_BOB" -H 'Content-Type: application/json' \
+#     -d '{"model":"assistant","messages":[{"role":"user","content":"hi"}],"max_tokens":5}'
+#   curl -sf -X POST "$LITELLM_BASE/team/update" -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+#     -H 'Content-Type: application/json' -d '{"team_id":"support","max_budget":1.00}'      # restore
+#
+# What matters: HTTP 429, error.type "budget_exceeded", error.code "429", no Retry-After.
+HTTP/1.1 429 Too Many Requests
+date: Thu, 10 Sep 2026 05:29:28 GMT
+content-length: 155
+content-type: application/json
+x-frame-options: DENY
+content-security-policy: frame-ancestors 'none'
+x-content-type-options: nosniff
+
+{"error":{"message":"Budget has been exceeded! Team=support Current cost: 0.308108, Max budget: 1e-06","type":"budget_exceeded","param":null,"code":"429"}}
