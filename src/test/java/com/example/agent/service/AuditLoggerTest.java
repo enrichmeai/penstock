@@ -1,5 +1,6 @@
 package com.example.agent.service;
 
+import com.example.agent.model.ToolOutcome;
 import com.example.agent.service.persistence.AuditEventEntity;
 import com.example.agent.service.persistence.AuditEventRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -57,6 +58,31 @@ public class AuditLoggerTest {
         AuditEventEntity event = mockRepo.saved.get(0);
         assertEquals("tool_call", event.getEventType());
         assertTrue(event.getDetailJson().contains("false"));
+    }
+
+    @Test
+    public void testToolCall_RefusedIsRecordedAsRefusedNotAsOk() throws Exception {
+        auditLogger.toolCall("bob", "session-1", "pod", Map.of("type", "read", "path", "/support/"), ToolOutcome.REFUSED, 150);
+
+        assertEquals(1, mockRepo.saved.size());
+        Map<?, ?> detail = mapper.readValue(mockRepo.saved.get(0).getDetailJson(), Map.class);
+        assertEquals("REFUSED", detail.get("outcome"), detail.toString());
+        assertEquals(false, detail.get("ok"), "kept for older readers; only OK is ok");
+        assertEquals(150, detail.get("contentBytes"));
+        assertEquals("pod", detail.get("tool"));
+    }
+
+    @Test
+    public void testToolCall_OkAndErrorOutcomes() throws Exception {
+        auditLogger.toolCall("bob", "session-1", "read_file", Map.of(), ToolOutcome.OK, 10);
+        auditLogger.toolCall("bob", "session-1", "shell", Map.of(), ToolOutcome.ERROR, 0);
+
+        Map<?, ?> ok = mapper.readValue(mockRepo.saved.get(0).getDetailJson(), Map.class);
+        Map<?, ?> error = mapper.readValue(mockRepo.saved.get(1).getDetailJson(), Map.class);
+        assertEquals("OK", ok.get("outcome"));
+        assertEquals(true, ok.get("ok"));
+        assertEquals("ERROR", error.get("outcome"));
+        assertEquals(false, error.get("ok"));
     }
 
     @Test

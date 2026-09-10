@@ -1,6 +1,7 @@
 package com.example.agent.service;
 
 import com.example.agent.config.CurrentUser;
+import com.example.agent.model.ToolOutcome;
 import com.example.agent.service.persistence.AuditEventEntity;
 import com.example.agent.service.persistence.AuditEventRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -77,6 +78,13 @@ public class AuditLogger {
         } catch (Exception e) {
             log.warn("Failed to log tool_call event", e);
         }
+    }
+
+    /** {@link #toolCall(String, String, String, Map, boolean, int)} by outcome. */
+    @Async
+    public void toolCall(String userId, String sessionId, String toolName, Map<String, Object> args,
+                         ToolOutcome outcome, int contentBytes) {
+        toolCall(userId, sessionId, toolName, args, outcome != ToolOutcome.ERROR, contentBytes);
     }
 
     /**

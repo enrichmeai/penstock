@@ -1,5 +1,6 @@
 package com.example.agent.config;
 
+import com.example.agent.model.ToolOutcome;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Timer;
@@ -115,6 +116,21 @@ class AgentMetricsTest {
                 .timer();
         assertNotNull(timer);
         assertEquals(1, timer.count());
+    }
+
+    @Test
+    void recordToolCallRefusedOutcomeIsItsOwnLabel() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        AgentMetrics metrics = new AgentMetrics(registry);
+
+        metrics.recordToolCall("pod", ToolOutcome.REFUSED, 12);
+
+        Counter refused = registry.find("tool_calls_total").tag("tool", "pod").tag("outcome", "refused").counter();
+        assertNotNull(refused, "a refusal is counted as refused");
+        assertEquals(1.0, refused.count());
+        assertNull(registry.find("tool_calls_total").tag("tool", "pod").tag("outcome", "ok").counter(),
+                "a refusal is not a success");
+        assertEquals(1, registry.find("tool_call_duration_ms").tag("tool", "pod").timer().count());
     }
 
     @Test

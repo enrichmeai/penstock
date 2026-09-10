@@ -166,6 +166,6 @@ public class ToolRegistry {
         String truncated = head + marker + tail;
         log.info("Tool output truncated from {} to {} bytes", contentBytes.length, truncated.getBytes(StandardCharsets.UTF_8).length);
 
-        return new ToolResult(r.callId(), truncated, r.isError());
+        return new ToolResult(r.callId(), truncated, r.outcome());
     }
 }

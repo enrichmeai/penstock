@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import com.example.agent.model.ToolOutcome;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.ConcurrentHashMap;
@@ -110,6 +111,11 @@ public class AgentMetrics {
                         .tag("tool", tool)
                         .register(registry)
         ).record(java.time.Duration.ofMillis(durationMs));
+    }
+
+    /** {@link #recordToolCall(String, boolean, long)} by outcome. */
+    public void recordToolCall(String tool, ToolOutcome outcome, long durationMs) {
+        recordToolCall(tool, outcome != ToolOutcome.ERROR, durationMs);
     }
 
     /**
