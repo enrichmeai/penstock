@@ -5,6 +5,7 @@ import com.example.agent.config.ApiError;
 import com.example.agent.config.ApiErrorCode;
 import com.example.agent.config.CurrentUser;
 import com.example.agent.config.RequestIdFilter;
+import com.example.agent.config.SafeMessage;
 import com.example.agent.config.SseEmitterRegistry;
 import com.example.agent.controller.dto.ChatRequest;
 import com.example.agent.controller.dto.ChatResponse;
@@ -210,7 +211,7 @@ public class AgentController {
                 log.warn("SSE stream failed", e);
                 try {
                     emitter.send(SseEmitter.event().name(SseEvent.ERROR.wire())
-                            .data(ApiError.of(e.getMessage() == null ? e.toString() : e.getMessage(),
+                            .data(ApiError.of(clientSafeMessage(e, "Internal error."),
                                     ApiErrorCode.INTERNAL_ERROR, requestId)));
                 } catch (IOException ignore) {}
                 emitter.completeWithError(e);
@@ -281,5 +282,13 @@ public class AgentController {
                         "outputTokens", s.getTotalUsage().outputTokens(),
                         "total",        s.getTotalUsage().total()
                 ));
+    }
+
+    static String clientSafeMessage(Throwable error, String fallback) {
+        if (!error.getClass().isAnnotationPresent(SafeMessage.class)) {
+            return fallback;
+        }
+        String message = error.getMessage();
+        return (message == null || message.isBlank()) ? fallback : message;
     }
 }

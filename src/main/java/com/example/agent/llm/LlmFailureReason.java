@@ -42,8 +42,11 @@ public enum LlmFailureReason {
         if (failure instanceof GatewayRefusedException refused) {
             return refused.refusal().failureReason();
         }
-        if (failure instanceof ProviderErrorException || failure instanceof WebClientResponseException) {
+        if (failure instanceof ProviderErrorException) {
             return PROVIDER_ERROR;
+        }
+        if (failure instanceof WebClientResponseException response) {
+            return response.getStatusCode().value() == 429 ? GATEWAY_REFUSED : PROVIDER_ERROR;
         }
         if (failure instanceof ProviderUnreachableException || failure instanceof WebClientRequestException) {
             return UNREACHABLE;

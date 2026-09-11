@@ -35,6 +35,8 @@ class LlmFailureReasonTest {
     void otherFailuresAreClassifiedByType() {
         assertEquals(LlmFailureReason.PROVIDER_ERROR,
                 LlmFailureReason.of(new ProviderErrorException(PROVIDER, status(502, "bad gateway"))));
+        assertEquals(LlmFailureReason.GATEWAY_REFUSED,
+                LlmFailureReason.of(status(429, "raw refusal from untranslated path")));
         assertEquals(LlmFailureReason.PROVIDER_ERROR,
                 LlmFailureReason.of(status(500, "raw, from a path that did not translate")));
         WebClientRequestException network = new WebClientRequestException(new ConnectException("refused"),
