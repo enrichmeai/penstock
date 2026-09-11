@@ -58,4 +58,12 @@ class ToolResultTest {
                 "{\"callId\":\"c1\",\"content\":\"no\",\"outcome\":\"REFUSED\",\"isError\":false}", ToolResult.class);
         assertEquals(ToolOutcome.REFUSED, read.outcome());
     }
+
+    @Test
+    void nullContentIsNormalizedToEmptyString() throws Exception {
+        assertEquals("", new ToolResult("c1", null, ToolOutcome.OK).content());
+        assertEquals("",
+                mapper.readValue("{\"callId\":\"c1\",\"content\":null,\"outcome\":\"OK\",\"isError\":false}",
+                        ToolResult.class).content());
+    }
 }

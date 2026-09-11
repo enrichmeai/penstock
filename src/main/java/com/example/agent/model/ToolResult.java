@@ -24,6 +24,7 @@ import java.util.Objects;
 public record ToolResult(String callId, String content, ToolOutcome outcome) {
 
     public ToolResult {
+        content = content == null ? "" : content;
         Objects.requireNonNull(outcome, "outcome");
     }
 
