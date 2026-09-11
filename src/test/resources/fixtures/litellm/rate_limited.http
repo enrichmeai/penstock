@@ -1,0 +1,39 @@
+# LiteLLM refusing a chat completion because the key's requests-per-minute limit is reached.
+#
+# Captured 2026-09-10 from the running enrichmeai/governed-ai-demo stack: LiteLLM open build,
+# ghcr.io/berriai/litellm:main-latest (image sha256:35db95db70f9e9ffe202514292194d0927e40f21
+# 3b77f865565f377265d128cf). The demo has no rate-limited key, so a temporary virtual key with
+# rpm_limit=1 was generated, called twice inside a minute (first call 200, second refused), and
+# deleted afterwards; the hash in the message is that deleted key's. Everything below this
+# comment block is the second response verbatim, headers included. Not edited; never invent one.
+#
+# Capture command (in governed-ai-demo, stack up via ./up.sh):
+#   . lib/kit.sh
+#   KEY=$(curl -sf -X POST "$LITELLM_BASE/key/generate" -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+#     -H 'Content-Type: application/json' -d '{"key_alias":"fixture-rpm","rpm_limit":1,"models":["assistant"]}' \
+#     | python3 -c 'import sys,json;print(json.load(sys.stdin)["key"])')
+#   BODY='{"model":"assistant","messages":[{"role":"user","content":"hi"}],"max_tokens":5}'
+#   curl -s -o /dev/null -X POST "$LITELLM_BASE/v1/chat/completions" -H "Authorization: Bearer $KEY" \
+#     -H 'Content-Type: application/json' -d "$BODY"                                          # 200
+#   curl -s -D - -X POST "$LITELLM_BASE/v1/chat/completions" -H "Authorization: Bearer $KEY" \
+#     -H 'Content-Type: application/json' -d "$BODY"                                          # 429
+#   curl -sf -X POST "$LITELLM_BASE/key/delete" -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+#     -H 'Content-Type: application/json' -d "{\"keys\":[\"$KEY\"]}"                          # clean up
+#
+# What matters: HTTP 429, error.type "throttling_error", error.code "429", Retry-After 60.
+HTTP/1.1 429 Too Many Requests
+date: Thu, 10 Sep 2026 05:29:34 GMT
+retry-after: 60
+rate_limit_type: requests
+reset_at: 2026-09-10 05:30:34 UTC
+x-litellm-call-id: 833ec0de-223a-45fa-b9b4-cc85d631c19f
+x-litellm-response-cost: 0
+x-litellm-key-rpm-limit: 1
+x-litellm-key-spend: 0.0
+content-length: 269
+content-type: application/json
+x-frame-options: DENY
+content-security-policy: frame-ancestors 'none'
+x-content-type-options: nosniff
+
+{"error":{"message":"Rate limit exceeded for api_key: 985a9561b9dfc6b32e75fb1b59d08d52f7958062e9d45811774a6f2186bb7477. Limit type: requests. Current limit: 1, Remaining: 0. Limit resets at: 2026-09-10 05:30:34 UTC","type":"throttling_error","param":null,"code":"429"}}

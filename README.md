@@ -198,7 +198,13 @@ event: message    data: { "role":"TOOL","toolResults":[…] }
 event: done       data: { "ok": true }
 ```
 
-The web UI consumes this with `fetch()` + `ReadableStream` (EventSource can't POST).
+A turn that ends without an answer emits `event: error` instead of `done`, with the same
+body the REST endpoints return (see *Error responses*): `code: gateway_refused` plus
+`reason` when the model gateway refused the call — the stream then closes normally — and
+`code: internal_error` when the stream itself failed.
+
+The web UI consumes this with `fetch()` + `ReadableStream` (EventSource can't POST), and
+renders a gateway refusal as its own block, distinct from a stream failure.
 The non-streaming `POST /api/chat` remains available for simple clients.
 
 ### Heartbeats and long-running turns
@@ -306,6 +312,39 @@ overridden with env vars or `--agent.*=value` command-line flags.
 | `DELETE` | `/api/sessions/{id}` | — | Delete a session |
 
 Interactive API docs at **`/swagger-ui.html`** when the app is running.
+
+### Error responses
+
+Every error is one JSON shape — from the REST endpoints, and as the payload of the SSE
+`error` event:
+
+```json
+{ "error": "The AI gateway refused this call: budget exhausted.",
+  "code": "gateway_refused", "reason": "budget_exceeded",
+  "requestId": "demo-b5", "timestamp": "2026-09-10T05:29:28Z", "fieldErrors": null }
+```
+
+| Status | `code` | Meaning |
+| --- | --- | --- |
+| 400 | `bad_request`, `bad_state`, `validation_failed` | the request; `validation_failed` carries `fieldErrors` |
+| 401 | `unauthenticated` | no or invalid credentials |
+| 403 | `forbidden` | the caller lacks permission |
+| 404 | `not_found` | unknown session, or not the caller's (deliberately the same answer) |
+| 429 | `gateway_refused` | the model gateway refused the call before any model ran; `reason` says which refusal |
+| 500 | `internal_error` | something in this service failed; the message is generic |
+
+`gateway_refused` is the gateway's decision, not a failure of this service, and `reason` is
+what the gateway's 429 body said (`error.type` on LiteLLM's wire):
+
+| `reason` | Gateway said | Penstock does |
+| --- | --- | --- |
+| `budget_exceeded` | a budget (team, key, user) is exhausted | answers at once — waiting cannot clear it, so it is not retried |
+| `rate_limited` | a request or token rate limit is reached | retries on the gateway's `Retry-After` (three attempts), then answers; `Retry-After` is passed through as a response header |
+| `unknown` | a 429 whose body Penstock could not classify | as `rate_limited` |
+
+The `error` text is Penstock's own catalogue sentence; the gateway's message (which can carry
+a key hash) goes to the server log only. The same refusal is written to `audit_events` as an
+`llm_call` with `ok: false` and `reason` — see the audit section below.
 
 ## Architecture
 

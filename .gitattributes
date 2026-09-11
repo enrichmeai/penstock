@@ -1,0 +1,2 @@
+# Captured HTTP responses keep their bytes (CRLF header lines) on every platform.
+src/test/resources/fixtures/**/*.http -text

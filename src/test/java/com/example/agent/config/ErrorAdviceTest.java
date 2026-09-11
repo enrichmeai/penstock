@@ -1,6 +1,9 @@
 package com.example.agent.config;
 
 import jakarta.validation.constraints.NotBlank;
+import com.example.agent.llm.GatewayRefusedException;
+import com.example.agent.llm.LiteLlmFixtures;
+import com.example.agent.llm.LlmMessage;
 import com.example.agent.llm.CompletionResult;
 import com.example.agent.llm.LlmProvider;
 import com.example.agent.model.ChatMessage;
@@ -23,10 +26,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -112,6 +117,20 @@ class ErrorAdviceTest {
         @GetMapping("/error/internal")
         void internalError() {
             throw new RuntimeException("Unexpected error occurred");
+        }
+
+        /** The gateway's captured 429 for an exhausted budget, thrown as the llm layer throws it. */
+        @GetMapping("/error/gateway-budget")
+        void gatewayBudgetExceeded() throws IOException {
+            throw GatewayRefusedException.from("openai",
+                    LiteLlmFixtures.load(LiteLlmFixtures.BUDGET_EXCEEDED).asException());
+        }
+
+        /** The gateway's captured 429 for a rate limit (Retry-After: 60). */
+        @GetMapping("/error/gateway-rate-limit")
+        void gatewayRateLimited() throws IOException {
+            throw GatewayRefusedException.from("openai",
+                    LiteLlmFixtures.load(LiteLlmFixtures.RATE_LIMITED).asException());
         }
     }
 
@@ -208,5 +227,36 @@ class ErrorAdviceTest {
         assertThat(response).contains("Internal error.");
         // Original error message MUST NOT appear
         assertThat(response).doesNotContain("Unexpected error occurred");
+    }
+
+    @Test
+    void gatewayRefusalIs429WithCodeAndReasonNotAnInternalError() throws Exception {
+        String response = mvc.perform(get("/error/gateway-budget"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value("gateway_refused"))
+                .andExpect(jsonPath("$.reason").value("budget_exceeded"))
+                .andExpect(jsonPath("$.error").value(LlmMessage.GATEWAY_REFUSED_BUDGET_EXCEEDED.format()))
+                .andExpect(jsonPath("$.requestId").exists())
+                .andExpect(jsonPath("$.timestamp").exists())
+                .andExpect(header().doesNotExist("Retry-After"))
+                .andReturn().getResponse().getContentAsString();
+
+        // The gateway's own text (team, spend, budget) stays out of the response
+        assertThat(response).doesNotContain("Team=support");
+        assertThat(response).doesNotContain("internal_error");
+    }
+
+    @Test
+    void gatewayRateLimitCarriesTheGatewaysRetryAfter() throws Exception {
+        String response = mvc.perform(get("/error/gateway-rate-limit"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "60"))
+                .andExpect(jsonPath("$.code").value("gateway_refused"))
+                .andExpect(jsonPath("$.reason").value("rate_limited"))
+                .andExpect(jsonPath("$.error").value(LlmMessage.GATEWAY_REFUSED_RATE_LIMITED_RETRY_AFTER.format(60)))
+                .andReturn().getResponse().getContentAsString();
+
+        // The key hash in the gateway's message never reaches a client
+        assertThat(response).doesNotContain("api_key");
     }
 }

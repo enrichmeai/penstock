@@ -5,6 +5,7 @@ import com.example.agent.config.AgentProperties;
 import com.example.agent.config.RequestIdFilter;
 import com.example.agent.llm.CompletionResult;
 import com.example.agent.llm.LlmCallContext;
+import com.example.agent.llm.LlmRetry;
 import com.example.agent.llm.LlmProvider;
 import com.example.agent.model.BearerToken;
 import com.example.agent.model.ChatMessage;
@@ -21,6 +22,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -123,7 +126,7 @@ public class OpenAiProvider implements LlmProvider {
 
         JsonNode response;
         try {
-            response = com.example.agent.llm.LlmRetry.call(name(), () -> completionsRequest(credential, context)
+            response = LlmRetry.call(name(), () -> completionsRequest(credential, context)
                     .bodyValue(body)
                     .retrieve()
                     .bodyToMono(JsonNode.class)
@@ -182,6 +185,14 @@ public class OpenAiProvider implements LlmProvider {
                     .timeout(CALL_TIMEOUT)
                     .toStream()
                     .forEach(line -> handleStreamEvent(line, textBuf, toolBufs, usageRef, onToken));
+        } catch (WebClientResponseException e) {
+            // Typed here because this path bypasses LlmRetry: a 429 is the gateway's
+            // refusal whichever path carried it, and must not reach the caller raw.
+            metrics.recordLlmCall(name(), false, 0, 0);
+            throw LlmRetry.failure(name(), e);
+        } catch (WebClientRequestException e) {
+            metrics.recordLlmCall(name(), false, 0, 0);
+            throw LlmRetry.unreachable(name(), e);
         } catch (Exception e) {
             metrics.recordLlmCall(name(), false, 0, 0);
             throw e;

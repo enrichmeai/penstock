@@ -3,6 +3,7 @@ package com.example.agent.service;
 import com.example.agent.config.AgentProperties;
 import com.example.agent.llm.CompletionResult;
 import com.example.agent.llm.LlmCallContext;
+import com.example.agent.llm.LlmFailureReason;
 import com.example.agent.llm.LlmProvider;
 import com.example.agent.model.*;
 import com.example.agent.tools.ToolContext;
@@ -150,8 +151,12 @@ public class AgentService {
                                 tools.specs(),
                                 llmContext);
             } catch (RuntimeException | Error e) {
+                // Audited with its reason: a gateway's refusal (budget, rate limit) is a
+                // different row from a provider that fell over. The exception itself goes
+                // up untouched — the REST and SSE layers type their answer from it.
                 if (auditLogger != null) {
-                    auditLogger.llmCall(session.getUserId(), session.getId(), llm.name(), 0, 0, false);
+                    auditLogger.llmCall(session.getUserId(), session.getId(), llm.name(), 0, 0, false,
+                            LlmFailureReason.of(e));
                 }
                 throw e;
             }
