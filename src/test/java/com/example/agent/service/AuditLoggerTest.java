@@ -1,5 +1,6 @@
 package com.example.agent.service;
 
+import com.example.agent.model.ToolOutcome;
 import com.example.agent.service.persistence.AuditEventEntity;
 import com.example.agent.service.persistence.AuditEventRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,7 +34,7 @@ public class AuditLoggerTest {
     @Test
     public void testToolCall_Success() {
         // Act
-        auditLogger.toolCall("alice", "session-1", "read_file", Map.of("path", "/etc/passwd"), true, 1024);
+        auditLogger.toolCall("alice", "session-1", "read_file", Map.of("path", "/etc/passwd"), ToolOutcome.OK, 1024);
 
         // Assert
         assertEquals(1, mockRepo.saved.size());
@@ -50,13 +51,38 @@ public class AuditLoggerTest {
     @Test
     public void testToolCall_Failure() {
         // Act
-        auditLogger.toolCall("alice", "session-1", "write_file", Map.of("path", "/restricted"), false, 0);
+        auditLogger.toolCall("alice", "session-1", "write_file", Map.of("path", "/restricted"), ToolOutcome.ERROR, 0);
 
         // Assert
         assertEquals(1, mockRepo.saved.size());
         AuditEventEntity event = mockRepo.saved.get(0);
         assertEquals("tool_call", event.getEventType());
         assertTrue(event.getDetailJson().contains("false"));
+    }
+
+    @Test
+    public void testToolCall_RefusedIsRecordedAsRefusedNotAsOk() throws Exception {
+        auditLogger.toolCall("bob", "session-1", "pod", Map.of("type", "read", "path", "/support/"), ToolOutcome.REFUSED, 150);
+
+        assertEquals(1, mockRepo.saved.size());
+        Map<?, ?> detail = mapper.readValue(mockRepo.saved.get(0).getDetailJson(), Map.class);
+        assertEquals("REFUSED", detail.get("outcome"), detail.toString());
+        assertEquals(false, detail.get("ok"), "kept for older readers; only OK is ok");
+        assertEquals(150, detail.get("contentBytes"));
+        assertEquals("pod", detail.get("tool"));
+    }
+
+    @Test
+    public void testToolCall_OkAndErrorOutcomes() throws Exception {
+        auditLogger.toolCall("bob", "session-1", "read_file", Map.of(), ToolOutcome.OK, 10);
+        auditLogger.toolCall("bob", "session-1", "shell", Map.of(), ToolOutcome.ERROR, 0);
+
+        Map<?, ?> ok = mapper.readValue(mockRepo.saved.get(0).getDetailJson(), Map.class);
+        Map<?, ?> error = mapper.readValue(mockRepo.saved.get(1).getDetailJson(), Map.class);
+        assertEquals("OK", ok.get("outcome"));
+        assertEquals(true, ok.get("ok"));
+        assertEquals("ERROR", error.get("outcome"));
+        assertEquals(false, error.get("ok"));
     }
 
     @Test
@@ -93,7 +119,7 @@ public class AuditLoggerTest {
         AuditLogger auditLoggerNoRepo = new AuditLogger(null, mapper);
 
         // Act: should not throw
-        auditLoggerNoRepo.toolCall("alice", "session-1", "test_tool", Map.of(), true, 0);
+        auditLoggerNoRepo.toolCall("alice", "session-1", "test_tool", Map.of(), ToolOutcome.OK, 0);
         auditLoggerNoRepo.llmCall("alice", "session-1", "anthropic", 0, 0, true);
 
         // Assert: nothing saved
@@ -103,7 +129,7 @@ public class AuditLoggerTest {
     @Test
     public void testSessionIdNull() {
         // Act
-        auditLogger.toolCall("alice", null, "bash", Map.of("cmd", "echo hello"), true, 100);
+        auditLogger.toolCall("alice", null, "bash", Map.of("cmd", "echo hello"), ToolOutcome.OK, 100);
 
         // Assert
         assertEquals(1, mockRepo.saved.size());
@@ -116,7 +142,7 @@ public class AuditLoggerTest {
     public void testNullUser_RecordedAsAnonymous() {
         // A null/blank user (e.g. a caller that never resolved one) must never
         // NPE and is attributed to "anonymous".
-        auditLogger.toolCall(null, "session-1", "bash", Map.of(), true, 0);
+        auditLogger.toolCall(null, "session-1", "bash", Map.of(), ToolOutcome.OK, 0);
         auditLogger.llmCall("  ", "session-1", "anthropic", 1, 2, true);
 
         assertEquals(2, mockRepo.saved.size());

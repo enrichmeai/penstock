@@ -2,6 +2,7 @@ package com.example.agent.tools;
 
 import com.example.agent.config.AgentProperties;
 import com.example.agent.model.BearerToken;
+import com.example.agent.model.ToolOutcome;
 import com.example.agent.model.ToolResult;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -206,14 +207,40 @@ class CisternToolTest {
     }
 
     @Test
-    void refusalComesBackAsASuccessfulResultNotAnError() {
+    void aRefusalIsItsOwnOutcomeNotAnError() {
         pod.enqueue(new MockResponse().setResponseCode(403));
 
         ToolResult r = tool(CredentialMode.SERVICE).execute("c4", read("/private/x"),
                 new ToolContext("alice", "s1"));
 
+        assertEquals(ToolOutcome.REFUSED, r.outcome(), "403 is the owner's decision: refused, not ok and not an error");
         assertFalse(r.isError(), "403 is the owner's decision, not a malfunction");
         assertTrue(r.content().contains("Refused"));
+        assertTrue(r.content().contains("do not attempt another route"), "the do-not-retry instruction to the model stays");
+    }
+
+    @Test
+    void anUnrecognisedCredentialAndAMissingResourceAreErrors() {
+        pod.enqueue(new MockResponse().setResponseCode(401));
+        pod.enqueue(new MockResponse().setResponseCode(404));
+        CisternTool tool = tool(CredentialMode.SERVICE);
+
+        ToolResult unauthorised = tool.execute("c5", read("/x"), new ToolContext("alice", "s1"));
+        ToolResult missing = tool.execute("c6", read("/y"), new ToolContext("alice", "s1"));
+
+        assertEquals(ToolOutcome.ERROR, unauthorised.outcome());
+        assertEquals(ToolOutcome.ERROR, missing.outcome());
+        assertTrue(missing.content().contains("No such resource"));
+    }
+
+    @Test
+    void anUnreachablePodIsAnError() throws Exception {
+        pod.shutdown();
+
+        ToolResult r = tool(CredentialMode.SERVICE).execute("c7", read("/x"), new ToolContext("alice", "s1"));
+
+        assertEquals(ToolOutcome.ERROR, r.outcome());
+        assertTrue(r.content().contains("Could not reach the pod"), r.content());
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.example.agent.tools;
 import com.example.agent.config.AgentMetrics;
 import com.example.agent.config.AgentProperties;
 import com.example.agent.model.ToolCall;
+import com.example.agent.model.ToolOutcome;
 import com.example.agent.model.ToolResult;
 import com.example.agent.service.AuditLogger;
 import org.slf4j.Logger;
@@ -94,17 +95,16 @@ public class ToolRegistry {
         try {
             ToolResult r = t.execute(call.id(), call.arguments() == null ? Map.of() : call.arguments(), context);
             long durationMs = (System.nanoTime() - start) / 1_000_000;
-            log.info("Tool {} ({} ms) isError={}", call.name(), durationMs, r.isError());
+            log.info("Tool {} ({} ms) outcome={}", call.name(), durationMs, r.outcome());
 
-            // Record metrics for successful call
+            // Metrics and audit by outcome: a refusal is neither a success nor an error,
+            // and the audit row for a refused read must not look like a granted one (#8).
             if (metrics != null) {
-                metrics.recordToolCall(call.name(), !r.isError(), durationMs);
+                metrics.recordToolCall(call.name(), r.outcome(), durationMs);
             }
-
-            // Audit the tool call
             if (auditLogger != null) {
                 int contentBytes = r.content() == null ? 0 : r.content().getBytes(StandardCharsets.UTF_8).length;
-                auditLogger.toolCall(userId, sessionId, call.name(), call.arguments() == null ? Map.of() : call.arguments(), !r.isError(), contentBytes);
+                auditLogger.toolCall(userId, sessionId, call.name(), call.arguments() == null ? Map.of() : call.arguments(), r.outcome(), contentBytes);
             }
 
             // Check if output needs truncation
@@ -121,14 +121,12 @@ public class ToolRegistry {
             long durationMs = (System.nanoTime() - start) / 1_000_000;
             log.warn("Tool {} threw", call.name(), e);
 
-            // Record metrics for failed call
+            // A tool that threw is an error, by outcome
             if (metrics != null) {
-                metrics.recordToolCall(call.name(), false, durationMs);
+                metrics.recordToolCall(call.name(), ToolOutcome.ERROR, durationMs);
             }
-
-            // Audit the failed tool call
             if (auditLogger != null) {
-                auditLogger.toolCall(userId, sessionId, call.name(), call.arguments() == null ? Map.of() : call.arguments(), false, 0);
+                auditLogger.toolCall(userId, sessionId, call.name(), call.arguments() == null ? Map.of() : call.arguments(), ToolOutcome.ERROR, 0);
             }
 
             return ToolResult.error(call.id(), "Tool threw: " + e.getMessage());
@@ -166,6 +164,6 @@ public class ToolRegistry {
         String truncated = head + marker + tail;
         log.info("Tool output truncated from {} to {} bytes", contentBytes.length, truncated.getBytes(StandardCharsets.UTF_8).length);
 
-        return new ToolResult(r.callId(), truncated, r.isError());
+        return new ToolResult(r.callId(), truncated, r.outcome());
     }
 }

@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import com.example.agent.model.ToolOutcome;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.ConcurrentHashMap;
@@ -88,18 +89,20 @@ public class AgentMetrics {
      * Record a tool call with duration.
      *
      * @param tool        The tool name
-     * @param ok          True if the call succeeded, false if it threw an exception
+     * @param outcome     How the call ended; the {@code outcome} label is {@code ok}, {@code refused}
+     *                    or {@code error} — a refusal (the far system's decision) is counted apart
+     *                    from both a success and an error
      * @param durationMs  Duration in milliseconds
      */
-    public void recordToolCall(String tool, boolean ok, long durationMs) {
-        String outcome = ok ? "ok" : "error";
+    public void recordToolCall(String tool, ToolOutcome outcome, long durationMs) {
+        String label = outcome.metricLabel();
 
         // Increment tool_calls_total counter
-        String callCounterKey = "tool_calls_total|tool=" + tool + "|outcome=" + outcome;
+        String callCounterKey = "tool_calls_total|tool=" + tool + "|outcome=" + label;
         counterCache.computeIfAbsent(callCounterKey, key ->
                 Counter.builder("tool_calls_total")
                         .tag("tool", tool)
-                        .tag("outcome", outcome)
+                        .tag("outcome", label)
                         .register(registry)
         ).increment();
 
