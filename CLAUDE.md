@@ -83,6 +83,12 @@ Build board in `enrichmeai/cistern`. **Never** post a secret or credential value
 `enrichmeai/cistern`, but a change needed there becomes a `/new-issue` in `cistern`, linked from
 the issue here.
 
+**Reading the other repo.** Both are cloned side by side (`~/projects/penstock`,
+`~/projects/cistern`). To read Cistern from this repo's session, start with
+`claude --add-dir ../cistern`, or use `/add-dir ../cistern` mid-session. Read only: never edit
+or commit in the other checkout from here (cistern's `governance-guard.sh` refuses a commit in
+`~/projects/cistern` anyway).
+
 **How the two repos connect:** Cistern owns the pod; Penstock consumes it through `CisternTool`
 (the `pod` tool), `CredentialResolver` and the demo stack in cistern's `docs/demo/`. A change
 that needs new pod behaviour is one PR per repo, and **Cistern lands first**.
