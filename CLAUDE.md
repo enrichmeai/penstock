@@ -25,6 +25,96 @@ Minimum env for `bootRun`: either `GITHUB_COPILOT_TOKEN` (default provider), or 
 
 Enable SQLite persistence with `AGENT_STORAGE_TYPE=sqlite` — this activates the `storage-sqlite` Spring profile and Flyway migrations under `src/main/resources/db/migration/sqlite`. For production, use `AGENT_STORAGE_TYPE=postgres` — activates the `storage-postgres` profile, runs migrations under `src/main/resources/db/migration/postgres`, and reads `AGENT_DB_URL` / `AGENT_DB_USER` / `AGENT_DB_PASSWORD`. The JPA entities are vendor-agnostic; only the Flyway scripts diverge per vendor (any new migration needs a sibling in both directories). In `memory` mode, `AgentApplication.main` excludes JPA/DataSource auto-config before `SpringApplication.run` so Hibernate won't try to start.
 
+## Autonomous build loop (owner, 2026-09-26)
+
+**Claude builds, the `reviewer` agent verifies, the owner merges.** The loop runs the same way
+here and in `enrichmeai/cistern` (each shaped to its own build), and is carried over from the
+`valuedocs` repos:
+
+`/new-issue` (idea → ready issue) → `/groom` (Build board, run from the cistern session) → `/build-task <issue>` → hooks on every edit → `reviewer` → fix (max 3 attempts) → `/compound` → PR
+
+**The four rules. They are not negotiable:**
+1. **Verify before you write.** Any use of an external library, LLM provider API, config key or
+   CLI flag (Spring Boot, Spring Security, Flyway, Hibernate, Bucket4j, the Anthropic/OpenAI/
+   Copilot/Ollama APIs, the Cistern pod, GitHub Actions, …) is checked against the official docs
+   with WebFetch **before** the code is written, at the version `build.gradle` resolves. Never
+   guess a signature, field or version. Start from § "Pinned docs".
+2. **Done means green.** The fast gates below locally, the full `./gradlew build` in CI `build`
+   (cite the run and the real test totals). A gate that could not run is reported as not run,
+   never as passing. A green test proves nothing until you have checked it was not bent to fit
+   (§ Gotchas: the agent will make a failing test green by editing production code).
+3. **Three attempts, then stop.** After 3 failed fix attempts at the same gate or reviewer finding,
+   write the Blocker summary (`.claude/skills/build-task/SKILL.md` § 6) on the issue and in your reply.
+4. **Pinned docs first.** Search only when no pinned doc covers it, and pin what you found in `/compound`.
+
+**Fast gates (exact commands):**
+
+| Changed | Command |
+|---|---|
+| any Java | `./gradlew compileTestJava`, then `./gradlew test --tests '<the classes you touched>'` |
+| a Flyway migration | a sibling with the same version in both `db/migration/sqlite/` and `db/migration/postgres/` (the Stop hook checks it) |
+| threading, config or startup | an IT across the real boundary (`IdentityPropagationIT`, `MemoryModeStartupIT`), not a stub-injected unit test |
+| `.claude/hooks/**`, `.claude/settings.json` | `.claude/hooks/test-hooks.sh` (add a case for every new guard, and prove it RED first) |
+| full build | CI `build` on the PR (`./gradlew --no-daemon build` on Java 21) |
+
+**Hooks (`.claude/settings.json`, scripts in `.claude/hooks/`):**
+- **Before a Bash command:** `guard-destructive.sh` forces an approval prompt for force pushes,
+  pushes to `main`, pushing a `v*` tag (it starts `release.yml`), ref deletion, `reset --hard`,
+  `clean -f`, recursive `rm`, `docker push`, Gradle `bootRun|publish|flyway*`, and
+  `gh release|workflow|secret` or write-method `gh api`. The cases are pinned in
+  `.claude/hooks/test-hooks.sh`. In a headless run nobody can approve, so these do not run at all.
+- **After each edit:** a syntax check for JSON, YAML, Python and shell files.
+- **When the turn ends:** `./gradlew compileTestJava` when Java or Gradle files changed, and the
+  Flyway sibling check. It skips when nothing changed since the last clean run, blocks the stop at
+  most once, and reports "not run" rather than "passed" when the wrapper jar, the JDK or the
+  network is the problem. Opt out with `CLAUDE_SKIP_STOP_COMPILE=1`.
+
+**The GitHub Action builder** (`.github/workflows/claude.yml`): an issue labelled `claude`, or a
+comment starting `@claude`, by the owner's account on the owner's own issue or PR. It fetches the
+Gradle wrapper before Claude starts, has no provider keys, cannot publish, tag, merge or edit
+workflows, and runs one at a time. It needs the `CLAUDE_CODE_OAUTH_TOKEN` repository secret. It
+counts as this repo's session: do not start it while another session is working here.
+
+**Where things for the owner go.** Anything that needs the owner (a merge, a release, a key, a
+ruling) goes on the PR or issue it belongs to, and `/groom` lists it in the Owner queue of the
+Build board in `enrichmeai/cistern`. **Never** post a secret or credential value anywhere on GitHub.
+
+**One writer per repo.** A session changes code only in this repo. It may read
+`enrichmeai/cistern`, but a change needed there becomes a `/new-issue` in `cistern`, linked from
+the issue here.
+
+**Reading the other repo.** Both are cloned side by side (`~/projects/penstock`,
+`~/projects/cistern`). To read Cistern from this repo's session, start with
+`claude --add-dir ../cistern`, or use `/add-dir ../cistern` mid-session. Read only: never edit
+or commit in the other checkout from here (cistern's `governance-guard.sh` refuses a commit in
+`~/projects/cistern` anyway).
+
+**How the two repos connect:** Cistern owns the pod; Penstock consumes it through `CisternTool`
+(the `pod` tool), `CredentialResolver` and the demo stack in cistern's `docs/demo/`. A change
+that needs new pod behaviour is one PR per repo, and **Cistern lands first**.
+
+### Pinned docs
+
+Versions `build.gradle` resolves: Java 21, Gradle 8.14.5, Spring Boot 3.5.16 (its BOM manages
+Spring Security, Flyway and Hibernate; the community dialects are pinned separately),
+springdoc-openapi 2.9.0, Bucket4j 8.10.1.
+
+Added 2026-09-26 and not yet fetched from this environment: the first session that fetches a row
+marks it ✓, and replaces any URL that has moved.
+
+| Area | Doc |
+|---|---|
+| Spring Boot 3.5 | https://docs.spring.io/spring-boot/3.5/index.html |
+| Spring Security | https://docs.spring.io/spring-security/reference/index.html |
+| Flyway | https://documentation.red-gate.com/flyway |
+| Bucket4j 8.10 | https://bucket4j.com/8.10.1/toc.html |
+| Anthropic Messages API | https://docs.claude.com/en/api/messages |
+| OpenAI Chat Completions | https://platform.openai.com/docs/api-reference/chat |
+| Ollama API | https://github.com/ollama/ollama/blob/main/docs/api.md |
+| Cistern (the pod Penstock calls) | https://github.com/enrichmeai/cistern (read the source at the version you target) |
+| claude-code-action | https://code.claude.com/docs/en/github-actions |
+| Claude Code hooks | https://code.claude.com/docs/en/hooks |
+
 ## Architecture
 
 The agent loop lives in `AgentService.runTurn` (`src/main/java/com/example/agent/service/AgentService.java`):
@@ -128,3 +218,5 @@ or produced a wrong answer.
   starting work or reporting status. Several sessions share this repo and this
   checkout; every failure it guards against produced a confident wrong answer
   rather than an error.
+- `build-task`, `compound`, `new-issue` and the `reviewer` agent — the autonomous
+  build loop (§ "Autonomous build loop"). `/groom` lives in the cistern repo.
