@@ -20,7 +20,11 @@
       "Bash(gh issue view *)",
       "Bash(gh issue list *)",
       "Bash(gh run view *)",
-      "Bash(gh run list *)"
+      "Bash(gh run list *)",
+      "Bash(bash scripts/*)",
+      "Bash(./scripts/*)",
+      "Bash(.claude/hooks/test-hooks.sh)",
+      "Bash(bash .claude/hooks/test-hooks.sh)"
     ],
     "ask": [
       "Bash(git push --force *)",
