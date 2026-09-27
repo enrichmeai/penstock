@@ -13,6 +13,12 @@
 #     exactly as in build.yml.
 #   - run two at once: one concurrency group per repository, never cancelled mid-run.
 #
+# Tools: the action does NOT read .claude/settings.json permissions; it passes its own short list
+# (read, search, git add/commit/push/rm) and disallows WebFetch. Without --allowedTools below the
+# builder cannot run Gradle, fetch the pinned docs, or run the hook tests (found on cistern#64,
+# run 36328499745: 117/120 turns, 18 denials, nothing pushed). The guard hook in .claude/hooks
+# still runs on every Bash call; --disallowedTools still wins (bootRun stays refused).
+#
 # Note: pushes made with GITHUB_TOKEN do not start other workflows. CI runs when the owner's
 # account opens the PR from Claude's branch, and on later pushes by closing and reopening the PR.
 # (Docs: code.claude.com/docs/en/github-actions § "CI not running on Claude's commits".)
@@ -91,6 +97,7 @@ jobs:
           include_comments_by_actor: josepharuja
           branch_prefix: claude/
           claude_args: >-
-            --max-turns 120
+            --max-turns 200
+            --allowedTools "Edit,Write,MultiEdit,Task,TodoWrite,WebFetch,Bash(./gradlew compileTestJava:*),Bash(./gradlew test:*),Bash(./gradlew build:*),Bash(./gradlew --no-daemon:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git fetch:*),Bash(git checkout:*),Bash(git switch:*),Bash(bash scripts/*),Bash(./scripts/*),Bash(bash .claude/hooks/test-hooks.sh),Bash(.claude/hooks/test-hooks.sh)"
             --disallowedTools "Bash(gh pr merge:*),Bash(gh workflow run:*),Bash(gh api:*),Bash(gh release:*),Bash(git tag:*),Bash(git push origin main:*),Bash(git push --tags:*),Bash(docker push:*),Bash(./gradlew bootRun:*),Bash(curl:*)"
-            --append-system-prompt "You are the builder: Claude builds, the reviewer agent verifies, the owner merges. CLAUDE.md in this repository governs everything you do; follow the /build-task skill (verify external APIs against the pinned docs first, red then green as in redgreen-fix, run the reviewer agent before replying, at most 3 fix attempts then a Blocker summary, then /compound). Work only on the task in the triggering issue or comment; if it is ambiguous, reply with the question and stop. One branch per task. Prove every behaviour change red first, then green, and quote both. Every commit is DCO signed off (git commit -s) with a conventional message and carries no AI co-author trailer. A failing test is questioned before production code is changed to satisfy it. Never relax a test, never widen a permission or the sandbox, never merge, tag, publish, dispatch a workflow, or touch .github/workflows. You have no provider keys and no cloud access: anything that needs a real LLM, a running pod, or a release, write it down as an owner action and stop. End every reply with: branch, head SHA, files changed, tests run with their result, and anything left for the owner."
+            --append-system-prompt "You are the builder: Claude builds, the reviewer agent verifies, the owner merges. CLAUDE.md in this repository governs everything you do; follow the /build-task skill (verify external APIs against the pinned docs first, red then green as in redgreen-fix, run the reviewer agent before replying, at most 3 fix attempts then a Blocker summary, then /compound). Commit and push work in progress after the first green test and after each reviewer round, so a run that ends early loses nothing. Work only on the task in the triggering issue or comment; if it is ambiguous, reply with the question and stop. One branch per task. Prove every behaviour change red first, then green, and quote both. Every commit is DCO signed off (git commit -s) with a conventional message and carries no AI co-author trailer. A failing test is questioned before production code is changed to satisfy it. Never relax a test, never widen a permission or the sandbox, never merge, tag, publish, dispatch a workflow, or touch .github/workflows. You have no provider keys and no cloud access: anything that needs a real LLM, a running pod, or a release, write it down as an owner action and stop. End every reply with: branch, head SHA, files changed, tests run with their result, and anything left for the owner."
