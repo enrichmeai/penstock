@@ -3,6 +3,7 @@ package com.example.agent.tools;
 import com.example.agent.config.AgentProperties;
 import com.example.agent.config.RequestIdFilter;
 import com.example.agent.model.BearerToken;
+import com.example.agent.model.ToolOutcome;
 import com.example.agent.model.ToolResult;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -174,14 +175,16 @@ public class CisternTool implements Tool {
      * Turns the pod's answer into something the model can act on correctly.
      *
      * <p>The distinction that matters: {@code 403} is the owner's decision and belongs in the
-     * conversation as such, so it comes back as a successful tool result carrying a refusal.
-     * {@code 401} and {@code 404} are the agent's problem or the caller's, and are errors.
+     * conversation as such, so it comes back as a {@link ToolOutcome#REFUSED refused} result —
+     * not a success (the audit trail must not count it as one) and not an error (the model must
+     * not retry it). {@code 401} and {@code 404} are the agent's problem or the caller's, and
+     * are errors.
      */
     private static ToolResult describe(String callId, String uri, WebClientResponseException e,
                                        CredentialMode presented) {
         HttpStatus status = HttpStatus.resolve(e.getStatusCode().value());
         if (status == HttpStatus.FORBIDDEN) {
-            return ToolResult.ok(callId, "Refused: the owner has not granted access to "
+            return ToolResult.refused(callId, "Refused: the owner has not granted access to "
                 + uri + ". This is a permission decision, not an error — report it to the user "
                 + "and do not attempt another route to the same content.");
         }

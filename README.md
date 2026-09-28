@@ -78,9 +78,9 @@ your own systems.
 
 - **Structured logging** — `logback-spring.xml` emits plain text by default; activate `-Dspring.profiles.active=prod` for JSON via `logstash-logback-encoder`. Every log line carries `requestId`, `userId`, and (where applicable) `sessionId` in MDC.
 - **Request IDs** — the `RequestIdFilter` reads `X-Request-Id` or generates one, stamps MDC, and echoes the ID as a response header so clients can correlate.
-- **Metrics** — `/actuator/prometheus` exposes `llm_calls_total{provider,outcome}`, `llm_tokens_total{provider,kind}`, `tool_calls_total{tool,outcome}`, `tool_call_duration_ms{tool}`, and `sse_streams_active` gauge. **Requires authentication when auth is enabled** — the labels carry tool names, providers and token counts. If your scraper cannot authenticate, set `AGENT_METRICS_PUBLIC_SCRAPE=true` and restrict the port at the network; `/actuator/health/**` stays open either way for load balancers.
+- **Metrics** — `/actuator/prometheus` exposes `llm_calls_total{provider,outcome}`, `llm_tokens_total{provider,kind}`, `tool_calls_total{tool,outcome=ok|refused|error}`, `tool_call_duration_ms{tool}`, and `sse_streams_active` gauge. **Requires authentication when auth is enabled** — the labels carry tool names, providers and token counts. If your scraper cannot authenticate, set `AGENT_METRICS_PUBLIC_SCRAPE=true` and restrict the port at the network; `/actuator/health/**` stays open either way for load balancers.
 - **Readiness vs liveness** — `/actuator/health/liveness` stays up while an LLM provider is misconfigured; `/actuator/health/readiness` goes DOWN so load balancers pull the instance out of rotation. Custom `LlmProviderHealthIndicator` does a config-only check (no external calls).
-- **Audit log** — every LLM call and tool invocation is persisted to `audit_events` (SQLite mode only). Owner-scoped read at `GET /api/sessions/{id}/audit`.
+- **Audit log** — every LLM call and tool invocation is persisted to `audit_events` in the database-backed storage modes (SQLite and Postgres). Owner-scoped read at `GET /api/sessions/{id}/audit`. A `tool_call` row's `detail.outcome` is `OK`, `REFUSED` or `ERROR` (`detail.ok` is kept for older readers and is true only for `OK`), so a refused read never looks like a granted one — the sequence is shown for real in [docs/consent-demo.md](docs/consent-demo.md).
 - **Graceful SSE shutdown** — on `ContextClosedEvent` the `SseEmitterRegistry` sends a terminating `shutdown` event and completes every in-flight emitter so clients don't see socket resets.
 - **CI** — `.github/workflows/build.yml` caches Gradle, auto-bootstraps the wrapper, runs `./gradlew build`, uploads test reports and the built jar.
 
@@ -306,6 +306,29 @@ overridden with env vars or `--agent.*=value` command-line flags.
 | `DELETE` | `/api/sessions/{id}` | — | Delete a session |
 
 Interactive API docs at **`/swagger-ui.html`** when the app is running.
+
+### Tool outcomes
+
+A `TOOL` message's `toolResults[]` (in `POST /api/chat` responses, `GET /api/sessions/{id}`
+history and SSE `message` events) carries how each call ended:
+
+```json
+{ "callId": "call_1", "content": "Refused: the owner has not granted access to …",
+  "outcome": "REFUSED", "isError": false }
+```
+
+| `outcome` | Meaning | `isError` |
+| --- | --- | --- |
+| `OK` | the tool did what was asked | `false` |
+| `REFUSED` | the far system said no — the pod owner's rule, a permission the caller lacks. An answer, not a malfunction: the model is told to report it and not to try another route | `false` |
+| `ERROR` | the tool could not do what was asked: bad arguments, an unreachable system, a fault | `true` |
+
+`outcome` is the field of record; `isError` is derived from it and kept for clients written
+before outcomes existed. A stored message or an exported transcript that predates `outcome`
+is read by its `isError`. The same outcome is what the audit row and the
+`tool_calls_total{outcome=ok|refused|error}` metric record, so a refused pod read is
+distinguishable from a granted one everywhere without reading server logs. No allow-list or
+pre-check exists on the agent's side: the far system decides, Penstock reports.
 
 ## Architecture
 

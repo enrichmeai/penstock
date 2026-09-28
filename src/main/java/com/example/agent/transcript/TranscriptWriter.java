@@ -34,7 +34,7 @@ import java.util.Map;
  *
  * ## Tool
  * ```tool_result
- * {"callId":"...", "content":"...", "isError":false}
+ * {"callId":"...", "content":"...", "isError":false, "outcome":"OK"}
  * ```
  * </pre>
  *
@@ -43,6 +43,12 @@ import java.util.Map;
  */
 @Component
 public class TranscriptWriter {
+
+    /** Keys of a {@code tool_result} block; {@link TranscriptReader} reads the same. */
+    static final String RESULT_CALL_ID = "callId";
+    static final String RESULT_CONTENT = "content";
+    static final String RESULT_IS_ERROR = "isError";
+    static final String RESULT_OUTCOME = "outcome";
 
     private final ObjectMapper mapper;
 
@@ -105,10 +111,13 @@ public class TranscriptWriter {
     }
 
     private static Map<String, Object> toolResultJson(ToolResult tr) {
+        // isError stays, before outcome, so a transcript reads as it did; outcome is the
+        // field of record and is what a re-import restores.
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("callId", tr.callId());
-        m.put("content", tr.content());
-        m.put("isError", tr.isError());
+        m.put(RESULT_CALL_ID, tr.callId());
+        m.put(RESULT_CONTENT, tr.content());
+        m.put(RESULT_IS_ERROR, tr.isError());
+        m.put(RESULT_OUTCOME, tr.outcome());
         return m;
     }
 

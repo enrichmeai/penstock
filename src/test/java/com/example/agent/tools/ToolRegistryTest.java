@@ -1,11 +1,18 @@
 package com.example.agent.tools;
 
+import com.example.agent.config.AgentMetrics;
 import com.example.agent.config.AgentProperties;
+import com.example.agent.model.ToolOutcome;
+import com.example.agent.service.AuditLogger;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import com.example.agent.model.ToolCall;
 import com.example.agent.model.ToolResult;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -39,6 +46,84 @@ class ToolRegistryTest {
         registry.invoke(new ToolCall("c2", "ctx_capture", Map.of()));
         assertEquals(ToolContext.ANONYMOUS, seen.get().userId());
         assertNull(seen.get().sessionId());
+    }
+
+    /** One audited tool call, as the registry reported it. */
+    private record Audited(String user, String tool, ToolOutcome outcome, int contentBytes) {}
+
+    private static Tool returning(String name, ToolResult result) {
+        return new Tool() {
+            @Override public String name() { return name; }
+            @Override public String description() { return name; }
+            @Override public Map<String, Object> inputSchema() { return Map.of(); }
+            @Override public ToolResult execute(String id, Map<String, Object> args, ToolContext context) {
+                if (result == null) throw new IllegalStateException("tool fell over");
+                return new ToolResult(id, result.content(), result.outcome());
+            }
+        };
+    }
+
+    private static double count(SimpleMeterRegistry registry, String tool, String outcome) {
+        Counter c = registry.find("tool_calls_total").tag("tool", tool).tag("outcome", outcome).counter();
+        return c == null ? 0 : c.count();
+    }
+
+    @Test
+    void aRefusalIsAuditedAndCountedAsRefusedNotAsASuccess() {
+        // #8: the audit row for a refused read must not be indistinguishable from a granted one.
+        String refusal = "Refused: the owner has not granted access to /support/. Report it.";
+        List<Audited> audited = new ArrayList<>();
+        AuditLogger recording = new AuditLogger(null, new ObjectMapper()) {
+            @Override
+            public void toolCall(String userId, String sessionId, String toolName, Map<String, Object> args,
+                                 ToolOutcome outcome, int contentBytes) {
+                audited.add(new Audited(userId, toolName, outcome, contentBytes));
+            }
+        };
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        ToolRegistry registry = new ToolRegistry(List.of(returning("pod", ToolResult.refused("_", refusal))), new AgentProperties());
+        registry.setAuditLogger(recording);
+        registry.setMetrics(new AgentMetrics(meters));
+
+        ToolResult r = registry.invoke(new ToolCall("c1", "pod", Map.of("type", "read", "path", "/support/")), "sess-1", "bob");
+
+        assertEquals(ToolOutcome.REFUSED, r.outcome());
+        assertEquals(List.of(new Audited("bob", "pod", ToolOutcome.REFUSED, refusal.getBytes(StandardCharsets.UTF_8).length)), audited);
+        assertEquals(1.0, count(meters, "pod", "refused"));
+        assertEquals(0.0, count(meters, "pod", "ok"), "a refusal is not a success");
+        assertEquals(0.0, count(meters, "pod", "error"), "a refusal is not an error");
+    }
+
+    @Test
+    void aSuccessAndAnErrorKeepTheirOwnOutcomes() {
+        List<Audited> audited = new ArrayList<>();
+        AuditLogger recording = new AuditLogger(null, new ObjectMapper()) {
+            @Override
+            public void toolCall(String userId, String sessionId, String toolName, Map<String, Object> args,
+                                 ToolOutcome outcome, int contentBytes) {
+                audited.add(new Audited(userId, toolName, outcome, contentBytes));
+            }
+        };
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        ToolRegistry registry = new ToolRegistry(List.of(
+                returning("read", ToolResult.ok("_", "doc")),
+                returning("broken", ToolResult.error("_", "boom")),
+                returning("thrower", null)), new AgentProperties());
+        registry.setAuditLogger(recording);
+        registry.setMetrics(new AgentMetrics(meters));
+
+        registry.invoke(new ToolCall("c1", "read", Map.of()), "sess-1", "bob");
+        registry.invoke(new ToolCall("c2", "broken", Map.of()), "sess-1", "bob");
+        ToolResult threw = registry.invoke(new ToolCall("c3", "thrower", Map.of()), "sess-1", "bob");
+
+        assertEquals(ToolOutcome.ERROR, threw.outcome());
+        assertEquals(List.of(
+                new Audited("bob", "read", ToolOutcome.OK, 3),
+                new Audited("bob", "broken", ToolOutcome.ERROR, 4),
+                new Audited("bob", "thrower", ToolOutcome.ERROR, 0)), audited);
+        assertEquals(1.0, count(meters, "read", "ok"));
+        assertEquals(1.0, count(meters, "broken", "error"));
+        assertEquals(1.0, count(meters, "thrower", "error"));
     }
 
     @Test

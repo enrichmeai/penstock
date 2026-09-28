@@ -67,8 +67,11 @@
 
     .tool-block { background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--tool); border-radius: 6px; padding: 8px 12px; margin-top: 6px; font-family: "SF Mono", Monaco, Consolas, monospace; font-size: 12px; }
     .tool-block.error { border-left-color: var(--error); }
+    /* A refusal is the owner's decision, not a malfunction: its own look, neither ok nor error. */
+    .tool-block.refused { border-left-color: var(--warn); }
     .tool-title { color: var(--tool); font-weight: 600; margin-bottom: 4px; }
     .tool-title.error { color: var(--error); }
+    .tool-title.refused { color: var(--warn); }
     .tool-args { color: var(--muted); white-space: pre-wrap; margin-bottom: 4px; font-size: 11px; }
     .tool-result { white-space: pre-wrap; color: var(--text); max-height: 400px; overflow-y: auto; }
 
@@ -212,11 +215,19 @@ function renderMessage(msg) {
   const cls = 'msg role-' + msg.role.toLowerCase();
 
   if (msg.role === 'TOOL') {
-    const blocks = (msg.toolResults || []).map(r => `
-      <div class="tool-block ${r.isError ? 'error' : ''}">
-        <div class="tool-title ${r.isError ? 'error' : ''}">Tool result ${r.isError ? '(error)' : ''}</div>
+    // outcome is the field of record (OK | REFUSED | ERROR); isError alone is an older payload.
+    const blocks = (msg.toolResults || []).map(r => {
+      const outcome = r.outcome || (r.isError ? 'ERROR' : 'OK');
+      const style = outcome === 'ERROR' ? 'error' : outcome === 'REFUSED' ? 'refused' : '';
+      const title = outcome === 'ERROR' ? 'Tool result (error)'
+                  : outcome === 'REFUSED' ? "Refused by the pod owner's rule"
+                  : 'Tool result';
+      return `
+      <div class="tool-block ${style}">
+        <div class="tool-title ${style}">${title}</div>
         <div class="tool-result">${esc(r.content)}</div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     return `<div class="${cls}"><div class="role">Tool output</div>${blocks}</div>`;
   }
 
@@ -481,9 +492,12 @@ document.getElementById('audit-session').addEventListener('click', async () => {
   const row = (ev) => {
     const t = ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString() : '';
     const d = ev.detail || {};
-    const ok = d.ok === false ? ' style="color:#e66"' : '';
+    // tool_call rows carry outcome (OK | REFUSED | ERROR); a refusal is shown as such, not as a failure.
+    const outcome = ev.eventType === 'tool_call' ? (d.outcome || (d.ok ? 'OK' : 'ERROR')) : null;
+    const colour = outcome === 'REFUSED' ? 'var(--warn)' : (d.ok === false ? '#e66' : '');
+    const ok = colour ? ` style="color:${colour}"` : '';
     const what = ev.eventType === 'tool_call'
-      ? `tool <b>${esc(d.tool)}</b> · ${d.ok ? 'ok' : 'failed'} · ${esc(d.contentBytes ?? 0)} bytes`
+      ? `tool <b>${esc(d.tool)}</b> · ${esc(outcome.toLowerCase())} · ${esc(d.contentBytes ?? 0)} bytes`
       : `llm <b>${esc(d.provider)}</b> · ${d.ok ? 'ok' : 'failed'} · ${esc(d.inputTokens ?? 0)} in / ${esc(d.outputTokens ?? 0)} out`;
     return `<div style="display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;">
       <span style="opacity:.6;white-space:nowrap">${esc(t)}</span>

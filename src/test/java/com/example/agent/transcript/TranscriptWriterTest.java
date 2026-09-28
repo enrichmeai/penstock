@@ -56,7 +56,7 @@ class TranscriptWriterTest {
                 "\n" +
                 "## Tool\n" +
                 "```tool_result\n" +
-                "{\"callId\":\"call-1\",\"content\":\"plugins { id 'java' }\",\"isError\":false}\n" +
+                "{\"callId\":\"call-1\",\"content\":\"plugins { id 'java' }\",\"isError\":false,\"outcome\":\"OK\"}\n" +
                 "```\n";
 
         assertEquals(expected, md);

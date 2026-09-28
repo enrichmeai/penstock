@@ -3,6 +3,7 @@ package com.example.agent.transcript;
 import com.example.agent.model.ChatMessage;
 import com.example.agent.model.Session;
 import com.example.agent.model.ToolCall;
+import com.example.agent.model.ToolOutcome;
 import com.example.agent.model.ToolResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -74,5 +75,52 @@ class TranscriptReaderTest {
         for (ChatMessage m : parsed.messages()) {
             assertNotNull(m.timestamp());
         }
+    }
+
+    @Test
+    void aRefusalSurvivesTheRoundTrip() {
+        ObjectMapper mapper = new ObjectMapper();
+        Session s = new TranscriptWriterTest.RecordingSession("sess-ref", Instant.parse("2026-09-10T06:00:00Z"));
+        s.setTitle("Refused");
+        s.add(ChatMessage.user("read the playbook"));
+        s.add(ChatMessage.assistant("Reading.", List.of(new ToolCall("c1", "pod", Map.of("type", "read")))));
+        s.add(ChatMessage.tool(List.of(ToolResult.refused("c1", "Refused: the owner has not granted access."))));
+
+        String md = new TranscriptWriter(mapper).write(s);
+        TranscriptReader.Parsed parsed = new TranscriptReader(mapper).parse(md);
+
+        ToolResult tr = parsed.messages().get(2).toolResults().get(0);
+        assertEquals(ToolOutcome.REFUSED, tr.outcome(), md);
+        assertEquals(false, tr.isError());
+        assertEquals("Refused: the owner has not granted access.", tr.content());
+    }
+
+    @Test
+    void aTranscriptWrittenBeforeOutcomesExistedReadsTheFlag() {
+        String md = "# Old\n"
+                + "Session: sess-old\n"
+                + "Created: 2026-05-23T10:15:30Z\n"
+                + "\n"
+                + "## User\n"
+                + "go\n"
+                + "\n"
+                + "## Assistant\n"
+                + "```tool_call\n"
+                + "{\"id\":\"c1\",\"name\":\"shell\",\"arguments\":{}}\n"
+                + "```\n"
+                + "\n"
+                + "## Tool\n"
+                + "```tool_result\n"
+                + "{\"callId\":\"c1\",\"content\":\"boom\",\"isError\":true}\n"
+                + "```\n"
+                + "```tool_result\n"
+                + "{\"callId\":\"c1\",\"content\":\"fine\",\"isError\":false}\n"
+                + "```\n";
+
+        TranscriptReader.Parsed parsed = new TranscriptReader(new ObjectMapper()).parse(md);
+
+        List<ToolResult> results = parsed.messages().get(2).toolResults();
+        assertEquals(ToolOutcome.ERROR, results.get(0).outcome());
+        assertEquals(ToolOutcome.OK, results.get(1).outcome());
     }
 }

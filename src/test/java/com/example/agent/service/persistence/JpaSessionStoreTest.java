@@ -3,6 +3,9 @@ package com.example.agent.service.persistence;
 import com.example.agent.config.CurrentUser;
 import com.example.agent.model.ChatMessage;
 import com.example.agent.model.Session;
+import com.example.agent.model.ToolCall;
+import com.example.agent.model.ToolOutcome;
+import com.example.agent.model.ToolResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
@@ -64,6 +67,26 @@ class JpaSessionStoreTest {
         assertThat(h).hasSize(2);
         assertThat(h.get(0).text()).isEqualTo("hello");
         assertThat(h.get(1).text()).isEqualTo("world");
+    }
+
+    @Test
+    void aRefusedToolResultSurvivesTheStore() {
+        Session s = store.create();
+        ChatMessage call = ChatMessage.assistant("Reading.", List.of(new ToolCall("c1", "pod", java.util.Map.of("type", "read"))));
+        ChatMessage results = ChatMessage.tool(List.of(
+                ToolResult.refused("c1", "Refused: the owner has not granted access."),
+                ToolResult.error("c2", "boom"),
+                ToolResult.ok("c3", "doc")));
+        s.add(call);     store.appendMessage(s, call);
+        s.add(results);  store.appendMessage(s, results);
+
+        List<ToolResult> loaded = store.get(s.getId()).orElseThrow().getHistory().get(1).toolResults();
+
+        assertThat(loaded).extracting(ToolResult::outcome)
+                .containsExactly(ToolOutcome.REFUSED, ToolOutcome.ERROR, ToolOutcome.OK);
+        assertThat(loaded.get(0).isError()).isFalse();
+        assertThat(messageRepo.findBySessionIdOrderByPositionAsc(s.getId()).get(1).getPayloadJson())
+                .contains("\"outcome\":\"REFUSED\"");
     }
 
     @Test
