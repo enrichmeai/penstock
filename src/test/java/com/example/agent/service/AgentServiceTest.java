@@ -2,12 +2,16 @@ package com.example.agent.service;
 
 import com.example.agent.config.AgentProperties;
 import com.example.agent.llm.CompletionResult;
+import com.example.agent.llm.GatewayRefusedException;
+import com.example.agent.llm.LiteLlmFixtures;
+import com.example.agent.llm.LlmFailureReason;
 import com.example.agent.llm.LlmProvider;
 import com.example.agent.model.*;
 import com.example.agent.tools.ToolContext;
 import com.example.agent.tools.Tool;
 import com.example.agent.tools.ToolRegistry;
 import com.example.agent.tools.ToolSpec;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
@@ -133,6 +137,43 @@ class AgentServiceTest {
 
         assertEquals(1, completeCalls.get(), "non-streaming path should be taken");
         assertEquals(0, streamingCalls.get(), "streaming path should be skipped");
+    }
+
+    /**
+     * The gateway's refusal is one llm_call that failed for a stated reason: the audit row must
+     * say which, and the caller must receive the refusal itself, not a wrapper.
+     */
+    @Test
+    void aGatewayRefusalIsAuditedWithItsReasonAndReachesTheCallerUntouched() throws Exception {
+        AgentProperties props = new AgentProperties();
+        ToolRegistry registry = new ToolRegistry(List.of(), props);
+        GatewayRefusedException refusal = GatewayRefusedException.from("openai",
+                LiteLlmFixtures.load(LiteLlmFixtures.BUDGET_EXCEEDED).asException());
+        LlmProvider refusing = new LlmProvider() {
+            @Override public String name() { return "openai"; }
+            @Override public CompletionResult complete(String sys, List<ChatMessage> hist, List<ToolSpec> tools, String sessionId) {
+                throw refusal;
+            }
+        };
+        List<LlmFailureReason> auditedReasons = new ArrayList<>();
+        List<Boolean> auditedOks = new ArrayList<>();
+        AuditLogger recording = new AuditLogger(null, new ObjectMapper()) {
+            @Override
+            public void llmCall(String userId, String sessionId, String provider, int in, int out,
+                                boolean ok, LlmFailureReason reason) {
+                auditedOks.add(ok);
+                auditedReasons.add(reason);
+            }
+        };
+        AgentService svc = new AgentService(refusing, registry, props, new InMemorySessionStore());
+        svc.setAuditLogger(recording);
+        Session s = svc.createSession();
+
+        GatewayRefusedException thrown = assertThrows(GatewayRefusedException.class, () -> svc.chat(s, "hi"));
+
+        assertSame(refusal, thrown);
+        assertEquals(List.of(false), auditedOks);
+        assertEquals(List.of(LlmFailureReason.BUDGET_EXCEEDED), auditedReasons);
     }
 
     /** A provider that always asks for another tool call, so the loop runs to its cap. */

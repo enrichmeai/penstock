@@ -3,6 +3,8 @@ package com.example.agent.config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import com.example.agent.llm.GatewayRefusedException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -34,7 +36,7 @@ class ErrorAdvice {
     public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex) {
         String requestId = getRequestId();
         log.warn("[{}] Access denied", requestId, ex);
-        ApiError error = ApiError.of("Access denied.", "forbidden", requestId);
+        ApiError error = ApiError.of("Access denied.", ApiErrorCode.FORBIDDEN, requestId);
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
     }
 
@@ -45,7 +47,7 @@ class ErrorAdvice {
     public ResponseEntity<ApiError> handleAuthenticationException(AuthenticationException ex) {
         String requestId = getRequestId();
         log.warn("[{}] Authentication required", requestId, ex);
-        ApiError error = ApiError.of("Authentication required.", "unauthenticated", requestId);
+        ApiError error = ApiError.of("Authentication required.", ApiErrorCode.UNAUTHENTICATED, requestId);
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
     }
 
@@ -72,7 +74,7 @@ class ErrorAdvice {
     public ResponseEntity<ApiError> handleMissingParameter(MissingServletRequestParameterException ex) {
         String requestId = getRequestId();
         log.warn("[{}] Bad request: {}", requestId, ex.getMessage(), ex);
-        ApiError error = ApiError.of(ex.getMessage(), "bad_request", requestId);
+        ApiError error = ApiError.of(ex.getMessage(), ApiErrorCode.BAD_REQUEST, requestId);
         return ResponseEntity.badRequest().body(error);
     }
 
@@ -84,7 +86,7 @@ class ErrorAdvice {
     public ResponseEntity<ApiError> handleSessionNotFound(SessionNotFoundException ex) {
         String requestId = getRequestId();
         log.debug("[{}] {}", requestId, ex.getMessage());
-        ApiError error = ApiError.of(ex.getMessage(), "not_found", requestId);
+        ApiError error = ApiError.of(ex.getMessage(), ApiErrorCode.NOT_FOUND, requestId);
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
     }
 
@@ -96,7 +98,7 @@ class ErrorAdvice {
         String requestId = getRequestId();
         log.warn("[{}] Bad request: {}", requestId, ex.getMessage(), ex);
         // Message is already safe (e.g., "Session not found: id123")
-        ApiError error = ApiError.of(ex.getMessage(), "bad_request", requestId);
+        ApiError error = ApiError.of(ex.getMessage(), ApiErrorCode.BAD_REQUEST, requestId);
         return ResponseEntity.badRequest().body(error);
     }
 
@@ -113,8 +115,25 @@ class ErrorAdvice {
         String message = isSafe ? ex.getMessage() : "Service is not ready.";
 
         log.warn("[{}] Bad state: {}", requestId, ex.getMessage(), ex);
-        ApiError error = ApiError.of(message, "bad_state", requestId);
+        ApiError error = ApiError.of(message, ApiErrorCode.BAD_STATE, requestId);
         return ResponseEntity.badRequest().body(error);
+    }
+
+    /**
+     * 429 Too Many Requests: the model gateway refused the call — a budget or a rate limit,
+     * decided upstream before any model ran. Not an internal error: nothing here failed, and
+     * the caller is owed the decision and its reason. The gateway's Retry-After is passed
+     * through when it sent one. The message is the catalogue's ({@link GatewayRefusedException}
+     * is {@link SafeMessage}); the gateway's own text stays in the log.
+     */
+    @ExceptionHandler(GatewayRefusedException.class)
+    public ResponseEntity<ApiError> handleGatewayRefused(GatewayRefusedException ex) {
+        String requestId = getRequestId();
+        log.warn("[{}] Gateway refused the model call: {} (upstream {} {})",
+                requestId, ex.refusal(), ex.upstreamStatus(), ex.upstream());
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS);
+        ex.retryAfter().ifPresent(wait -> response.header(HttpHeaders.RETRY_AFTER, Long.toString(wait.toSeconds())));
+        return response.body(ApiError.gatewayRefused(ex.getMessage(), ex.refusal(), requestId));
     }
 
     /**
@@ -125,7 +144,7 @@ class ErrorAdvice {
     public ResponseEntity<ApiError> handleThrowable(Throwable ex) {
         String requestId = getRequestId();
         log.error("[{}] Internal error", requestId, ex);
-        ApiError error = ApiError.of("Internal error.", "internal_error", requestId);
+        ApiError error = ApiError.of("Internal error.", ApiErrorCode.INTERNAL_ERROR, requestId);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }
 

@@ -3,6 +3,9 @@ package com.example.agent.llm.openai;
 import com.example.agent.config.AgentMetrics;
 import com.example.agent.config.AgentProperties;
 import com.example.agent.llm.CompletionResult;
+import com.example.agent.llm.GatewayRefusal;
+import com.example.agent.llm.GatewayRefusedException;
+import com.example.agent.llm.LiteLlmFixtures;
 import com.example.agent.llm.LlmCallContext;
 import com.example.agent.model.ChatMessage;
 import com.example.agent.model.ToolCall;
@@ -173,6 +176,21 @@ class OpenAiProviderWireTest {
                 new LlmCallContext("alice", "session-6", null));
 
         assertThat(server.takeRequest().getHeader("Authorization")).isEqualTo("Bearer alice-virtual-key");
+    }
+
+    @Test
+    void aBudgetRefusalFromTheGatewayIsTypedAndNotRetried() throws Exception {
+        // The gateway's captured 429 for an exhausted budget, served on the wire.
+        server.enqueue(LiteLlmFixtures.load(LiteLlmFixtures.BUDGET_EXCEEDED).asMockResponse());
+
+        assertThatThrownBy(() -> provider.complete("system", List.of(ChatMessage.user("hi")), List.of(),
+                new LlmCallContext("bob", "session-8", "req-79")))
+                .isInstanceOfSatisfying(GatewayRefusedException.class, refused -> {
+                    assertThat(refused.refusal()).isEqualTo(GatewayRefusal.BUDGET_EXCEEDED);
+                    assertThat(refused.upstreamStatus()).isEqualTo(429);
+                    assertThat(refused.provider()).isEqualTo("openai");
+                });
+        assertThat(server.getRequestCount()).as("an exhausted budget is not retried").isEqualTo(1);
     }
 
     @Test
