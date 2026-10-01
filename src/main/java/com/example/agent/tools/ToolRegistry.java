@@ -31,7 +31,12 @@ public class ToolRegistry {
 
     public ToolRegistry(List<Tool> discovered, AgentProperties props) {
         this.props = props;
-        discovered.forEach(t -> tools.put(t.name(), t));
+        List<String> enabled = props.getTools().getEnabled();
+        discovered.forEach(t -> {
+            if (enabled.isEmpty() || enabled.contains(t.name())) {
+                tools.put(t.name(), t);
+            }
+        });
         log.info("Registered {} tools: {}", tools.size(), tools.keySet());
     }
 

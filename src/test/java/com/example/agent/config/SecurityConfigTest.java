@@ -330,4 +330,39 @@ class SecurityConfigTest {
             mvc.perform(get("/api/tools")).andExpect(status().isUnauthorized());
         }
     }
+
+    // ---------- "acp" profile active without web-application-type=none ----------
+
+    /**
+     * Regression guard for issue #61's reviewer finding: SecurityConfig must not be excluded
+     * by the "acp" Spring profile name alone — a profile can be activated independently of
+     * {@code spring.main.web-application-type} (e.g. a bare {@code SPRING_PROFILES_ACTIVE=acp}
+     * that never goes through {@code AgentApplication}'s own {@code --acp} detection). This
+     * context is a normal servlet web app (the default {@code @SpringBootTest} web environment)
+     * with the {@code acp} profile active; if SecurityConfig were keyed on the profile name,
+     * this would boot with every endpoint open. It must still require auth.
+     */
+    @SpringBootTest
+    @AutoConfigureMockMvc
+    @org.springframework.test.context.ActiveProfiles("acp")
+    @TestPropertySource(properties = {
+            "agent.llm.provider=stub",
+            "agent.workspace=${java.io.tmpdir}/agent-test-sec-acp-profile-servlet",
+            "agent.storage.type=memory",
+            "agent.rate-limit.enabled=false"
+    })
+    @org.springframework.context.annotation.Import(StubCfg.class)
+    @Nested class AcpProfileActiveButStillAServletWebApp {
+        @Autowired MockMvc mvc;
+
+        @Test
+        void authIsStillEnforced() throws Exception {
+            mvc.perform(get("/api/tools")).andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void healthStaysOpen() throws Exception {
+            mvc.perform(get("/api/health")).andExpect(status().isOk());
+        }
+    }
 }

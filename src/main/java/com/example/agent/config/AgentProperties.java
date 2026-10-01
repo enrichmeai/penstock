@@ -253,6 +253,15 @@ public class AgentProperties {
         private Jira jira = new Jira();
         private Cistern cistern = new Cistern();
         private int maxOutputBytes = 16_384;
+        /**
+         * Allow-list of tool names registered with {@code ToolRegistry}, by {@code Tool#name()}.
+         * Empty (the default) registers every discovered tool, unchanged from before this
+         * setting existed. The {@code acp} profile sets this to the read-only tool set
+         * (CLAUDE.md "Sandboxing invariants" — mutating tools arrive behind permission in a
+         * later part). A tool left out is unregistered entirely, so it is neither advertised
+         * to the model nor invocable — not merely hidden from the tool spec list.
+         */
+        private List<String> enabled = List.of();
 
         public Shell getShell() { return shell; }
         public void setShell(Shell shell) { this.shell = shell; }
@@ -263,6 +272,8 @@ public class AgentProperties {
         public void setJira(Jira jira) { this.jira = jira; }
         public int getMaxOutputBytes() { return maxOutputBytes; }
         public void setMaxOutputBytes(int maxOutputBytes) { this.maxOutputBytes = maxOutputBytes; }
+        public List<String> getEnabled() { return enabled; }
+        public void setEnabled(List<String> enabled) { this.enabled = enabled == null ? List.of() : enabled; }
     }
 
     public static class Shell {
@@ -323,6 +334,13 @@ public class AgentProperties {
          * it does for any bean property. {@code RelaxedEnvBindingTest} pins both.
          */
         private CredentialMode credentialMode = CredentialMode.SERVICE;
+        /**
+         * Disables the 'write' operation of the {@code pod} tool — it still neither appears in
+         * the schema the model sees nor executes if asked anyway. The {@code acp} profile (part
+         * 1 of issue #59) sets this, since Penstock's own tool allow-list is per-tool-name and
+         * cannot otherwise exclude just one operation of a multi-operation tool.
+         */
+        private boolean readOnly = false;
 
         public String getBaseUrl() { return baseUrl; }
         public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
@@ -332,6 +350,8 @@ public class AgentProperties {
         public void setCredentialMode(CredentialMode credentialMode) {
             this.credentialMode = credentialMode == null ? CredentialMode.SERVICE : credentialMode;
         }
+        public boolean isReadOnly() { return readOnly; }
+        public void setReadOnly(boolean readOnly) { this.readOnly = readOnly; }
     }
 
     public static class Storage {

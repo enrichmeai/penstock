@@ -55,6 +55,8 @@ public class CisternTool implements Tool {
     private final WebClient webClient;
     private final CredentialResolver credentials;
 
+    private final boolean readOnly;
+
     public CisternTool(AgentProperties props, WebClient.Builder webClientBuilder,
                        CredentialResolver credentials) {
         AgentProperties.Cistern cfg = props.getTools().getCistern();
@@ -63,6 +65,7 @@ public class CisternTool implements Tool {
         this.mode = cfg.getCredentialMode();
         this.webClient = webClientBuilder.build();
         this.credentials = credentials;
+        this.readOnly = cfg.isReadOnly();
     }
 
     @Override
@@ -72,14 +75,19 @@ public class CisternTool implements Tool {
 
     @Override
     public String description() {
-        return "Read, list and write the user's own documents in their Cistern pod, " + actingAs() + ". "
+        String writeClause = readOnly
+            ? "'write' is disabled on this agent instance (agent.tools.cistern.read-only=true) — "
+              + "do not attempt it. "
+            : "'write' (create or replace a resource), ";
+        return "Read, list" + (readOnly ? "" : " and write") + " the user's own documents in their "
+            + "Cistern pod, " + actingAs() + ". "
             + "Operations: 'read' (fetch a resource), 'list' (contents of a container), "
-            + "'write' (create or replace a resource), 'receipts' (what has been "
-            + "accessed, if permitted). Access is decided by the owner's rules: a refusal "
-            + "means you were not granted that resource — report it, do not work around it. "
-            + "Large responses are truncated to the tool output cap (16 KB by default, "
-            + "head and tail kept with an omission marker) — a truncated read is NOT the "
-            + "full document; say so rather than treating it as complete. "
+            + writeClause
+            + "'receipts' (what has been accessed, if permitted). Access is decided by the "
+            + "owner's rules: a refusal means you were not granted that resource — report it, "
+            + "do not work around it. Large responses are truncated to the tool output cap "
+            + "(16 KB by default, head and tail kept with an omission marker) — a truncated "
+            + "read is NOT the full document; say so rather than treating it as complete. "
             + "Requires agent.tools.cistern.base-url and a credential for the configured "
             + "credential-mode.";
     }
@@ -94,10 +102,13 @@ public class CisternTool implements Tool {
 
     @Override
     public Map<String, Object> inputSchema() {
+        List<String> operations = readOnly
+            ? List.of("read", "list", "receipts")
+            : List.of("read", "list", "write", "receipts");
         return Map.of(
             "type", "object",
             "properties", Map.of(
-                "type", Map.of("type", "string", "enum", List.of("read", "list", "write", "receipts"),
+                "type", Map.of("type", "string", "enum", operations,
                     "description", "Operation to perform"),
                 "path", Map.of("type", "string",
                     "description", "Path within the pod, e.g. /notes/meeting.ttl or /notes/"),
@@ -118,6 +129,11 @@ public class CisternTool implements Tool {
             return ToolResult.error(callId, missingCredential(context));
         }
         String type = string(arguments, "type");
+        if (readOnly && "write".equals(type)) {
+            // Belt-and-suspenders: inputSchema() already omits "write" from the enum the model
+            // sees, but a model can emit an argument outside its own declared schema.
+            return ToolResult.error(callId, "write is disabled on this agent instance (agent.tools.cistern.read-only=true).");
+        }
         String path = string(arguments, "path");
         if (path.isBlank()) {
             return ToolResult.error(callId, "path is required");

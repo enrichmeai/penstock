@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -56,9 +57,20 @@ import java.util.List;
  *               Not affected by {@code agent.auth.mode}.
  *
  * Both chains are skipped when {@code agent.auth.enabled=false}.
+ *
+ * <p>Excluded entirely when the application is not a servlet web application — ACP stdio mode
+ * (see {@code AgentApplication}, which forces {@code spring.main.web-application-type=none} for
+ * {@code --acp}) has no servlet context, and Spring Security's {@code HttpSecurity} bean only
+ * exists under one — the {@code SecurityFilterChain} beans below fail to construct otherwise.
+ * Deliberately keyed on the actual application type via {@code @ConditionalOnWebApplication},
+ * not on the {@code acp} Spring profile name: a profile can be activated independently of
+ * {@code web-application-type} (e.g. a bare {@code SPRING_PROFILES_ACTIVE=acp}, bypassing
+ * {@code AgentApplication}'s own {@code --acp}/{@code AGENT_MODE} detection), and this must not
+ * leave a full servlet web server running with auth silently excluded.
  */
 @Configuration
 @EnableWebSecurity
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class SecurityConfig {
 
     private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);

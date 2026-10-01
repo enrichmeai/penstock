@@ -219,6 +219,18 @@ Comment frames are part of the SSE spec — clients consume them transparently
 without surfacing an event. Heartbeat activity is exported as
 `sse_heartbeats_sent_total{outcome=ok|error}` on `/actuator/prometheus`.
 
+## In your IDE (ACP)
+
+`java -jar penstock.jar --acp` speaks the [Agent Client Protocol](https://github.com/agentclientprotocol/java-sdk)
+over stdin/stdout instead of serving HTTP — launch it from an ACP-aware editor
+in place of the editor's own agent. This first cut answers `initialize`, opens
+sessions, streams replies, and honours `session/cancel`; it exposes only the
+read-only tools (`read_file`, `list_dir`, `glob`, `grep`, `pod`) — no
+`write_file`, `edit_file`, `shell` or `git` yet, since mutating tools arrive
+behind `session/request_permission` in a later release. The working directory
+the editor opens must be this agent's configured workspace; anything else is
+refused. A full walkthrough is coming in a follow-up release.
+
 ## Running multiple replicas
 
 Single-instance is the default and works fine for small teams. To run two or

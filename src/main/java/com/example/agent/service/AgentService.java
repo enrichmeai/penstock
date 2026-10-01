@@ -30,6 +30,17 @@ public class AgentService {
 
     private static final Logger log = LoggerFactory.getLogger(AgentService.class);
 
+    /**
+     * Prefixes of the sentinel assistant-text messages {@link #runTurn} appends when a turn
+     * stops for a reason other than the model finishing on its own. Exposed so other front
+     * ends (the ACP stream adapter maps these to {@code stopReason}) can classify a stop
+     * without re-parsing free text they don't own, and so the two stay in lockstep instead
+     * of drifting if the copy changes.
+     */
+    public static final String SESSION_BUDGET_EXCEEDED_PREFIX = "Budget exceeded for this session";
+    public static final String REQUEST_BUDGET_REACHED_PREFIX = "Per-request token budget reached";
+    public static final String MAX_TURNS_REACHED_PREFIX = "Stopped: reached max turns";
+
     private final LlmProvider llm;
     private final ToolRegistry tools;
     private final AgentProperties props;
@@ -126,7 +137,7 @@ public class AgentService {
             if (session.getTotalUsage().total() >= props.getLlm().getMaxTokensPerSession()) {
                 long maxSessionTokens = props.getLlm().getMaxTokensPerSession();
                 appendAndEmit(session, ChatMessage.assistantText(
-                        "Budget exceeded for this session (limit: " + maxSessionTokens + " tokens). Start a new session to continue."), emit);
+                        SESSION_BUDGET_EXCEEDED_PREFIX + " (limit: " + maxSessionTokens + " tokens). Start a new session to continue."), emit);
                 if (titleUpdated) sessionStore.update(session);
                 return;
             }
@@ -169,7 +180,7 @@ public class AgentService {
             if (session.getTotalUsage().total() >= props.getLlm().getMaxTokensPerSession()) {
                 long maxSessionTokens = props.getLlm().getMaxTokensPerSession();
                 appendAndEmit(session, ChatMessage.assistantText(
-                        "Budget exceeded for this session (limit: " + maxSessionTokens + " tokens). Start a new session to continue."), emit);
+                        SESSION_BUDGET_EXCEEDED_PREFIX + " (limit: " + maxSessionTokens + " tokens). Start a new session to continue."), emit);
                 if (titleUpdated) sessionStore.update(session);
                 return;
             }
@@ -183,7 +194,7 @@ public class AgentService {
             if (perRequestTotal >= props.getLlm().getMaxTokensPerRequest()) {
                 long maxRequestTokens = props.getLlm().getMaxTokensPerRequest();
                 appendAndEmit(session, ChatMessage.assistantText(
-                        "Per-request token budget reached (limit: " + maxRequestTokens + " tokens). " +
+                        REQUEST_BUDGET_REACHED_PREFIX + " (limit: " + maxRequestTokens + " tokens). " +
                         "Send another message to continue — the history is kept and the next " +
                         "request starts with a fresh budget — or ask something narrower."), emit);
                 if (titleUpdated) sessionStore.update(session);
@@ -199,7 +210,7 @@ public class AgentService {
         }
 
         appendAndEmit(session, ChatMessage.assistantText(
-                "Stopped: reached max turns (" + maxTurns + "). " +
+                MAX_TURNS_REACHED_PREFIX + " (" + maxTurns + "). " +
                 "The task may be incomplete. Send another message to continue — the " +
                 "history is kept and the next request starts with a fresh turn and " +
                 "token budget."), emit);
