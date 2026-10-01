@@ -271,6 +271,25 @@ management:
 spring:
   config:
     activate:
+      on-profile: acp
+
+agent:
+  tools:
+    # Read-only surface for part 1 of issue #59: mutating tools (write_file, edit_file,
+    # shell, git) arrive behind session/request_permission in a later part. `pod` is
+    # included for its read/list/receipts operations — writes through it are gated by
+    # the pod's own Web Access Control, not by this allow-list (see CisternTool).
+    enabled:
+      - read_file
+      - list_dir
+      - glob
+      - grep
+      - pod
+
+---
+spring:
+  config:
+    activate:
       on-profile: storage-postgres
   datasource:
     url:      ${AGENT_DB_URL:jdbc:postgresql://localhost:5432/agent}

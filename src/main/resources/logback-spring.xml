@@ -4,7 +4,7 @@
          "default" profile: activating any profile (e.g. storage-sqlite via
          AGENT_STORAGE_TYPE) drops "default", which would leave the root logger
          pointing at an undefined appender and silence all logging. -->
-    <springProfile name="!prod">
+    <springProfile name="!prod &amp; !acp">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
             <encoder>
                 <pattern>%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] [%X{userId:-}] [%X{sessionId:-}] %logger{30} - %msg%n</pattern>
@@ -12,9 +12,40 @@
         </appender>
     </springProfile>
 
-    <!-- Production profile: JSON structured logs -->
-    <springProfile name="prod">
+    <!-- ACP stdio mode: stdout IS the JSON-RPC wire (CLAUDE.md issue #61 — "Agents must
+         not write non-ACP data to stdout"). Both appenders above write to stdout by
+         default, which would corrupt every message, so this profile redirects to stderr
+         regardless of whether prod's JSON encoding is also active. -->
+    <springProfile name="acp &amp; !prod">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <target>System.err</target>
+            <encoder>
+                <pattern>%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] [%X{userId:-}] [%X{sessionId:-}] %logger{30} - %msg%n</pattern>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <!-- Production profile: JSON structured logs -->
+    <springProfile name="prod &amp; !acp">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <customFields>{"service":"ai-coding-agent"}</customFields>
+                <fieldNames>
+                    <timestamp>@timestamp</timestamp>
+                    <level>level</level>
+                    <logger>logger</logger>
+                    <message>message</message>
+                    <threadName>thread_name</threadName>
+                </fieldNames>
+                <includeMdc>true</includeMdc>
+                <includeContext>false</includeContext>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <springProfile name="prod &amp; acp">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <target>System.err</target>
             <encoder class="net.logstash.logback.encoder.LogstashEncoder">
                 <customFields>{"service":"ai-coding-agent"}</customFields>
                 <fieldNames>

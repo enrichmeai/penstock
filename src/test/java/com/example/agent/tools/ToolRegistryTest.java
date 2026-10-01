@@ -183,4 +183,45 @@ class ToolRegistryTest {
         assertEquals("req-9", seen.get().requestId());
         assertEquals("eyJ.alice", seen.get().bearer().orElseThrow().secret());
     }
+
+    private static Tool named(String name) {
+        return new Tool() {
+            @Override public String name() { return name; }
+            @Override public String description() { return name; }
+            @Override public Map<String, Object> inputSchema() { return Map.of(); }
+            @Override public ToolResult execute(String id, Map<String, Object> args, ToolContext context) {
+                return ToolResult.ok(id, "ok");
+            }
+        };
+    }
+
+    @Test
+    void emptyEnabledListRegistersEveryDiscoveredTool() {
+        AgentProperties props = new AgentProperties();
+        assertTrue(props.getTools().getEnabled().isEmpty(), "default is unrestricted");
+
+        ToolRegistry registry = new ToolRegistry(List.of(named("read_file"), named("shell"), named("git")), props);
+
+        assertEquals(3, registry.all().size());
+    }
+
+    @Test
+    void nonEmptyEnabledListRegistersOnlyThoseToolsByName() {
+        // Mirrors the acp profile's agent.tools.enabled allow-list (CLAUDE.md §61):
+        // a tool left out is unregistered entirely, so it is neither advertised to the
+        // model (specs()) nor invocable, not merely hidden from the spec list.
+        AgentProperties props = new AgentProperties();
+        props.getTools().setEnabled(List.of("read_file", "list_dir", "glob", "grep", "pod"));
+
+        ToolRegistry registry = new ToolRegistry(List.of(
+                named("read_file"), named("list_dir"), named("glob"), named("grep"), named("pod"),
+                named("write_file"), named("edit_file"), named("shell"), named("git")), props);
+
+        List<String> registeredNames = registry.specs().stream().map(ToolSpec::name).sorted().toList();
+        assertEquals(List.of("glob", "grep", "list_dir", "pod", "read_file"), registeredNames);
+
+        ToolResult result = registry.invoke(new ToolCall("c1", "shell", Map.of()));
+        assertTrue(result.isError());
+        assertEquals("Unknown tool: shell", result.content());
+    }
 }

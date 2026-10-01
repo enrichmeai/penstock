@@ -253,6 +253,15 @@ public class AgentProperties {
         private Jira jira = new Jira();
         private Cistern cistern = new Cistern();
         private int maxOutputBytes = 16_384;
+        /**
+         * Allow-list of tool names registered with {@code ToolRegistry}, by {@code Tool#name()}.
+         * Empty (the default) registers every discovered tool, unchanged from before this
+         * setting existed. The {@code acp} profile sets this to the read-only tool set
+         * (CLAUDE.md "Sandboxing invariants" — mutating tools arrive behind permission in a
+         * later part). A tool left out is unregistered entirely, so it is neither advertised
+         * to the model nor invocable — not merely hidden from the tool spec list.
+         */
+        private List<String> enabled = List.of();
 
         public Shell getShell() { return shell; }
         public void setShell(Shell shell) { this.shell = shell; }
@@ -263,6 +272,8 @@ public class AgentProperties {
         public void setJira(Jira jira) { this.jira = jira; }
         public int getMaxOutputBytes() { return maxOutputBytes; }
         public void setMaxOutputBytes(int maxOutputBytes) { this.maxOutputBytes = maxOutputBytes; }
+        public List<String> getEnabled() { return enabled; }
+        public void setEnabled(List<String> enabled) { this.enabled = enabled == null ? List.of() : enabled; }
     }
 
     public static class Shell {

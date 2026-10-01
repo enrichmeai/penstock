@@ -6,6 +6,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
@@ -56,9 +57,16 @@ import java.util.List;
  *               Not affected by {@code agent.auth.mode}.
  *
  * Both chains are skipped when {@code agent.auth.enabled=false}.
+ *
+ * <p>Excluded entirely on the {@code acp} profile: {@code spring.main.web-application-type=none}
+ * (the ACP stdio runner, see {@code AgentApplication}) has no servlet context, and Spring
+ * Security's {@code HttpSecurity} bean only exists under a web application context — the
+ * {@code SecurityFilterChain} beans below fail to construct otherwise. ACP mode has no HTTP
+ * surface to secure in the first place.
  */
 @Configuration
 @EnableWebSecurity
+@Profile("!acp")
 public class SecurityConfig {
 
     private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);

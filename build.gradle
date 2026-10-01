@@ -84,6 +84,8 @@ dependencies {
 
     // MockWebServer — provider streaming + non-streaming wire tests
     testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+
+    implementation 'com.agentclientprotocol:acp-agent-support:0.18.0'
 }
 
 tasks.named('test') {
