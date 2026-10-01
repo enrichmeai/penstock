@@ -222,4 +222,44 @@ class CisternToolTest {
         assertTrue(tool(CredentialMode.PER_USER).description().contains("as the user"));
         assertTrue(tool(CredentialMode.FORWARD).description().contains("as the signed-in user"));
     }
+
+    @Nested
+    class ReadOnlyMode {
+
+        private CisternTool readOnlyTool() {
+            AgentProperties props = properties(CredentialMode.SERVICE, SERVICE_TOKEN);
+            props.getTools().getCistern().setReadOnly(true);
+            return new CisternTool(props, WebClient.builder(), new ConfiguredCredentialResolver(props));
+        }
+
+        @Test
+        void writeIsRefusedWithoutEverReachingThePod() {
+            ToolResult r = readOnlyTool().execute("c1",
+                    Map.of("type", "write", "path", "/notes/a.ttl", "content", "x"),
+                    new ToolContext("alice", "s1"));
+
+            assertTrue(r.isError());
+            assertTrue(r.content().contains("read-only"));
+            assertEquals(0, pod.getRequestCount(), "a disabled write must never hit the network");
+        }
+
+        @Test
+        void writeIsExcludedFromTheAdvertisedOperations() {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> properties = (Map<String, Object>) readOnlyTool().inputSchema().get("properties");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> type = (Map<String, Object>) properties.get("type");
+            assertFalse(((java.util.List<?>) type.get("enum")).contains("write"));
+        }
+
+        @Test
+        void readStillWorks() throws Exception {
+            pod.enqueue(new MockResponse().setBody("doc"));
+
+            ToolResult r = readOnlyTool().execute("c1", read("/notes/a.ttl"), new ToolContext("alice", "s1"));
+
+            assertFalse(r.isError());
+            assertEquals("doc", r.content());
+        }
+    }
 }

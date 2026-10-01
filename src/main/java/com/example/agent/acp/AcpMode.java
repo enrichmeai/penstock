@@ -67,7 +67,13 @@ public class AcpMode {
     @Prompt
     AcpSchema.PromptResponse prompt(AcpSchema.PromptRequest request, SyncPromptContext ctx) {
         Session session = sessions.require(request.sessionId());
-        sessions.clearCancelled(session.getId());
+        // Deliberately not cleared here: the previous turn's own `finally` block (below)
+        // already clears the flag once it finishes, and a session only ever has one prompt
+        // in flight (the protocol errors on a second with CONCURRENT_PROMPT). Clearing again
+        // on entry raced the session/cancel notification's own dispatch — cancel and prompt
+        // are independent JSON-RPC messages the SDK can process concurrently, so a cancel
+        // sent immediately after the prompt it targets could be set *before* this handler
+        // starts, and clearing here erased it, losing the cancellation outright.
         AcpStreamAdapter adapter = new AcpStreamAdapter(ctx, session.getId(), () -> sessions.isCancelled(session.getId()));
         try {
             agentService.chatStreaming(session, request.text(), TurnContext.none(), adapter::onMessage, adapter::onToken);

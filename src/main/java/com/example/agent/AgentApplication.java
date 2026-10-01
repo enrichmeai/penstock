@@ -28,8 +28,8 @@ import java.util.Map;
  * {@code web-application-type=none} before the context starts — the same timing trick as
  * the storage switch above, since by the time a {@code @Profile}-gated bean could read it,
  * Spring Boot has already chosen the application context type. See
- * {@code SecurityConfig}'s {@code @Profile("!acp")} for why: {@code HttpSecurity} only
- * exists under a web application context, and ACP mode has none to secure.
+ * {@code SecurityConfig}'s {@code @ConditionalOnWebApplication} for why: {@code HttpSecurity}
+ * only exists under a web application context, and ACP mode has none to secure.
  */
 @SpringBootApplication
 public class AgentApplication {
@@ -55,6 +55,19 @@ public class AgentApplication {
 
         boolean acp = isAcpMode(args);
         if (acp) {
+            // AcpSessionBridge creates Session objects directly, bypassing SessionStore.create()
+            // (there is no HTTP principal in stdio mode to stamp them with — see its javadoc).
+            // AgentService still calls sessionStore.appendMessage/update per turn; the in-memory
+            // store no-ops safely, but JpaSessionStore.appendMessage writes straight to
+            // agent_messages with no check that a session row exists and no FK to catch it —
+            // every ACP turn would silently write permanently orphaned rows. Fail fast rather
+            // than let that run unnoticed.
+            if (!"memory".equalsIgnoreCase(storage == null ? "memory" : storage)) {
+                throw new IllegalStateException(
+                        "--acp (ACP stdio mode) supports agent.storage.type=memory only in this "
+                        + "release; got '" + storage + "'. Unset AGENT_STORAGE_TYPE or set it to "
+                        + "memory.");
+            }
             profiles.add("acp");
             defaults.put("spring.main.banner-mode", "off");
         }

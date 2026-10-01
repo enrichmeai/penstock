@@ -276,15 +276,18 @@ spring:
 agent:
   tools:
     # Read-only surface for part 1 of issue #59: mutating tools (write_file, edit_file,
-    # shell, git) arrive behind session/request_permission in a later part. `pod` is
-    # included for its read/list/receipts operations — writes through it are gated by
-    # the pod's own Web Access Control, not by this allow-list (see CisternTool).
+    # shell, git) arrive behind session/request_permission in a later part.
     enabled:
       - read_file
       - list_dir
       - glob
       - grep
       - pod
+    cistern:
+      # `pod` is a single tool with a read/list/write/receipts operation argument, so the
+      # allow-list above (per tool name) can't exclude just its write operation — this does:
+      # CisternTool neither advertises nor executes 'write' when true.
+      read-only: true
 
 ---
 spring:

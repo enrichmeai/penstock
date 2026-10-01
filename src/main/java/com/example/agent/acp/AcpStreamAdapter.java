@@ -73,6 +73,13 @@ final class AcpStreamAdapter {
         }
     }
 
+    /**
+     * Matches the model's final text against {@code AgentService}'s own sentinel prefixes
+     * rather than a typed signal, since the loop returns none today. A model asked to echo
+     * one of these exact prefixes verbatim would be misclassified; low-probability (they're
+     * distinctive synthetic strings, not something a prompt would normally provoke) but a
+     * real gap, flagged rather than silently accepted.
+     */
     static AcpSchema.StopReason classify(String text) {
         if (text != null) {
             if (text.startsWith(AgentService.MAX_TURNS_REACHED_PREFIX)) {

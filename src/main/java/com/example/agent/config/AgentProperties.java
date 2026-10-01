@@ -334,6 +334,13 @@ public class AgentProperties {
          * it does for any bean property. {@code RelaxedEnvBindingTest} pins both.
          */
         private CredentialMode credentialMode = CredentialMode.SERVICE;
+        /**
+         * Disables the 'write' operation of the {@code pod} tool — it still neither appears in
+         * the schema the model sees nor executes if asked anyway. The {@code acp} profile (part
+         * 1 of issue #59) sets this, since Penstock's own tool allow-list is per-tool-name and
+         * cannot otherwise exclude just one operation of a multi-operation tool.
+         */
+        private boolean readOnly = false;
 
         public String getBaseUrl() { return baseUrl; }
         public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
@@ -343,6 +350,8 @@ public class AgentProperties {
         public void setCredentialMode(CredentialMode credentialMode) {
             this.credentialMode = credentialMode == null ? CredentialMode.SERVICE : credentialMode;
         }
+        public boolean isReadOnly() { return readOnly; }
+        public void setReadOnly(boolean readOnly) { this.readOnly = readOnly; }
     }
 
     public static class Storage {

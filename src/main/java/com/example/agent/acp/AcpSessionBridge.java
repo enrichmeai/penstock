@@ -17,11 +17,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * principal to stamp it with (CLAUDE.md, "Identity on background threads" — the IDE
  * launched this process as the OS user, so that's the identity {@link Session} carries),
  * and {@code SessionStore.create()} always stamps the session it returns from
- * {@code CurrentUser}, which resolves to "anonymous" with no request in flight. ACP mode
- * targets {@code agent.storage.type=memory} in this part — {@code AgentService.chatStreaming}
- * still calls {@code sessionStore.appendMessage}/{@code update} per turn, which no-op for
- * the in-memory store; a session created here is invisible to the SQLite/Postgres stores
- * (no row exists for it), a known gap outside this part's scope.
+ * {@code CurrentUser}, which resolves to "anonymous" with no request in flight.
+ * {@code AgentService.chatStreaming} still calls {@code sessionStore.appendMessage}/
+ * {@code update} per turn against whichever store is configured, with no row for this
+ * session to attach to — harmless for the in-memory store (the {@code Session} object
+ * itself is the source of truth), but {@code JpaSessionStore.appendMessage} would write
+ * permanently orphaned rows with no FK to catch it. {@code AgentApplication.main} fails
+ * fast if {@code --acp} is combined with anything other than
+ * {@code agent.storage.type=memory}, so that case cannot reach here.
  */
 @Component
 public class AcpSessionBridge {
@@ -55,7 +58,8 @@ public class AcpSessionBridge {
         return flag != null && flag.get();
     }
 
-    /** Reset before each new prompt so a stale cancel from a prior turn doesn't leak into this one. */
+    /** Cleared once a turn finishes (by {@code AcpMode.prompt}'s {@code finally}), so a stale
+     * cancel from a prior turn can never leak into the next one on this session. */
     public void clearCancelled(String sessionId) {
         AtomicBoolean flag = cancelled.get(sessionId);
         if (flag != null) flag.set(false);
