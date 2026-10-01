@@ -3,16 +3,27 @@
 *Formerly "AI Coding Agent".* A penstock carries water under pressure to the
 turbine — it delivers work to where the work gets done.
 
-**Your models, beyond the IDE.** A self-hosted, centrally-governed agent that runs
-GitHub Copilot (or Claude / OpenAI / Ollama) against the workflows your IDE can't
-reach — CI hooks, Slack commands, scheduled triage jobs, and custom tools that talk
-to your internal systems (Jira, runbooks, observability). Built in **Spring Boot 3 +
-Gradle + Java 21** with auth, rate limiting, audit logging, and Prometheus metrics
-on by default.
+**Penstock runs your agents on your data, with receipts.** A self-hosted agent
+runtime, built on GitHub Copilot (or Claude / OpenAI / Ollama), for the work
+that happens where no editor is open. Four things define it:
 
-If your developers already have Copilot in their IDE and you want **the same models,
-the same contract, running the autonomous workflows no editor can host** — this is
-what you run.
+1. **Where it runs.** Headless — CI hooks, Slack commands, scheduled triage
+   jobs, webhooks — not a developer's keyboard.
+2. **Whose hardware.** Self-hosted, Apache 2.0. The transcript, the audit log
+   and the credentials never leave your deployment.
+3. **Whose data, provably.** Through the [`pod` tool](./src/main/java/com/example/agent/tools/CisternTool.java),
+   an agent reads and writes a person's own data in a
+   [Cistern](https://github.com/enrichmeai/cistern) pod, under rules that
+   person wrote — and every access is receipted on their side, not ours.
+4. **And it can sit inside Air, too.** Planned: Penstock speaking the Agent
+   Client Protocol so it shows up as a selectable agent inside JetBrains Air
+   (and Zed) — tracked in [#59](https://github.com/enrichmeai/penstock/issues/59),
+   not yet merged.
+
+Built in **Spring Boot 3 + Gradle + Java 21** with auth, rate limiting, audit
+logging, and Prometheus metrics on by default. See
+[Penstock and JetBrains Air](#penstock-and-jetbrains-air) below for how this
+differs from governing agent spend and model choice.
 
 **Three surfaces, one backend**: a web UI for developers, a REST API for automation
 (CI, Slack, bots, cron), and SSE streaming for real-time interactive work. Built-in
@@ -41,7 +52,8 @@ developers' IDE. Anthropic, OpenAI, and Ollama remain available as fallbacks; fl
 
 ## Beyond the IDE: three example integrations
 
-Ready-to-deploy demos that show the agent operating where Copilot-for-IDE cannot:
+Ready-to-deploy demos that show the agent operating headless, where no editor
+is open:
 
 - **[CI nightly triage](./examples/ci-nightly-triage/)** — a GitHub Actions
   workflow that calls the agent's REST API at 2am, asks it to diagnose failing
@@ -54,9 +66,30 @@ Ready-to-deploy demos that show the agent operating where Copilot-for-IDE cannot
   internal systems. Copy this pattern for your runbook repo, PagerDuty,
   observability stack, anything. 30–50 lines per tool.
 
-This is the shape of value Copilot-for-IDE structurally can't deliver: agent
-workflows that run without a developer at a keyboard, and tools that talk to
-your own systems.
+None of this needs an editor open: agent workflows that run without a
+developer at a keyboard, against your own infrastructure, with tools that
+talk to your own systems.
+
+## Penstock and JetBrains Air
+
+[JetBrains Air](https://blog.jetbrains.com/blog/2026/09/22/introducing-jetbrains-air/)
+(announced 2026-09-22) puts agents inside the IDE and governs which agents and
+models a developer may spend against. Penstock answers a different question:
+whose *data* an agent is allowed to touch while it works, and proof afterwards
+that it stayed inside the rules.
+
+| | Penstock | JetBrains Air |
+| --- | --- | --- |
+| Where it runs | Headless — CI, Slack, cron, webhooks; no editor needed | Inside JetBrains IDEs, the browser (`air.jetbrains.cloud`), or the local Air App desktop client ([docs](https://www.jetbrains.com/help/air/ways-to-reach-air-teams.html)) |
+| Whose hardware | Self-hosted, Apache 2.0 — nothing leaves your deployment | "A cloud environment is a Docker container that runs on a virtual machine in the cloud" ([docs](https://www.jetbrains.com/help/air/configure-environments.html)); no self-hosted mode is documented |
+| What's governed | Whose data an agent touches, under rules that person wrote, receipted on their side via the `pod` tool and a [Cistern](https://github.com/enrichmeai/cistern) pod | Agent/model permissions, spend, and auditability for the organization: "organizational policy, visibility, auditability, cost management, and accountability for AI-assisted and agent-driven development" ([announcement](https://blog.jetbrains.com/blog/2026/09/22/introducing-jetbrains-air/)); "Set permissions for the whole organization or tailor them to specific teams or individuals" ([product page](https://www.jetbrains.com/air/)) |
+| How they fit together | Planned: Penstock as a selectable agent inside Air via the Agent Client Protocol — [#59](https://github.com/enrichmeai/penstock/issues/59), not yet merged | — |
+
+These aren't competing claims about the same thing: Air governs *which agent
+and model* a developer may spend against, from inside the IDE. Penstock
+governs *whose data* an agent may touch while running headless, and gives the
+data's owner a receipt afterwards — see [Acting as the signed-in
+user](#acting-as-the-signed-in-user).
 
 ## Features
 

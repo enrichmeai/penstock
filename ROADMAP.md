@@ -154,6 +154,7 @@ The block-list regex is not a real defence. Pick one of:
 - **Import/export sessions** as Markdown transcripts.
 - **Web search tool / HTTP fetch tool** for agents that need to browse docs.
 - **MCP support** — expose the tools via the Model Context Protocol so other agents can use them.
+- **Agent Client Protocol** — speak ACP so Penstock runs as a selectable agent inside JetBrains Air and Zed — see [#59](https://github.com/enrichmeai/penstock/issues/59).
 
 ---
 
