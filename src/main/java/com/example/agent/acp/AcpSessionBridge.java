@@ -1,5 +1,6 @@
 package com.example.agent.acp;
 
+import com.agentclientprotocol.sdk.agent.SyncPromptContext;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
 import com.agentclientprotocol.sdk.error.AcpProtocolException;
 import com.example.agent.model.Session;
@@ -31,6 +32,7 @@ public class AcpSessionBridge {
 
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
     private final Map<String, AtomicBoolean> cancelled = new ConcurrentHashMap<>();
+    private final Map<String, SyncPromptContext> promptContexts = new ConcurrentHashMap<>();
 
     public Session create(String userId) {
         Session session = new Session(userId);
@@ -63,5 +65,26 @@ public class AcpSessionBridge {
     public void clearCancelled(String sessionId) {
         AtomicBoolean flag = cancelled.get(sessionId);
         if (flag != null) flag.set(false);
+    }
+
+    /**
+     * The live {@link SyncPromptContext} for the turn currently in flight on this session, set
+     * by {@code AcpMode.prompt} for the duration of one {@code session/prompt} call. {@link
+     * com.example.agent.tools.Tool#execute} runs deep inside that call's stack (through {@code
+     * AgentService.runTurn} and {@code ToolRegistry.invoke}, neither of which knows about ACP),
+     * so this session-keyed lookup — not a parameter threaded through those shared signatures —
+     * is how {@link PermissionGate} reaches the client that can answer {@code
+     * session/request_permission}. Same lifecycle as {@link #cancel}/{@link #clearCancelled}.
+     */
+    public void setPromptContext(String sessionId, SyncPromptContext ctx) {
+        promptContexts.put(sessionId, ctx);
+    }
+
+    public SyncPromptContext promptContext(String sessionId) {
+        return promptContexts.get(sessionId);
+    }
+
+    public void clearPromptContext(String sessionId) {
+        promptContexts.remove(sessionId);
     }
 }

@@ -275,19 +275,28 @@ spring:
 
 agent:
   tools:
-    # Read-only surface for part 1 of issue #59: mutating tools (write_file, edit_file,
-    # shell, git) arrive behind session/request_permission in a later part.
+    # Full tool surface for part 2 of issue #59 (#62): write_file, edit_file, shell, git and
+    # pod writes are reachable, but AcpToolPermissionConfig wraps each in AcpGatedTool, so every
+    # call whose ACP kind is edit/delete/execute (agent.acp.permission.required-kinds) goes
+    # through PermissionGate's session/request_permission before it runs — ShellTool's
+    # block-list and GitTool's whitelist underneath are unchanged and still apply.
     enabled:
       - read_file
       - list_dir
       - glob
       - grep
+      - write_file
+      - edit_file
+      - shell
+      - git
       - pod
     cistern:
       # `pod` is a single tool with a read/list/write/receipts operation argument, so the
-      # allow-list above (per tool name) can't exclude just its write operation — this does:
-      # CisternTool neither advertises nor executes 'write' when true.
-      read-only: true
+      # allow-list above (per tool name) can't exclude just its write operation. Part 1 set
+      # this true to keep 'write' out of ACP mode entirely; part 2 relies on PermissionGate
+      # instead (AcpGatedTool only gates the 'write' operation — read/list/receipts stay
+      # unprompted, same as every other read tool here).
+      read-only: false
 
 ---
 spring:

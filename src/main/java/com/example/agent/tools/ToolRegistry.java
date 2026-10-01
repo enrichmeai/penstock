@@ -1,5 +1,6 @@
 package com.example.agent.tools;
 
+import com.example.agent.acp.PermissionGatedTool;
 import com.example.agent.config.AgentMetrics;
 import com.example.agent.config.AgentProperties;
 import com.example.agent.model.ToolCall;
@@ -34,7 +35,13 @@ public class ToolRegistry {
         List<String> enabled = props.getTools().getEnabled();
         discovered.forEach(t -> {
             if (enabled.isEmpty() || enabled.contains(t.name())) {
-                tools.put(t.name(), t);
+                // A plain tool never overwrites an already-registered PermissionGatedTool
+                // wrapper for the same name (acp profile only) — see PermissionGatedTool.
+                Tool existing = tools.get(t.name());
+                boolean keepExisting = existing instanceof PermissionGatedTool && !(t instanceof PermissionGatedTool);
+                if (!keepExisting) {
+                    tools.put(t.name(), t);
+                }
             }
         });
         log.info("Registered {} tools: {}", tools.size(), tools.keySet());

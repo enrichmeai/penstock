@@ -52,7 +52,7 @@ final class AcpStreamAdapter {
             stopReason = classify(message.text());
             for (ToolCall call : message.toolCalls()) {
                 ctx.sendUpdate(sessionId, new AcpSchema.ToolCall(
-                        "tool_call", call.id(), call.name(), kindOf(call.name()),
+                        "tool_call", call.id(), call.name(), kindOf(call.name(), call.arguments()),
                         AcpSchema.ToolCallStatus.IN_PROGRESS, List.of(), List.of(),
                         call.arguments(), null, null));
             }
@@ -93,11 +93,19 @@ final class AcpStreamAdapter {
         return AcpSchema.StopReason.END_TURN;
     }
 
-    static AcpSchema.ToolKind kindOf(String toolName) {
+    /**
+     * {@code pod} is a single tool whose {@code type} argument picks the operation (CLAUDE.md
+     * issue #62 "Surface") — only {@code write} is a mutation, so its kind depends on the call's
+     * arguments and not just its name, unlike every other tool here.
+     */
+    static AcpSchema.ToolKind kindOf(String toolName, java.util.Map<String, Object> arguments) {
         return switch (toolName) {
             case "read_file", "list_dir" -> AcpSchema.ToolKind.READ;
             case "glob", "grep" -> AcpSchema.ToolKind.SEARCH;
-            case "pod" -> AcpSchema.ToolKind.FETCH;
+            case "write_file", "edit_file" -> AcpSchema.ToolKind.EDIT;
+            case "shell", "git" -> AcpSchema.ToolKind.EXECUTE;
+            case "pod" -> "write".equals(arguments == null ? null : String.valueOf(arguments.get("type")))
+                    ? AcpSchema.ToolKind.EDIT : AcpSchema.ToolKind.FETCH;
             default -> AcpSchema.ToolKind.OTHER;
         };
     }
