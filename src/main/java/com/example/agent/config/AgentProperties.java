@@ -22,6 +22,7 @@ public class AgentProperties {
     private Sse sse = new Sse();
     private RateLimit rateLimit = new RateLimit();
     private Metrics metrics = new Metrics();
+    private Acp acp = new Acp();
 
     public String getWorkspace() { return workspace; }
     public void setWorkspace(String workspace) { this.workspace = workspace; }
@@ -52,6 +53,9 @@ public class AgentProperties {
 
     public RateLimit getRateLimit() { return rateLimit; }
     public void setRateLimit(RateLimit rateLimit) { this.rateLimit = rateLimit; }
+
+    public Acp getAcp() { return acp; }
+    public void setAcp(Acp acp) { this.acp = acp; }
 
     // ---------- nested ----------
 
@@ -352,6 +356,34 @@ public class AgentProperties {
         }
         public boolean isReadOnly() { return readOnly; }
         public void setReadOnly(boolean readOnly) { this.readOnly = readOnly; }
+    }
+
+    /**
+     * ACP ({@code --acp}) stdio mode settings. See issue #62: mutating tools are gated
+     * behind {@code session/request_permission}.
+     */
+    public static class Acp {
+        private Permission permission = new Permission();
+
+        public Permission getPermission() { return permission; }
+        public void setPermission(Permission permission) { this.permission = permission; }
+    }
+
+    /**
+     * Which ACP tool {@code kind}s {@link com.example.agent.acp.PermissionGate} requires
+     * {@code session/request_permission} for before a tool call runs. Default is every
+     * mutating kind the ACP spec defines ({@code edit}, {@code delete}, {@code execute}) —
+     * widen it to gate more (e.g. {@code move}), but {@code execute} is always enforced
+     * regardless of this list: a deployment cannot use this setting to let shell/git run
+     * unprompted.
+     */
+    public static class Permission {
+        private List<String> requiredKinds = List.of("edit", "delete", "execute");
+
+        public List<String> getRequiredKinds() { return requiredKinds; }
+        public void setRequiredKinds(List<String> requiredKinds) {
+            this.requiredKinds = requiredKinds == null ? List.of() : requiredKinds;
+        }
     }
 
     public static class Storage {

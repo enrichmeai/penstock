@@ -4,6 +4,8 @@ import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.example.agent.service.AgentService;
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -42,11 +44,22 @@ class AcpStreamAdapterTest {
 
     @Test
     void toolKindMapping() {
-        assertEquals(AcpSchema.ToolKind.READ, AcpStreamAdapter.kindOf("read_file"));
-        assertEquals(AcpSchema.ToolKind.READ, AcpStreamAdapter.kindOf("list_dir"));
-        assertEquals(AcpSchema.ToolKind.SEARCH, AcpStreamAdapter.kindOf("glob"));
-        assertEquals(AcpSchema.ToolKind.SEARCH, AcpStreamAdapter.kindOf("grep"));
-        assertEquals(AcpSchema.ToolKind.FETCH, AcpStreamAdapter.kindOf("pod"));
-        assertEquals(AcpSchema.ToolKind.OTHER, AcpStreamAdapter.kindOf("shell"));
+        assertEquals(AcpSchema.ToolKind.READ, AcpStreamAdapter.kindOf("read_file", Map.of()));
+        assertEquals(AcpSchema.ToolKind.READ, AcpStreamAdapter.kindOf("list_dir", Map.of()));
+        assertEquals(AcpSchema.ToolKind.SEARCH, AcpStreamAdapter.kindOf("glob", Map.of()));
+        assertEquals(AcpSchema.ToolKind.SEARCH, AcpStreamAdapter.kindOf("grep", Map.of()));
+        assertEquals(AcpSchema.ToolKind.EDIT, AcpStreamAdapter.kindOf("write_file", Map.of()));
+        assertEquals(AcpSchema.ToolKind.EDIT, AcpStreamAdapter.kindOf("edit_file", Map.of()));
+        assertEquals(AcpSchema.ToolKind.EXECUTE, AcpStreamAdapter.kindOf("shell", Map.of()));
+        assertEquals(AcpSchema.ToolKind.EXECUTE, AcpStreamAdapter.kindOf("git", Map.of()));
+        assertEquals(AcpSchema.ToolKind.OTHER, AcpStreamAdapter.kindOf("jira", Map.of()));
+    }
+
+    @Test
+    void podKindDependsOnTheTypeArgument() {
+        assertEquals(AcpSchema.ToolKind.FETCH, AcpStreamAdapter.kindOf("pod", Map.of("type", "read")));
+        assertEquals(AcpSchema.ToolKind.FETCH, AcpStreamAdapter.kindOf("pod", Map.of("type", "list")));
+        assertEquals(AcpSchema.ToolKind.EDIT, AcpStreamAdapter.kindOf("pod", Map.of("type", "write")));
+        assertEquals(AcpSchema.ToolKind.FETCH, AcpStreamAdapter.kindOf("pod", Map.of()));
     }
 }

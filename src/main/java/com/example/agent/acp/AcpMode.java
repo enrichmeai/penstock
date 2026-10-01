@@ -75,12 +75,14 @@ public class AcpMode {
         // sent immediately after the prompt it targets could be set *before* this handler
         // starts, and clearing here erased it, losing the cancellation outright.
         AcpStreamAdapter adapter = new AcpStreamAdapter(ctx, session.getId(), () -> sessions.isCancelled(session.getId()));
+        sessions.setPromptContext(session.getId(), ctx);
         try {
             agentService.chatStreaming(session, request.text(), TurnContext.none(), adapter::onMessage, adapter::onToken);
         } catch (AcpCancelledException cancelled) {
             return new AcpSchema.PromptResponse(AcpSchema.StopReason.CANCELLED);
         } finally {
             sessions.clearCancelled(session.getId());
+            sessions.clearPromptContext(session.getId());
         }
         return new AcpSchema.PromptResponse(adapter.stopReason());
     }
