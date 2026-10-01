@@ -81,7 +81,7 @@ that it stayed inside the rules.
 | | Penstock | JetBrains Air |
 | --- | --- | --- |
 | Where it runs | Headless — CI, Slack, cron, webhooks; no editor needed | Inside JetBrains IDEs, the browser (`air.jetbrains.cloud`), or the local Air App desktop client ([docs](https://www.jetbrains.com/help/air/ways-to-reach-air-teams.html)) |
-| Whose hardware | Self-hosted, Apache 2.0 — nothing leaves your deployment | Cloud tasks run "as a Docker container on a virtual machine in the JetBrains cloud service" ([docs](https://www.jetbrains.com/help/air/tasks.html)); no self-hosted mode is documented |
+| Whose hardware | Self-hosted, Apache 2.0 — nothing leaves your deployment | "A cloud environment is a Docker container that runs on a virtual machine in the cloud" ([docs](https://www.jetbrains.com/help/air/configure-environments.html)); no self-hosted mode is documented |
 | What's governed | Whose data an agent touches, under rules that person wrote, receipted on their side via the `pod` tool and a [Cistern](https://github.com/enrichmeai/cistern) pod | Agent/model permissions, spend, and auditability for the organization: "organizational policy, visibility, auditability, cost management, and accountability for AI-assisted and agent-driven development" ([announcement](https://blog.jetbrains.com/blog/2026/09/22/introducing-jetbrains-air/)); "Set permissions for the whole organization or tailor them to specific teams or individuals" ([product page](https://www.jetbrains.com/air/)) |
 | How they fit together | Planned: Penstock as a selectable agent inside Air via the Agent Client Protocol — [#59](https://github.com/enrichmeai/penstock/issues/59), not yet merged | — |
 
