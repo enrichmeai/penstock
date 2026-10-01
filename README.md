@@ -256,13 +256,16 @@ without surfacing an event. Heartbeat activity is exported as
 
 `java -jar penstock.jar --acp` speaks the [Agent Client Protocol](https://github.com/agentclientprotocol/java-sdk)
 over stdin/stdout instead of serving HTTP — launch it from an ACP-aware editor
-in place of the editor's own agent. This first cut answers `initialize`, opens
-sessions, streams replies, and honours `session/cancel`; it exposes only the
-read-only tools (`read_file`, `list_dir`, `glob`, `grep`, `pod`) — no
-`write_file`, `edit_file`, `shell` or `git` yet, since mutating tools arrive
-behind `session/request_permission` in a later release. The working directory
-the editor opens must be this agent's configured workspace; anything else is
-refused. A full walkthrough is coming in a follow-up release.
+in place of the editor's own agent. It answers `initialize`, opens sessions,
+streams replies, and honours `session/cancel`; the read-only tools
+(`read_file`, `list_dir`, `glob`, `grep`, and `pod`'s read/list/receipts
+operations) run unprompted, while `write_file`, `edit_file`, `shell`, `git`
+and `pod`'s `write` operation each go through `session/request_permission`
+first. The working directory the editor opens must be this agent's configured
+workspace; anything else is refused. See
+[Penstock in JetBrains Air and Zed](./docs/ide-agents.md) for registration
+steps in each editor, what the permission prompt looks like, and
+troubleshooting.
 
 ## Running multiple replicas
 
