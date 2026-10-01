@@ -224,4 +224,39 @@ class ToolRegistryTest {
         assertTrue(result.isError());
         assertEquals("Unknown tool: shell", result.content());
     }
+
+    /** A gated wrapper, as AcpToolPermissionConfig produces for the same name as a raw tool. */
+    private static Tool gated(String name) {
+        return new com.example.agent.acp.PermissionGatedTool() {
+            @Override public String name() { return name; }
+            @Override public String description() { return name + " (gated)"; }
+            @Override public Map<String, Object> inputSchema() { return Map.of(); }
+            @Override public ToolResult execute(String id, Map<String, Object> args, ToolContext context) {
+                return ToolResult.ok(id, "gated");
+            }
+        };
+    }
+
+    @Test
+    void gatedWrapperWinsOverTheRawToolOfTheSameNameInEitherDiscoveryOrder() {
+        // The whole reason PermissionGatedTool exists (CLAUDE.md §62): in acp profile both
+        // the raw tool bean and its gated wrapper are discovered under one name, and Spring's
+        // List<Tool> order between them is unspecified. The registry must keep the gated one
+        // whichever arrives first — otherwise a mutating tool could run unprompted.
+        AgentProperties props = new AgentProperties();
+
+        ToolRegistry gatedFirst = new ToolRegistry(List.of(gated("shell"), named("shell")), props);
+        assertEquals("gated", gatedFirst.invoke(new ToolCall("c1", "shell", Map.of())).content());
+
+        ToolRegistry rawFirst = new ToolRegistry(List.of(named("shell"), gated("shell")), props);
+        assertEquals("gated", rawFirst.invoke(new ToolCall("c2", "shell", Map.of())).content());
+
+        // Both still count as one registered tool, so specs() advertises it once.
+        assertEquals(1, gatedFirst.all().size());
+        assertEquals(1, rawFirst.all().size());
+
+        // Outside acp profile there is no wrapper, and a plain tool still registers as before.
+        ToolRegistry plain = new ToolRegistry(List.of(named("shell")), props);
+        assertEquals("ok", plain.invoke(new ToolCall("c3", "shell", Map.of())).content());
+    }
 }
