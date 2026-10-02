@@ -1,0 +1,11 @@
+id: acp-protocol-v1
+source: https://github.com/agentclientprotocol/agent-client-protocol
+read: 2026-10-02
+version: "1"
+trust: primary
+holds:
+  - a JSON-RPC protocol that lets an editor run an external program as its coding agent over stdin/stdout
+  - initialize and session/new negotiate a session before any prompt streams
+  - session/new.cwd must resolve to the agent's configured workspace, or the agent refuses the session
+  - mutating tool calls go through session/request_permission with four outcomes: allow once, always allow, reject, always reject ("always" lasts for the session, not remembered across sessions)
+  - session/cancel is a notification, not a request, that an in-flight prompt observes cooperatively

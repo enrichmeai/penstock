@@ -1,0 +1,10 @@
+id: acp-java-sdk-0.18.0
+source: https://github.com/agentclientprotocol/java-sdk
+read: 2026-10-02
+version: 0.18.0
+trust: primary
+holds:
+  - build.gradle resolves com.agentclientprotocol:acp-agent-support:0.18.0 for Penstock's --acp mode
+  - offers an annotation-based agent style (@AcpAgent, @Initialize, @NewSession, @Prompt, @Cancel) that Penstock's AcpMode uses directly
+  - ships a stdio transport (StdioAcpAgentTransport) that AcpStdioRunner builds the agent's transport on
+  - AcpAgentSupport.run() blocks until the client disconnects (closes stdin)

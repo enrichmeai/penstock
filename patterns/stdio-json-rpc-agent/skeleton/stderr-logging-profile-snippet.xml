@@ -1,0 +1,18 @@
+<!--
+  Skeleton: redirect this mode's console logging to stderr, because stdout IS the JSON-RPC
+  wire for a stdio agent — anything else written there (a stray println, a library that logs
+  to stdout by default) corrupts every message the editor reads, with no visible error.
+
+  This is a logback-spring.xml <springProfile> snippet; adapt the profile name
+  (<your-profile-name>) and merge it alongside whatever profiles your app already defines —
+  do NOT key the normal-mode appender on "default": activating any other profile drops
+  "default" too, silencing every log line including startup failures.
+-->
+<springProfile name="&lt;your-profile-name&gt;">
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <target>System.err</target>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{30} - %msg%n</pattern>
+        </encoder>
+    </appender>
+</springProfile>

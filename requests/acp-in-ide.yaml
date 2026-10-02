@@ -1,0 +1,18 @@
+id: acp-in-ide
+want: Penstock runs inside JetBrains Air and Zed as a selectable coding agent, speaking the Agent Client Protocol over stdio, with mutating tools gated behind the editor's own permission prompt
+why: let developers use Penstock's workspace-sandboxed tool loop and audit trail from inside their editor, next to the vendor agents, without opening a second window
+done-when:
+  - --acp (or AGENT_MODE=acp) switches AgentApplication to ACP stdio mode instead of the HTTP server, with web-application-type=none
+  - session/new refuses any cwd that does not resolve exactly to agent.workspace
+  - read-only tools (read_file, list_dir, glob, grep, pod reads) run unprompted; write_file, edit_file, shell, git and pod writes each go through session/request_permission
+  - shell and git are gated no matter how the agent is configured, underneath whatever the permission grant says
+  - all logging moves to stderr in acp mode so stdout carries only ACP JSON-RPC frames
+  - registered and runnable from both Air's acp.json (agent_servers) and Zed's agent_servers settings
+not:
+  - no network or WebSocket ACP transport in this part — stdio only
+  - no change to HTTP/SSE server behaviour outside --acp mode
+  - --acp combined with any storage mode other than memory fails fast rather than running
+references: [acp-protocol-v1, acp-java-sdk-0.18.0, jetbrains-air-custom-agent, zed-agent-servers]
+patterns: [stdio-json-rpc-agent]
+outcome: shipped in v0.3.0 (#65, #66, #67), 2026-10-02
+issue: 59

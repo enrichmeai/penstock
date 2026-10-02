@@ -407,6 +407,8 @@ as it's produced, which the SSE controller relays to the client.
 
 **Harden for production** — swap `InMemoryUserDetailsManager` for a real user store; enforce HTTPS (put behind nginx / a load balancer); add rate limits; persist audit logs of tool calls.
 
+**Project memory** — `requests/`, `references/` and `patterns/` at the repo root record what was wanted, what was trusted, and how it was built, as plain YAML/Markdown; start at `requests/README.md`.
+
 ## Safety notes
 
 - The agent is restricted to `agent.workspace`; attempts to access paths outside are rejected with a `SecurityException`.

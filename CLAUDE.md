@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Penstock** (formerly `ai-coding-agent`; repo `enrichmeai/penstock`, image `ghcr.io/enrichmeai/penstock`). Spring Boot 3 + Java 21 agent that runs an LLM-driven tool-use loop over a sandboxed workspace. Exposes a web UI, a REST API, and an SSE streaming endpoint. Pluggable LLM provider (`copilot` default; `anthropic` / `openai` / `ollama`) and pluggable session store (`memory` default; `sqlite` / `postgres`).
 
+`requests/`, `references/` and `patterns/` at the repo root are this project's memory — what was wanted, what was trusted, how it was built; a plan should read them before writing new code (see `requests/README.md`).
+
 ## Commands
 
 Gradle wrapper is not checked in — run `./bootstrap.sh` once to download it. Then:

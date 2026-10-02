@@ -1,0 +1,11 @@
+id: jetbrains-air-custom-agent
+source: https://www.jetbrains.com/help/air/select-agents-and-models.html
+read: 2026-10-02
+version: ~ # documentation page, no release tag
+trust: primary
+holds:
+  - custom ACP agents are a feature of the Air desktop app only — the browser and in-IDE selectors only list org-enabled agents
+  - added via the agent selector's "Add ACP Agent", which opens the Air app's own acp.json
+  - acp.json entries live under agent_servers, keyed by the label shown in the agent selector, each with command/args/env
+  - acp.json applies to every task on that machine, not just one project
+  - per-agent login is a separate optional step the docs describe; Penstock declares no ACP auth method, so it doesn't apply — the only credential Penstock needs is the env block
