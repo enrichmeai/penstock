@@ -1,4 +1,5 @@
-# Release pipeline: push a tag like v0.1.0 and this
+# Release pipeline: push a tag like v0.1.0 (or run it from the Actions tab with
+# a version, and it creates the tag at the end) and this
 #   1. builds + tests the jar (version taken from the tag),
 #   2. builds the amd64 image and smoke-tests it (boots in default memory
 #      mode, polls /api/health) BEFORE anything is published,
@@ -18,6 +19,12 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, e.g. 0.3.0 — the tag v<version> is created on the chosen branch'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -32,8 +39,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Derive version from tag (v0.1.0 -> 0.1.0)
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+      - name: Derive version and tag
+        # Tag push: v0.1.0 -> VERSION 0.1.0, TAG v0.1.0. Manual run: the version
+        # input, and the tag is created by `gh release create --target` below,
+        # after everything has been built, smoke-tested and pushed.
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            VERSION="${INPUT_VERSION#v}"
+            TAG="v${VERSION}"
+            if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+              echo "::error::tag ${TAG} already exists; push a new version or delete the tag first"
+              exit 1
+            fi
+            echo "TARGET=--target=${GITHUB_SHA}" >> "$GITHUB_ENV"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+            TAG="${GITHUB_REF_NAME}"
+            echo "TARGET=" >> "$GITHUB_ENV"
+          fi
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "TAG=${TAG}" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v6
         with:
@@ -121,11 +148,13 @@ jobs:
           # Hand-written notes for this version, when present, go first; the
           # API prepends them to the generated "What's Changed" list.
           notes=()
-          if [ -f "docs/releases/${GITHUB_REF_NAME}.md" ]; then
-            notes=(--notes-file "docs/releases/${GITHUB_REF_NAME}.md")
+          if [ -f "docs/releases/${TAG}.md" ]; then
+            notes=(--notes-file "docs/releases/${TAG}.md")
           fi
-          gh release create "${GITHUB_REF_NAME}" \
-            --title "${GITHUB_REF_NAME}" \
+          # ${TARGET} is empty on a tag push; on a manual run it is
+          # --target=<sha>, which makes GitHub create the tag at that commit.
+          gh release create "${TAG}" ${TARGET} \
+            --title "${TAG}" \
             --generate-notes "${notes[@]}" \
             "build/libs/penstock-${VERSION}.jar" \
             "sbom-${VERSION}.cdx.json" \
