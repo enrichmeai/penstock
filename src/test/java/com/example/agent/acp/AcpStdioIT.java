@@ -51,6 +51,7 @@ class AcpStdioIT {
     private OutputStream stdin;
     private final LinkedBlockingQueue<String> queue = new LinkedBlockingQueue<>();
     private final List<String> allLines = new CopyOnWriteArrayList<>();
+    private final List<String> stderrLines = new CopyOnWriteArrayList<>();
 
     @AfterEach
     void tearDown() {
@@ -105,6 +106,32 @@ class AcpStdioIT {
         assertEveryLineSoFarIsJson();
     }
 
+    /**
+     * Issue #73 ("retrieve before reason"): the same {@code AgentService.runTurn} step runs
+     * inside {@code AcpMode.prompt}, so a prompt matching the seed pattern's triggers must
+     * load it here too — confirmed via the stderr line {@code AuditLogger.patternLoaded}
+     * writes, since ACP mode's forced {@code storage.type=memory} has no audit table.
+     */
+    @Test
+    void promptMatchingAPatternLogsItToStderr() throws Exception {
+        start();
+
+        call(1, "initialize", Map.of("protocolVersion", 1));
+        String cwd = workspace.toRealPath().toString();
+        JsonNode newSessionResult = call(2, "session/new", Map.of("cwd", cwd, "mcpServers", List.of()));
+        String sessionId = newSessionResult.get("sessionId").asText();
+
+        JsonNode promptResult = call(3, "session/prompt", Map.of(
+                "sessionId", sessionId,
+                "prompt", List.of(Map.of("type", "text", "text",
+                        "How do I wire up a stdio json-rpc agent for the editor?"))));
+        assertThat(promptResult.get("stopReason").asText()).isEqualTo("end_turn");
+
+        awaitStderrContains(Duration.ofSeconds(10), "pattern.loaded", "stdio-json-rpc-agent");
+
+        assertEveryLineSoFarIsJson();
+    }
+
     // ---- harness ----
 
     private void start() throws IOException {
@@ -116,6 +143,10 @@ class AcpStdioIT {
                 "--agent.llm.provider=stub",
                 "--agent.storage.type=memory",
                 "--agent.auth.enabled=false",
+                // Harmless for the other scenarios here (their prompts hit no trigger);
+                // lets promptMatchingAPatternLogsItToStderr below exercise retrieval in ACP
+                // mode, where memory storage means stderr is the only trail (no audit table).
+                "--agent.memory.enabled=true",
                 "--agent.workspace=" + workspace.toAbsolutePath());
         pb.redirectErrorStream(false);
         process = pb.start();
@@ -144,11 +175,36 @@ class AcpStdioIT {
 
     private void drainStderr() {
         try (BufferedReader r = new BufferedReader(new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
-            while (r.readLine() != null) {
-                // discarded — logs are expected here, not asserted on
+            String line;
+            while ((line = r.readLine()) != null) {
+                // Normally just logs, not asserted on — but in ACP mode, storage is forced to
+                // memory (no audit table), so AuditLogger.patternLoaded's INFO line is the
+                // only trail of what retrieval loaded; promptMatchingAPatternLogsItToStderr
+                // below reads it back from here.
+                stderrLines.add(line);
             }
         } catch (IOException ignored) {
         }
+    }
+
+    /** Polls the captured stderr lines for one containing every given substring. */
+    private void awaitStderrContains(Duration timeout, String... substrings) throws InterruptedException {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (System.nanoTime() < deadline) {
+            for (String line : stderrLines) {
+                boolean matchesAll = true;
+                for (String s : substrings) {
+                    if (!line.contains(s)) {
+                        matchesAll = false;
+                        break;
+                    }
+                }
+                if (matchesAll) return;
+            }
+            Thread.sleep(50);
+        }
+        throw new AssertionError("Timed out waiting for a stderr line containing " + List.of(substrings)
+                + ".\nstderr so far:\n" + String.join("\n", stderrLines));
     }
 
     private static Map<String, Object> request(int id, String method, Object params) {

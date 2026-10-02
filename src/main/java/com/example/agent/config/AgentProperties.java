@@ -23,6 +23,7 @@ public class AgentProperties {
     private RateLimit rateLimit = new RateLimit();
     private Metrics metrics = new Metrics();
     private Acp acp = new Acp();
+    private Memory memory = new Memory();
 
     public String getWorkspace() { return workspace; }
     public void setWorkspace(String workspace) { this.workspace = workspace; }
@@ -56,6 +57,9 @@ public class AgentProperties {
 
     public Acp getAcp() { return acp; }
     public void setAcp(Acp acp) { this.acp = acp; }
+
+    public Memory getMemory() { return memory; }
+    public void setMemory(Memory memory) { this.memory = memory; }
 
     // ---------- nested ----------
 
@@ -384,6 +388,24 @@ public class AgentProperties {
         public void setRequiredKinds(List<String> requiredKinds) {
             this.requiredKinds = requiredKinds == null ? List.of() : requiredKinds;
         }
+    }
+
+    /**
+     * "Retrieve before reason" (issue #73, part 2 of #71): before the first model call of a
+     * turn, match the user's input against {@code patterns/} and {@code requests/} under
+     * {@link #root} and load at most three matching patterns into that turn's system prompt.
+     * Off by default — these folders are this project's own build memory, not every
+     * deployment's.
+     */
+    public static class Memory {
+        private boolean enabled = false;
+        /** Directory containing patterns/, requests/ and references/. Defaults to the process cwd. */
+        private String root;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public String getRoot() { return root; }
+        public void setRoot(String root) { this.root = root; }
     }
 
     public static class Storage {

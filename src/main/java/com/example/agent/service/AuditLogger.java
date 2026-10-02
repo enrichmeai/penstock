@@ -117,6 +117,46 @@ public class AuditLogger {
         }
     }
 
+    /**
+     * Log a pattern-retrieval event: {@code ContextAssembler} loaded this pattern into the
+     * turn's system prompt. Logged at INFO regardless of whether a repository is available —
+     * in {@code memory} storage mode (ACP's only supported mode) there is no audit table, so
+     * the log line is the only trail of what was loaded.
+     *
+     * @param userId acting user, resolved on the request thread (null/blank → "anonymous")
+     * @param sessionId ID of the session (may be null)
+     * @param patternId id of the pattern loaded, from its manifest.yaml
+     * @param version version of the pattern loaded, from its manifest.yaml
+     */
+    @Async
+    public void patternLoaded(String userId, String sessionId, String patternId, String version) {
+        String user = normalise(userId);
+        log.info("pattern.loaded user={} session={} patternId={} version={}", user, sessionId, patternId, version);
+
+        if (repo == null) {
+            log.debug("Audit repository not available; skipping pattern.loaded event");
+            return;
+        }
+
+        try {
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("patternId", patternId);
+            detail.put("version", version);
+
+            String detailJson = mapper.writeValueAsString(detail);
+            AuditEventEntity event = new AuditEventEntity(
+                    Instant.now(),
+                    user,
+                    sessionId,
+                    "pattern.loaded",
+                    detailJson
+            );
+            repo.save(event);
+        } catch (Exception e) {
+            log.warn("Failed to log pattern.loaded event", e);
+        }
+    }
+
     private static String normalise(String userId) {
         return (userId == null || userId.isBlank()) ? CurrentUser.ANONYMOUS : userId;
     }
