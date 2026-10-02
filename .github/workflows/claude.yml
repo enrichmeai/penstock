@@ -88,7 +88,7 @@ jobs:
 
       # Pinned to the commit behind the v1 tag on 2026-09-24 (the same pin as the valuedocs repos):
       # a third-party action that receives a write token is pinned by SHA, not by a movable tag.
-      - uses: anthropics/claude-code-action@8cf3482550831fb35a4fc3fbf7ca139cf8028b4c # v1
+      - uses: anthropics/claude-code-action@fd1c128679612beff4ca259c78021c506e8aa7a7 # v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # The workflow token, not the Claude GitHub App: the App path needs id-token: write.
