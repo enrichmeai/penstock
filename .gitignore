@@ -8,6 +8,8 @@ bin/
 .DS_Store
 .env
 logs/
+__pycache__/
+*.pyc
 data/
 agent-workspace/
 .claude/settings.local.json

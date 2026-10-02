@@ -26,6 +26,8 @@ From this session only, list each of:
 4. **A pinned doc URL** in CLAUDE.md § "Pinned docs" — if you had to search for the right doc.
 5. **A CLAUDE.md rule** — one or two lines, usually under § Gotchas, with the date and the
    issue/PR number. Last resort, because prose is the weakest guard.
+6. **A pattern** (`/promote-pattern`) when the bar in that skill is met — the strongest guard
+   for work that will be built again.
 Skip a lesson only if an existing guard already covers it — name that guard.
 
 ## 3. Keep the guards lean
@@ -36,5 +38,7 @@ Skip a lesson only if an existing guard already covers it — name that guard.
 
 ## 4. Record it
 Add a `## Compound` section to the PR body: `lesson → guard added (file:line)` per lesson, or
-`none — <why>` if the task went clean. The `/groom` board counts these, so the owner can see
-the system getting stricter over time.
+`none — <why>` if the task went clean. Also add a `pattern:` line — either
+`pattern: proposed — <which bar condition held>, see "## Pattern proposed"` when
+`/promote-pattern` ran, or `pattern: not proposed — <which bar condition failed>` otherwise.
+The `/groom` board counts these, so the owner can see the system getting stricter over time.

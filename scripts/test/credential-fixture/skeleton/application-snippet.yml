@@ -1,0 +1,8 @@
+# Fixture for scripts/test-promote-pattern.sh: a skeleton that leaked a credential-shaped
+# value instead of a placeholder. The value below is not real — it matches ghp_* only to
+# prove credential-grep.sh refuses it; never put a real token in this repo.
+agent:
+  tools:
+    jira:
+      base-url: https://example.atlassian.net
+      token: ghp_FAKE1234567890FAKETOKENVALUE

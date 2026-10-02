@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Reads {@code patterns/*}/manifest.yaml}, {@code requests/*.yaml} and {@code references/*.yaml}
+ * Reads {@code patterns/*}/manifest.yaml, {@code requests/*.yaml} and {@code references/*.yaml}
  * under {@code agent.memory.root} at startup, and again on a bounded interval so an edit to a
  * card is picked up without a restart. Invalid YAML is logged and skipped — never fatal, since
  * one bad card must not take retrieval down for every other one.
