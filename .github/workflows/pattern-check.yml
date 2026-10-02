@@ -99,7 +99,7 @@ jobs:
             echo
             echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           } > "$RUNNER_TEMP/body.md"
-          n=$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number')
+          n=$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number // empty')
           if [ -n "$n" ]; then
             gh issue edit "$n" --body-file "$RUNNER_TEMP/body.md"
           else
