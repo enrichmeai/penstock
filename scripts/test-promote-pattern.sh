@@ -220,4 +220,49 @@ else
 fi
 rm -f "$cred_output"
 
+echo "=== test-promote-pattern: an existing pattern is never overwritten by a re-run ==="
+seed_before=$(cat patterns/stdio-json-rpc-agent/manifest.yaml patterns/stdio-json-rpc-agent/check.sh | sha256sum | cut -d' ' -f1)
+overwrite_output=$(mktemp)
+if bash scripts/promote-pattern.sh --id stdio-json-rpc-agent --range v0.2.0..v0.3.0 --issue 59 \
+    >"$overwrite_output" 2>&1; then
+    echo "FAIL: a real run on an existing --id exited 0 (it must refuse with 3 unless --replace)"
+    cat "$overwrite_output"
+    status=1
+else
+    rc=$?
+    if [ "$rc" -eq 3 ]; then
+        echo "PASS: real run on an existing --id refused with exit 3"
+    else
+        echo "FAIL: expected exit 3 on an existing --id, got $rc"
+        cat "$overwrite_output"
+        status=1
+    fi
+fi
+seed_after=$(cat patterns/stdio-json-rpc-agent/manifest.yaml patterns/stdio-json-rpc-agent/check.sh | sha256sum | cut -d' ' -f1)
+if [ "$seed_before" = "$seed_after" ]; then
+    echo "PASS: the hand-built seed is byte-identical after the refused run"
+else
+    echo "FAIL: the hand-built seed changed"
+    status=1
+fi
+rm -f "$overwrite_output"
+
+echo "=== test-promote-pattern: --out cannot leave the repository ==="
+for bad_out in ../elsewhere /tmp/elsewhere patterns; do
+    if bash scripts/promote-pattern.sh --id probe --range v0.2.0..v0.3.0 --issue 59 --out "$bad_out" >/dev/null 2>&1; then
+        echo "FAIL: --out $bad_out was accepted"
+        status=1
+    else
+        rc=$?
+        if [ "$rc" -eq 64 ]; then
+            echo "PASS: --out $bad_out refused with exit 64"
+        else
+            echo "FAIL: --out $bad_out exited $rc, expected 64"
+            status=1
+        fi
+    fi
+done
+[ -e ../elsewhere ] && { echo "FAIL: ../elsewhere was created"; status=1; }
+[ -e /tmp/elsewhere ] && { echo "FAIL: /tmp/elsewhere was created"; status=1; }
+
 exit $status

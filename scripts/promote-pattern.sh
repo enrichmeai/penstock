@@ -67,13 +67,16 @@
 #
 # Exit codes: 0 draft written (or printed, under --dry-run); 1 the clean-copy check.sh run
 # failed; 2 a credential-shaped value was found in the candidate skeleton (nothing written
-# under patterns/ or requests/ either way).
+# under patterns/ or requests/ either way); 3 the output directory already holds a pattern
+# and --replace was not given (an existing pattern is changed only by a deliberate PR,
+# never overwritten by a re-run); 64 bad arguments, including an --out outside this
+# repository.
 set -eu
 
 usage() {
     cat <<'USAGE' >&2
 Usage: promote-pattern.sh --id <id> --range <base>..<head> --issue <n>
-                           [--request <id>] [--dry-run] [--out <dir>] [--keep]
+                           [--request <id>] [--dry-run] [--out <dir>] [--keep] [--replace]
 USAGE
 }
 
@@ -84,6 +87,7 @@ request_id=""
 out_dir=""
 dry_run=0
 keep=0
+replace=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -94,6 +98,7 @@ while [ $# -gt 0 ]; do
         --out) out_dir="$2"; shift 2 ;;
         --dry-run) dry_run=1; shift ;;
         --keep) keep=1; shift ;;
+        --replace) replace=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "promote-pattern.sh: unknown argument '$1'" >&2; usage; exit 64 ;;
     esac
@@ -116,6 +121,29 @@ repo_root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$repo_root"
 
 : "${out_dir:=patterns/$id}"
+
+# --out must stay inside this repository: the draft is later removed and re-created with
+# rm -rf, and that must never be able to reach a path the owner did not mean.
+case "$out_dir" in
+    /*) out_abs="$out_dir" ;;
+    *) out_abs="$repo_root/$out_dir" ;;
+esac
+out_abs=$(python3 -c 'import os,sys; print(os.path.normpath(sys.argv[1]))' "$out_abs")
+case "$out_abs" in
+    "$repo_root"/*) ;;
+    *) echo "promote-pattern.sh: --out must be inside the repository ($repo_root), got '$out_dir'" >&2; exit 64 ;;
+esac
+if [ "$out_abs" = "$repo_root" ] || [ "$out_abs" = "$repo_root/patterns" ]; then
+    echo "promote-pattern.sh: --out must name one pattern directory, not '$out_dir'" >&2
+    exit 64
+fi
+
+# An existing pattern is never overwritten by a re-run. Refuse up front, before any work and
+# before the dry-run/real split, so a typo in --id cannot cost the hand-built seed.
+if [ "$dry_run" -eq 0 ] && [ "$replace" -eq 0 ] && [ -e "$out_abs" ]; then
+    echo "promote-pattern.sh: $out_dir already exists; pick a new --id, or pass --replace to overwrite it deliberately (nothing written)" >&2
+    exit 3
+fi
 
 if [ -z "$request_id" ]; then
     # "retrieve before reason" (#76): a request card for this issue may already exist under
@@ -258,9 +286,9 @@ check_status=0
 if [ "$check_status" -ne 0 ]; then
     echo "FAIL: generated check.sh exited $check_status in the clean copy" >&2
     if [ "$keep" -eq 1 ]; then
-        mkdir -p "$(dirname "$out_dir")"
-        rm -rf "$out_dir"
-        cp -R "$work/draft" "$out_dir"
+        mkdir -p "$(dirname "$out_abs")"
+        rm -rf "$out_abs"
+        cp -R "$work/draft" "$out_abs"
         echo "promote-pattern.sh: --keep set, left the failing draft at $out_dir" >&2
     fi
     rm -rf "$clean_copy"
@@ -277,10 +305,10 @@ if [ "$dry_run" -eq 1 ]; then
     exit 0
 fi
 
-mkdir -p "$(dirname "$out_dir")"
-rm -rf "$out_dir"
-cp -R "$work/draft" "$out_dir"
-rm -f "$out_dir/.bar-diagnostics.txt"
+mkdir -p "$(dirname "$out_abs")"
+rm -rf "$out_abs"
+cp -R "$work/draft" "$out_abs"
+rm -f "$out_abs/.bar-diagnostics.txt"
 
 if [ "$request_is_new" -eq 1 ] && [ -f "$work/draft-request.yaml" ]; then
     mkdir -p "$(dirname "$request_path")"

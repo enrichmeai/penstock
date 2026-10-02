@@ -54,6 +54,14 @@ jobs:
         # Every card parses, every id resolves, every pattern's check.sh passes (#72).
         run: bash scripts/check-cards.sh
 
+      - name: Check pattern promotion (scripts/promote-pattern.sh)
+        # Regenerates the seed pattern in --dry-run and asserts the overlap; proves the
+        # credential refusal writes nothing (#77). GH_TOKEN lets the script read the issue;
+        # without it the script continues with an empty issue and says so.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/test-promote-pattern.sh
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v7
