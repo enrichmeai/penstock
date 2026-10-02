@@ -88,6 +88,32 @@ public class AuditLoggerTest {
     }
 
     @Test
+    public void testPatternLoaded_Success() {
+        // Act
+        auditLogger.patternLoaded("alice", "session-1", "stdio-json-rpc-agent", "1");
+
+        // Assert
+        assertEquals(1, mockRepo.saved.size());
+        AuditEventEntity event = mockRepo.saved.get(0);
+        assertEquals("alice", event.getUserId());
+        assertEquals("session-1", event.getSessionId());
+        assertEquals("pattern.loaded", event.getEventType());
+        assertTrue(event.getDetailJson().contains("stdio-json-rpc-agent"));
+        assertTrue(event.getDetailJson().contains("\"version\":\"1\""));
+    }
+
+    @Test
+    public void testPatternLoaded_NoRepository_StillLogsButDoesNotThrow() {
+        // The acp profile forces storage.type=memory, where there is no AuditEventRepository —
+        // the log line is the only trail of what was loaded there, so this must never throw.
+        AuditLogger auditLoggerNoRepo = new AuditLogger(null, mapper);
+
+        auditLoggerNoRepo.patternLoaded("alice", "session-1", "stdio-json-rpc-agent", "1");
+
+        assertEquals(0, mockRepo.saved.size());
+    }
+
+    @Test
     public void testNoRepository_NullRepo() {
         // Arrange: AuditLogger with null repo
         AuditLogger auditLoggerNoRepo = new AuditLogger(null, mapper);

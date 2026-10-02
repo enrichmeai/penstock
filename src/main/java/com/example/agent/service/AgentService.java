@@ -4,6 +4,7 @@ import com.example.agent.config.AgentProperties;
 import com.example.agent.llm.CompletionResult;
 import com.example.agent.llm.LlmCallContext;
 import com.example.agent.llm.LlmProvider;
+import com.example.agent.memory.ContextAssembler;
 import com.example.agent.model.*;
 import com.example.agent.tools.ToolContext;
 import com.example.agent.tools.ToolRegistry;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
@@ -46,6 +48,7 @@ public class AgentService {
     private final AgentProperties props;
     private final SessionStore sessionStore;
     private AuditLogger auditLogger;
+    private ContextAssembler contextAssembler;
 
     public AgentService(LlmProvider llm,
                         ToolRegistry tools,
@@ -60,6 +63,11 @@ public class AgentService {
     @Autowired(required = false)
     public void setAuditLogger(AuditLogger auditLogger) {
         this.auditLogger = auditLogger;
+    }
+
+    @Autowired(required = false)
+    public void setContextAssembler(ContextAssembler contextAssembler) {
+        this.contextAssembler = contextAssembler;
     }
 
     /** Synchronous: runs the full loop, returns all new messages. */
@@ -130,6 +138,23 @@ public class AgentService {
         int maxTurns = props.getLlm().getMaxTurnsPerRequest();
         long perRequestTotal = 0;
 
+        // Built once per turn from userInput, never from session.getHistory() — the
+        // transcript stays the user's words and the model's; only the system prompt carries
+        // retrieved memory. Off by default (agent.memory.enabled); a no-op ContextAssembler
+        // (flag off, or no match) leaves the system prompt byte-identical.
+        String systemPromptForTurn = props.getLlm().getSystemPrompt();
+        if (contextAssembler != null) {
+            Optional<ContextAssembler.Assembled> assembled = contextAssembler.assemble(userInput);
+            if (assembled.isPresent()) {
+                systemPromptForTurn = assembled.get().block() + "\n\n" + systemPromptForTurn;
+                if (auditLogger != null) {
+                    for (ContextAssembler.LoadedPattern p : assembled.get().loadedPatterns()) {
+                        auditLogger.patternLoaded(session.getUserId(), session.getId(), p.id(), p.version());
+                    }
+                }
+            }
+        }
+
         for (int i = 0; i < maxTurns; i++) {
             log.debug("Agent iteration {}/{}", i + 1, maxTurns);
 
@@ -150,13 +175,13 @@ public class AgentService {
             try {
                 result = props.getLlm().isStreamingEnabled()
                         ? llm.completeStreaming(
-                                props.getLlm().getSystemPrompt(),
+                                systemPromptForTurn,
                                 windowedHist,
                                 tools.specs(),
                                 llmContext,
                                 onToken)
                         : llm.complete(
-                                props.getLlm().getSystemPrompt(),
+                                systemPromptForTurn,
                                 windowedHist,
                                 tools.specs(),
                                 llmContext);
