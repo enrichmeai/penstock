@@ -340,6 +340,7 @@ overridden with env vars or `--agent.*=value` command-line flags.
 | `agent.tools.file.max-bytes` | `1048576` | — | Max size for a single `read_file`. |
 | `agent.memory.enabled` | `false` | `AGENT_MEMORY_ENABLED` | "Retrieve before reason" (#73): load matching `patterns/` + `references/` into the turn's system prompt before the first model call. Off by default — these folders are this project's own build memory. |
 | `agent.memory.root` | `${user.dir}` | `AGENT_MEMORY_ROOT` | Directory containing `patterns/`, `requests/` and `references/`. |
+| `agent.memory.signature-depth` | `8` | `AGENT_MEMORY_SIGNATURE_DEPTH` | Max depth of the per-turn workspace walk used for signature matching; a file nested deeper is never considered. |
 
 ## REST API
 
