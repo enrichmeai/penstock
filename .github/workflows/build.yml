@@ -50,6 +50,10 @@ jobs:
           chmod +x ./gradlew
           ./gradlew --no-daemon build
 
+      - name: Check project memory (requests/, references/, patterns/)
+        # Every card parses, every id resolves, every pattern's check.sh passes (#72).
+        run: bash scripts/check-cards.sh
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v7

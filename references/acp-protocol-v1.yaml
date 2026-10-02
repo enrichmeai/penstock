@@ -6,6 +6,7 @@ trust: primary
 holds:
   - a JSON-RPC protocol that lets an editor run an external program as its coding agent over stdin/stdout
   - initialize and session/new negotiate a session before any prompt streams
-  - session/new.cwd must resolve to the agent's configured workspace, or the agent refuses the session
-  - mutating tool calls go through session/request_permission with four outcomes: allow once, always allow, reject, always reject ("always" lasts for the session, not remembered across sessions)
-  - session/cancel is a notification, not a request, that an in-flight prompt observes cooperatively
+  - session/new carries an absolute cwd and a list of MCP servers; the protocol leaves what the agent accepts as cwd to the agent (Penstock's rule is in requests/acp-in-ide.yaml)
+  - session/request_permission offers options of kind allow_once, allow_always, reject_once, reject_always; the outcome is the selected option or cancelled. How long an "always" answer lasts is the agent's decision (Penstock: the session)
+  - session/cancel is a notification, not a request; the agent stops and answers the in-flight prompt with stopReason cancelled, never an error
+  - the agent must write nothing to stdout except protocol frames; stderr is free for logs
