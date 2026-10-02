@@ -11,15 +11,35 @@
 #   - skipped when that change set is identical to the last one that passed;
 #   - one retry only: if a stop was already blocked (stop_hook_active) and it still fails, the stop
 #     is allowed with a warning to the owner, so a broken build can never loop forever.
-# Opt out for one session: CLAUDE_SKIP_STOP_COMPILE=1.
+#   - Review pending (issue #78): guard-task.sh leaves <git-dir>/claude-review.pending when
+#     the reviewer agent is launched and clear-review.sh removes it when the Task returns; while
+#     it is present the stop is blocked once, then allowed with a warning (same one-retry rule),
+#     so a stuck marker can never loop forever. Checked before the other gates and even when
+#     nothing changed.
+# Opt out for one session: CLAUDE_SKIP_STOP_GATES=1 skips every gate here;
+# CLAUDE_SKIP_STOP_COMPILE=1 skips only the Flyway and compile gates, never the review gate.
 set -uo pipefail
 
-[ "${CLAUDE_SKIP_STOP_COMPILE:-}" = "1" ] && exit 0
+[ "${CLAUDE_SKIP_STOP_GATES:-}" = "1" ] && exit 0
 input=$(cat)
 active=$(printf '%s' "$input" | jq -r '.stop_hook_active // false')
 
 root="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 cd "$root" || exit 0
+
+gitdir=$(git rev-parse --git-dir 2>/dev/null || true)
+if [ -n "$gitdir" ] && [ -f "$gitdir/claude-review.pending" ]; then
+  if [ "$active" = "true" ]; then
+    rm -f "$gitdir/claude-review.pending"
+    jq -n '{systemMessage: "Stop allowed, but the reviewer was started and never returned its verdict — treat this turn as BLOCKED and say so in the reply (CLAUDE.md § \"Autonomous build loop\")."}'
+    exit 0
+  fi
+  jq -n '{decision: "block", reason: "The reviewer was started and has not returned its verdict; wait for it (or re-run it in the foreground, without run_in_background) before ending the turn."}'
+  exit 0
+fi
+
+# The older, narrower opt-out: skips the Flyway and compile gates below, never the review gate.
+[ "${CLAUDE_SKIP_STOP_COMPILE:-}" = "1" ] && exit 0
 
 base=$(git merge-base HEAD origin/main 2>/dev/null || echo HEAD)
 all_changed=$( { git diff --name-only "$base" 2>/dev/null; git ls-files --others --exclude-standard 2>/dev/null; } | sort -u)
