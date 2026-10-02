@@ -26,3 +26,13 @@ patterns/<id>/
   skeleton for the obvious shapes (`sk-`, `ghp_`, `AKIA`, `-----BEGIN`,
   bare `password:`/`token:`/`secret:` followed by a non-placeholder value) and
   fails if it finds one.
+
+## How a pattern is proposed
+
+A pattern is never typed in by hand from scratch — `scripts/promote-pattern.sh`
+scaffolds a draft from a finished task's own branch diff and issue, run only
+when the bar in [`.claude/skills/promote-pattern/SKILL.md`](../.claude/skills/promote-pattern/SKILL.md)
+is met (the issue carries `pattern-candidate`, or the diff's files match no
+existing pattern and a prior merged PR already built the same area once). The
+draft still reaches this directory only through that task's own PR, reviewed
+like any other file in the diff — the script itself never writes to `main`.
