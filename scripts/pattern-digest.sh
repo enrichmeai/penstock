@@ -8,7 +8,8 @@
 #
 # Reads the basic-auth credentials from the same env vars README.md documents for a running
 # instance (AGENT_AUTH_USERNAME, default "admin"; AGENT_AUTH_PASSWORD, required) — never from
-# an argument, so the password never ends up in shell history or a process list.
+# an argument, so the password never ends up in shell history. curl gets them through a config
+# read from its stdin (`-K -`), not through `-u`, so they are not in its argv either.
 set -eu
 
 base_url="${1:-http://localhost:8080}"
@@ -19,11 +20,16 @@ if [ -z "${AGENT_AUTH_PASSWORD:-}" ]; then
 fi
 username="${AGENT_AUTH_USERNAME:-admin}"
 
-curl -sf -u "$username:$AGENT_AUTH_PASSWORD" "$base_url/api/audit/patterns" | python3 - <<'PYEOF'
+# The response is captured first and handed to Python as an argument: with `python3 -`, the
+# heredoc *is* stdin, so a pipe into it would never be read.
+response=$(printf 'user = "%s:%s"\n' "$username" "$AGENT_AUTH_PASSWORD" \
+    | curl -sf -K - "$base_url/api/audit/patterns")
+
+python3 - "$response" <<'PYEOF'
 import json
 import sys
 
-data = json.load(sys.stdin)
+data = json.loads(sys.argv[1])
 
 loaded = [p for p in data if p.get("loads", 0) > 0]
 never = [p for p in data if p.get("loads", 0) == 0]
