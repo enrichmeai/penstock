@@ -1,0 +1,10 @@
+id: zed-agent-servers
+source: https://zed.dev/docs/ai/external-agents
+read: 2026-10-02
+version: ~ # documentation page, no release tag
+trust: primary
+holds:
+  - added via the command palette ("agent: open settings") → External Agents → Add Agent → Add Custom Agent
+  - that flow opens the settings file with an agent_servers entry ready to fill in
+  - a Zed entry adds a type: custom field alongside command/args/env; Air's acp.json has no equivalent and must not carry it
+  - once saved, the agent appears in the new-thread menu in the Agent Panel

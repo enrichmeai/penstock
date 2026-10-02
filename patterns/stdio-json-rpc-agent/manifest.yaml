@@ -1,0 +1,26 @@
+id: stdio-json-rpc-agent
+version: 1
+triggers:
+  - acp
+  - agent client protocol
+  - ide agent
+  - stdio agent
+  - json-rpc agent
+  - --acp
+  - agent_servers
+  - custom agent
+  - session/request_permission
+signatures:
+  - src/main/java/com/example/agent/acp/**
+  - "**/acp.json"
+  - docs/ide-agents.md
+inputs:
+  - the mode's CLI flag / env var and internal profile name
+  - the @AcpAgent identity (name, protocol version)
+  - how the host app already resolves its sandboxed workspace root
+  - how the host app already creates a session/turn object with no HTTP principal
+  - which tools are read-only (unprompted) versus mutating (behind session/request_permission)
+verified-against:
+  tag: v0.3.0
+  date: 2026-10-02
+supersedes: ~
