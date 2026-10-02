@@ -46,7 +46,9 @@ lines with real totals. The full `./gradlew build` runs in CI: push the branch, 
 **draft**, and read the `build` run — never claim a suite you have not seen green.
 
 ## 5. Review
-Launch the `reviewer` agent with the spec from step 0. Fix every BLOCKER/MAJOR and every
+Launch the `reviewer` agent with the spec from step 0, **in the foreground**, and wait for its
+verdict: the hooks enforce it (`guard-task.sh` denies `run_in_background`, and the stop hook
+refuses to end the turn while a review is pending — issue #78). Fix every BLOCKER/MAJOR and every
 UNVERIFIED item; answer MINORs in one line each (fixed / why not). Re-run the reviewer after fixing.
 
 ## 6. The 3-attempt cap

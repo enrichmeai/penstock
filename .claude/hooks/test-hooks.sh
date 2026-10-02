@@ -123,5 +123,45 @@ out=$(echo '{"stop_hook_active":false}' | (cd "$tmp" && CLAUDE_PROJECT_DIR="$tmp
 expect none "$([ -z "$out" ] && echo none || jq -r '.decision // "none"' <<<"$out")" 'stop hook: migration with both siblings'
 rm -rf "$tmp/src" "$(git -C "$tmp" rev-parse --git-dir)/claude-stop-check.stamp"
 
+
+# guard-task (issue #78): a background agent is denied; a foreground reviewer leaves a pending
+# marker that the stop hook honours until clear-review removes it when the reviewer returns.
+gt() { jq -n --argjson bg "$1" --arg s "$2" '{tool_name:"Task", tool_input:{subagent_type:$s, run_in_background:$bg}}' | CLAUDE_PROJECT_DIR="$tmp" "$here/guard-task.sh" 2>/dev/null; }
+gdec() { local o; o=$(cat); if [ -z "$o" ]; then echo allow; else jq -r '.hookSpecificOutput.permissionDecision // "allow"' <<<"$o" 2>/dev/null || echo error; fi; }
+marker="$(git -C "$tmp" rev-parse --absolute-git-dir)/claude-review.pending"
+rm -f "$marker"
+expect deny "$(gt true reviewer | gdec)" 'guard-task: background reviewer denied'
+expect deny "$(gt true general-purpose | gdec)" 'guard-task: background agent of any kind denied'
+expect no "$([ -f "$marker" ] && echo yes || echo no)" 'guard-task: a denied call leaves no marker'
+expect allow "$(gt false general-purpose | gdec)" 'guard-task: foreground non-reviewer allowed'
+expect no "$([ -f "$marker" ] && echo yes || echo no)" 'guard-task: non-reviewer leaves no marker'
+expect allow "$(gt false reviewer | gdec)" 'guard-task: foreground reviewer allowed'
+expect yes "$([ -f "$marker" ] && echo yes || echo no)" 'guard-task: foreground reviewer writes the pending marker'
+expect allow "$(jq -n '{tool_name:"Bash", tool_input:{command:"ls"}}' | CLAUDE_PROJECT_DIR="$tmp" "$here/guard-task.sh" 2>/dev/null | gdec)" 'guard-task: non-Task input ignored'
+
+# stop-fast-gates with a pending review: block once, then allow with a warning and clear the marker.
+out=$(echo '{"stop_hook_active":false}' | (cd "$tmp" && CLAUDE_PROJECT_DIR="$tmp" "$here/stop-fast-gates.sh"))
+expect block "$(jq -r '.decision // "none"' <<<"$out" 2>/dev/null || echo error)" 'stop hook: pending review blocks the stop'
+expect yes "$([ -f "$marker" ] && echo yes || echo no)" 'stop hook: marker kept after the blocked stop'
+out=$(echo '{"stop_hook_active":true}' | (cd "$tmp" && CLAUDE_PROJECT_DIR="$tmp" "$here/stop-fast-gates.sh"))
+expect none "$(jq -r '.decision // "none"' <<<"$out" 2>/dev/null || echo error)" 'stop hook: second stop allowed'
+expect yes "$(jq -r 'if .systemMessage then "yes" else "no" end' <<<"$out" 2>/dev/null || echo error)" 'stop hook: second stop carries a warning'
+expect no "$([ -f "$marker" ] && echo yes || echo no)" 'stop hook: marker cleared after the allowed stop'
+
+# clear-review: the reviewer returning (PostToolUse Task) removes the marker; another agent does not.
+gt false reviewer >/dev/null
+jq -n '{tool_name:"Task", tool_input:{subagent_type:"general-purpose"}}' | CLAUDE_PROJECT_DIR="$tmp" "$here/clear-review.sh" >/dev/null 2>&1
+expect yes "$([ -f "$marker" ] && echo yes || echo no)" 'clear-review: another agent returning leaves the marker'
+jq -n '{tool_name:"Task", tool_input:{subagent_type:"reviewer"}}' | CLAUDE_PROJECT_DIR="$tmp" "$here/clear-review.sh" >/dev/null 2>&1
+expect no "$([ -f "$marker" ] && echo yes || echo no)" 'clear-review: reviewer returning removes the marker'
+out=$(echo '{"stop_hook_active":false}' | (cd "$tmp" && CLAUDE_PROJECT_DIR="$tmp" "$here/stop-fast-gates.sh"))
+expect "" "$out" 'stop hook: nothing pending after the reviewer returned'
+
+# CLAUDE_SKIP_STOP_GATES=1 skips the review gate like the others.
+gt false reviewer >/dev/null
+out=$(echo '{"stop_hook_active":false}' | (cd "$tmp" && CLAUDE_SKIP_STOP_GATES=1 CLAUDE_PROJECT_DIR="$tmp" "$here/stop-fast-gates.sh"))
+expect "" "$out" 'stop hook: CLAUDE_SKIP_STOP_GATES=1 skips the review gate'
+rm -f "$marker"
+
 echo "hook tests: $n run, $([ $fail = 0 ] && echo 'all passed' || echo 'FAILURES above')"
 exit $fail
