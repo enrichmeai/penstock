@@ -118,9 +118,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Hand-written notes for this version, when present, go first; the
+          # API prepends them to the generated "What's Changed" list.
+          notes=()
+          if [ -f "docs/releases/${GITHUB_REF_NAME}.md" ]; then
+            notes=(--notes-file "docs/releases/${GITHUB_REF_NAME}.md")
+          fi
           gh release create "${GITHUB_REF_NAME}" \
             --title "${GITHUB_REF_NAME}" \
-            --generate-notes \
+            --generate-notes "${notes[@]}" \
             "build/libs/penstock-${VERSION}.jar" \
             "sbom-${VERSION}.cdx.json" \
             "trivy-report-${VERSION}.txt"
