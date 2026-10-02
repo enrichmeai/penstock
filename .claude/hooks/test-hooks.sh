@@ -157,6 +157,12 @@ expect no "$([ -f "$marker" ] && echo yes || echo no)" 'clear-review: reviewer r
 out=$(echo '{"stop_hook_active":false}' | (cd "$tmp" && CLAUDE_PROJECT_DIR="$tmp" "$here/stop-fast-gates.sh"))
 expect "" "$out" 'stop hook: nothing pending after the reviewer returned'
 
+# CLAUDE_SKIP_STOP_COMPILE=1 is the narrower opt-out: it never skips the review gate.
+gt false reviewer >/dev/null
+out=$(echo '{"stop_hook_active":false}' | (cd "$tmp" && CLAUDE_SKIP_STOP_COMPILE=1 CLAUDE_PROJECT_DIR="$tmp" "$here/stop-fast-gates.sh"))
+expect block "$(jq -r '.decision // "none"' <<<"$out" 2>/dev/null || echo error)" 'stop hook: CLAUDE_SKIP_STOP_COMPILE=1 does not skip the review gate'
+rm -f "$marker"
+
 # CLAUDE_SKIP_STOP_GATES=1 skips the review gate like the others.
 gt false reviewer >/dev/null
 out=$(echo '{"stop_hook_active":false}' | (cd "$tmp" && CLAUDE_SKIP_STOP_GATES=1 CLAUDE_PROJECT_DIR="$tmp" "$here/stop-fast-gates.sh"))

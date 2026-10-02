@@ -16,11 +16,11 @@
 #     it is present the stop is blocked once, then allowed with a warning (same one-retry rule),
 #     so a stuck marker can never loop forever. Checked before the other gates and even when
 #     nothing changed.
-# Opt out for one session: CLAUDE_SKIP_STOP_GATES=1 (CLAUDE_SKIP_STOP_COMPILE=1 still works).
+# Opt out for one session: CLAUDE_SKIP_STOP_GATES=1 skips every gate here;
+# CLAUDE_SKIP_STOP_COMPILE=1 skips only the Flyway and compile gates, never the review gate.
 set -uo pipefail
 
 [ "${CLAUDE_SKIP_STOP_GATES:-}" = "1" ] && exit 0
-[ "${CLAUDE_SKIP_STOP_COMPILE:-}" = "1" ] && exit 0
 input=$(cat)
 active=$(printf '%s' "$input" | jq -r '.stop_hook_active // false')
 
@@ -37,6 +37,9 @@ if [ -n "$gitdir" ] && [ -f "$gitdir/claude-review.pending" ]; then
   jq -n '{decision: "block", reason: "The reviewer was started and has not returned its verdict; wait for it (or re-run it in the foreground, without run_in_background) before ending the turn."}'
   exit 0
 fi
+
+# The older, narrower opt-out: skips the Flyway and compile gates below, never the review gate.
+[ "${CLAUDE_SKIP_STOP_COMPILE:-}" = "1" ] && exit 0
 
 base=$(git merge-base HEAD origin/main 2>/dev/null || echo HEAD)
 all_changed=$( { git diff --name-only "$base" 2>/dev/null; git ls-files --others --exclude-standard 2>/dev/null; } | sort -u)
