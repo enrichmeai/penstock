@@ -4,6 +4,7 @@ import com.example.agent.config.AgentProperties;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -71,9 +72,14 @@ public class ContextAssembler {
         }
 
         String inputLower = userInput.toLowerCase(Locale.ROOT);
+        // One walk of the workspace per turn, shared by every pattern's signatures — not one
+        // per signature. Never reaches outside agent.workspace, and a tree that cannot be
+        // walked (an unreadable subdirectory, a vanished file) costs the signature hits for
+        // this turn, never the turn itself.
+        List<Path> workspaceFiles = workspaceFiles();
         List<Scored> scored = new ArrayList<>();
         for (PatternManifest p : all) {
-            int hits = triggerHits(p, inputLower) + signatureHits(p);
+            int hits = triggerHits(p, inputLower) + signatureHits(p, workspaceFiles);
             if (hits > 0) {
                 scored.add(new Scored(p, hits));
             }
@@ -134,23 +140,42 @@ public class ContextAssembler {
                 .count();
     }
 
-    private int signatureHits(PatternManifest p) {
+    private int signatureHits(PatternManifest p, List<Path> workspaceFiles) {
+        if (workspaceFiles.isEmpty()) {
+            return 0;
+        }
         return (int) p.signatures().stream()
-                .filter(this::matchesWorkspace)
+                .filter(sig -> matchesAny(sig, workspaceFiles))
                 .count();
     }
 
-    private boolean matchesWorkspace(String signature) {
+    /** Regular files under the workspace, relative to it; empty when the walk fails for any reason. */
+    private List<Path> workspaceFiles() {
+        if (workspace == null || !Files.isDirectory(workspace)) {
+            return List.of();
+        }
+        try (Stream<Path> walk = Files.walk(workspace)) {
+            return walk.filter(Files::isRegularFile)
+                    .map(workspace::relativize)
+                    .toList();
+        } catch (IOException | UncheckedIOException | SecurityException e) {
+            // Files.walk reports a failure met mid-tree as UncheckedIOException from the
+            // stream, not as IOException from the call — both land here.
+            return List.of();
+        }
+    }
+
+    private boolean matchesAny(String signature, List<Path> relativeFiles) {
         if (signature == null || signature.isBlank()) {
             return false;
         }
-        PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + signature);
-        try (Stream<Path> walk = Files.walk(workspace)) {
-            return walk.filter(Files::isRegularFile)
-                    .anyMatch(p -> matcher.matches(workspace.relativize(p)));
-        } catch (IOException e) {
-            return false;
+        PathMatcher matcher;
+        try {
+            matcher = FileSystems.getDefault().getPathMatcher("glob:" + signature);
+        } catch (IllegalArgumentException | UnsupportedOperationException e) {
+            return false; // a malformed glob in one manifest must not fail the turn
         }
+        return relativeFiles.stream().anyMatch(matcher::matches);
     }
 
     private String renderPattern(PatternManifest p) {
