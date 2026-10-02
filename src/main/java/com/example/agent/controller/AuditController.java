@@ -10,8 +10,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -109,21 +107,24 @@ public class AuditController {
      * there; see {@code AuditLogger.patternLoaded}).
      */
     @GetMapping("/audit/patterns")
-    public ResponseEntity<?> getPatternAudit() {
+    public List<Map<String, Object>> getPatternAudit() {
         if (!props.getMemory().isEnabled()) {
-            return ResponseEntity.ok(new ArrayList<>());
+            return new ArrayList<>();
         }
         if (auditRepo == null) {
-            Map<String, Object> error = new LinkedHashMap<>();
-            error.put("error", "the audit table does not exist in memory storage mode");
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error);
+            throw new AuditStoreUnavailableException("the audit table does not exist in memory storage mode");
         }
 
         Map<String, PatternUsage> usage = new LinkedHashMap<>();
         for (AuditEventEntity event : auditRepo.findByEventTypeOrderByTimestampDesc("pattern.loaded")) {
             try {
                 Map<?, ?> detail = mapper.readValue(event.getDetailJson(), Map.class);
-                String patternId = String.valueOf(detail.get("patternId"));
+                Object rawPatternId = detail.get("patternId");
+                if (rawPatternId == null) {
+                    log.warn("Skipping pattern audit event {} with no patternId", event.getId());
+                    continue;
+                }
+                String patternId = String.valueOf(rawPatternId);
                 String version = String.valueOf(detail.get("version"));
                 PatternUsage u = usage.computeIfAbsent(patternId, k -> new PatternUsage());
                 u.loads++;
@@ -155,7 +156,7 @@ public class AuditController {
         result.sort(Comparator.comparing(
                 (Map<String, Object> dto) -> (Instant) dto.get("lastLoadedAt"),
                 Comparator.nullsLast(Comparator.reverseOrder())));
-        return ResponseEntity.ok(result);
+        return result;
     }
 
     private static class PatternUsage {

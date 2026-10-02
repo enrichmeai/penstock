@@ -6,9 +6,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -20,9 +26,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@code pattern.loaded} audit events into per-pattern usage, and lists every pattern in the
  * catalog that has never been loaded, last.
  *
- * <p>{@code agent.memory.root} is left at its default ({@code ${user.dir}}), the project root,
- * so {@code patterns/stdio-json-rpc-agent} is in the catalog but never loaded by this test —
- * it is the "never-used" pattern the endpoint must still list, with zero loads.
+ * <p>{@code agent.memory.root} points at a throwaway temp directory with a single fixture
+ * pattern ({@code never-used-fixture}), not this repo's own {@code patterns/} — so the "never
+ * loaded" assertion below stays correct regardless of how many real patterns this repo
+ * accumulates (unlike pointing at {@code ${user.dir}}, which breaks the moment a second real
+ * pattern is added).
  *
  * <p>RED on {@code main}: {@code AuditEventRepository} has no {@code findByEventTypeOrderByTimestampDesc}
  * and {@code AuditController} has no {@code /api/audit/patterns} mapping, so this does not compile.
@@ -44,6 +52,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 class AuditPatternsIT {
 
+    @DynamicPropertySource
+    static void memoryRoot(DynamicPropertyRegistry registry) {
+        try {
+            Path root = Files.createTempDirectory("audit-patterns-it-memory-root");
+            Path patternDir = root.resolve("patterns").resolve("never-used-fixture");
+            Files.createDirectories(patternDir);
+            Files.writeString(patternDir.resolve("manifest.yaml"),
+                    "id: never-used-fixture\nversion: 1\ntriggers: []\nsignatures: []\n"
+                            + "verified-against:\n  tag: v1\n  date: 2026-01-01\n");
+            registry.add("agent.memory.root", root::toString);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     @Autowired MockMvc mvc;
     @Autowired AuditEventRepository auditRepo;
 
@@ -60,7 +83,7 @@ class AuditPatternsIT {
                 .andExpect(jsonPath("$[0].loads").value(2))
                 .andExpect(jsonPath("$[0].versions", org.hamcrest.Matchers.containsInAnyOrder("1", "2")))
                 .andExpect(jsonPath("$[0].lastLoadedAt").exists())
-                .andExpect(jsonPath("$[1].patternId").value("stdio-json-rpc-agent"))
+                .andExpect(jsonPath("$[1].patternId").value("never-used-fixture"))
                 .andExpect(jsonPath("$[1].loads").value(0))
                 .andExpect(jsonPath("$[1].lastLoadedAt").doesNotExist());
     }

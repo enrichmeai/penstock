@@ -115,6 +115,41 @@ else
 fi
 rm -rf "$repo" "$out"
 
+echo "=== test-check-cards: a manifest that fails staleness parsing is reported, not a crash ==="
+repo=$(mktemp -d)
+make_fixture_repo "$repo"
+# "zz-" so this sorts alphabetically AFTER malformed-fixture: the point of this case is that
+# the loop keeps checking patterns after the one that failed to parse, not before it.
+mkdir -p "$repo/patterns/malformed-fixture" "$repo/patterns/zz-fresh-tag-fixture"
+cp scripts/test/cards/malformed/manifest.yaml "$repo/patterns/malformed-fixture/manifest.yaml"
+cp scripts/test/cards/malformed/check.sh "$repo/patterns/malformed-fixture/check.sh"
+cp scripts/test/cards/fresh-tag/manifest.yaml "$repo/patterns/zz-fresh-tag-fixture/manifest.yaml"
+cp scripts/test/cards/fresh-tag/check.sh "$repo/patterns/zz-fresh-tag-fixture/check.sh"
+commit_fixture "$repo"
+git -C "$repo" tag v0.2.0
+set_origin_main "$repo"
+out=$(mktemp)
+if bash "$repo/scripts/check-cards.sh" >"$out" 2>&1; then
+    echo "FAIL: check-cards.sh exited 0 despite the unreadable manifest"
+    cat "$out"
+    status=1
+else
+    ok=1
+    grep -q "FAIL: patterns/malformed-fixture/manifest.yaml could not be read for staleness checking" "$out" || ok=0
+    # zz-fresh-tag-fixture's own id is "fresh-tag-fixture" (from the copied manifest) and is
+    # verified at the latest tag, so it must still be checked (proving the loop didn't abort)
+    # and must not be flagged STALE.
+    grep -q "STALE: fresh-tag-fixture" "$out" && ok=0
+    if [ "$ok" -eq 1 ]; then
+        echo "PASS: the unreadable manifest was reported by name, and the pattern after it was still checked (no abort)"
+    else
+        echo "FAIL: expected reporting did not match"
+        cat "$out"
+        status=1
+    fi
+fi
+rm -rf "$repo" "$out"
+
 echo "=== test-check-cards: this repo's own seed pattern still passes ==="
 out=$(mktemp)
 if bash scripts/check-cards.sh >"$out" 2>&1; then

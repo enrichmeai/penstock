@@ -113,6 +113,12 @@ class ErrorAdviceTest {
         void internalError() {
             throw new RuntimeException("Unexpected error occurred");
         }
+
+        @GetMapping("/error/audit-store-unavailable")
+        void auditStoreUnavailable() {
+            throw new com.example.agent.controller.AuditStoreUnavailableException(
+                    "the audit table does not exist in memory storage mode");
+        }
     }
 
     /**
@@ -208,5 +214,15 @@ class ErrorAdviceTest {
         assertThat(response).contains("Internal error.");
         // Original error message MUST NOT appear
         assertThat(response).doesNotContain("Unexpected error occurred");
+    }
+
+    @Test
+    void auditStoreUnavailableExceptionReturns503() throws Exception {
+        mvc.perform(get("/error/audit-store-unavailable"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("service_unavailable"))
+                .andExpect(jsonPath("$.error").value("the audit table does not exist in memory storage mode"))
+                .andExpect(jsonPath("$.requestId").exists())
+                .andExpect(jsonPath("$.timestamp").exists());
     }
 }

@@ -92,7 +92,10 @@ fi
 
 for manifest in patterns/*/manifest.yaml; do
     [ -e "$manifest" ] || continue
-    info=$(python3 - "$manifest" <<'PYEOF'
+    # Guarded with `if !` rather than a bare assignment: under `set -e`, a bare
+    # `info=$(...)` would abort the whole script on a malformed manifest (already reported
+    # by the YAML cross-check above) instead of reporting it here and checking the rest.
+    if ! info=$(python3 - "$manifest" <<'PYEOF'
 import sys
 
 import yaml
@@ -102,7 +105,11 @@ verified = data.get("verified-against") or {}
 tag = verified.get("tag")
 print(f"{data.get('id', '')}\t{tag or ''}")
 PYEOF
-    )
+    ); then
+        echo "FAIL: $manifest could not be read for staleness checking"
+        staleness_status=1
+        continue
+    fi
     id=$(printf '%s' "$info" | cut -f1)
     tag=$(printf '%s' "$info" | cut -f2)
 
