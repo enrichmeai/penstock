@@ -60,7 +60,10 @@ jobs:
         # without it the script continues with an empty issue and says so.
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/test-promote-pattern.sh
+        # actions/checkout is shallow and tagless; the test walks v0.1.0..v0.3.0.
+        run: |
+          git fetch --quiet --tags --unshallow origin || git fetch --quiet --tags origin
+          bash scripts/test-promote-pattern.sh
 
       - name: Upload test reports
         if: always()
