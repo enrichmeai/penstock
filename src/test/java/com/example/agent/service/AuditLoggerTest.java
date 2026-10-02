@@ -303,5 +303,10 @@ public class AuditLoggerTest {
                                                                         org.springframework.data.domain.Pageable pageable) {
             return java.util.Collections.emptyList();
         }
+
+        @Override
+        public List<AuditEventEntity> findByEventTypeOrderByTimestampDesc(String eventType) {
+            return java.util.Collections.emptyList();
+        }
     }
 }

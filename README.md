@@ -355,6 +355,8 @@ overridden with env vars or `--agent.*=value` command-line flags.
 | `GET` | `/api/sessions/{id}` | — | Full message history |
 | `GET` | `/api/sessions/{id}/usage` | — | Token usage summary for a session |
 | `DELETE` | `/api/sessions/{id}` | — | Delete a session |
+| `GET` | `/api/sessions/{id}/audit` | — | Audit events for a session (tool/LLM calls), owner-scoped |
+| `GET` | `/api/audit/patterns` | — | Per-pattern `pattern.loaded` usage: `[{patternId, loads, lastLoadedAt, versions}]`, never-loaded patterns last. `[]` with `agent.memory.enabled=false`; `503` in memory storage mode (no audit table). |
 
 Interactive API docs at **`/swagger-ui.html`** when the app is running.
 
