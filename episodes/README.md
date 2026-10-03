@@ -39,7 +39,10 @@ commits:                                     # optional, what the draft was buil
 ## Projects
 
 `penstock`, `cistern`, `valuedocs`, `site`, `estate` (owner-wide, no single project). The list
-is closed and mirrored in `scripts/check-cards.sh`; adding one is a PR that changes both.
+is closed and carried in three places besides this README: `PROJECTS` in `scripts/check-cards.sh`
+(the rule), the `--project` guard in `scripts/write-episode.sh`, and the directory-name fallback in
+`.claude/hooks/episode-draft.sh` (which maps a checkout to a project and so never yields `estate`).
+Adding a project is one PR that changes all four.
 
 ## Rules
 

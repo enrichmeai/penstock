@@ -2,7 +2,7 @@
 """Shape an episode draft (issue #86) from the evidence write-episode.sh gathered.
 
 Reads a work directory containing (each optional, absent when the gather step had nothing):
-  meta.json      {"id","date","project","issue_ref","pr_ref","merged","repo"}
+  meta.json      {"id","date","project","issue_ref","pr_ref"}
   issue.json     the GitHub issue (title, body)
   pr.json        the GitHub pull request (title, body, merge_commit_sha, merged_at)
   pr_files.json  the pull request's files ([{filename}])
