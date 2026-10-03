@@ -164,9 +164,12 @@ def last_verdict_for(pattern_id):
             if not line:
                 continue
             rec = json.loads(line)
-            filename = rec.get("filename", "")
-            if not filename.startswith(pattern_id + "-"):
+            # Match on the verdict's own `pattern` field, not the filename prefix: a pattern
+            # whose id extends another's (`x-v2` next to `x`) would otherwise be attributed
+            # to both, and could win "newest" for the wrong one.
+            if rec.get("pattern") != pattern_id:
                 continue
+            filename = rec.get("filename", "")
             if best is None or filename > best.get("filename", ""):
                 best = rec
     if best is None:
