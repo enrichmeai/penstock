@@ -475,6 +475,35 @@ properties, not the environment. The prefix is `PERUSER` — `AGENT_CREDENTIALS_
 binds nothing, silently, because map entries are matched from the environment side where
 the hyphen has already been removed.
 
+## Memory store in a pod
+
+`requests/`, `references/` and `patterns/` (this project's own build memory — see
+[patterns/README.md](patterns/README.md)) can be mirrored into the owner's own Cistern pod
+under `/memory/`, so a colleague or a hosted session can read a pattern and leave a verdict
+without ever getting a copy of the repository. Three scripts:
+
+- `scripts/memory-publish.sh [--dry-run] [--delete] [--base <url>]` — mirrors the three
+  folders via `cistern sync` (unreleased, Cistern `main` only; `CISTERN_CLI_JAR` must point at
+  a jar built from a `main` commit that carries it), running `scripts/check-cards.sh` first.
+- `scripts/memory-grant.sh reviewer <webid> --as <slug>` grants a reviewer **read** on
+  `/memory/patterns/` and **read + write** on their own `/memory/verdicts/<slug>/` —
+  never on `/memory/requests/` or `/memory/references/`.
+  `scripts/memory-grant.sh agent <webid>` grants a hosted session's own identity **read** on
+  `/memory/` as a whole; pair it with `agent.tools.cistern.*` above so that session's `pod`
+  tool calls present that identity.
+- `scripts/memory-revoke.sh <webid> [--as <slug>]` ends either grant in one command and
+  prints the receipts query to see what the grantee did while it was open.
+
+A verdict is one file, `/memory/verdicts/<slug>/<pattern-id>-<YYYY-MM-DD>.yaml`, documented in
+[patterns/README.md § "Review by grant"](patterns/README.md#review-by-grant) — it changes
+nothing by itself; `revise`/`retire` still become a PR the owner opens after reading it.
+`scripts/pattern-digest.sh --pod` reads those verdicts and the pod's read receipts straight
+from the owner's own token and adds them to the usage digest.
+
+All three scripts read `CISTERN_TOKEN` (the owner token) from the environment and never print
+it. `.cistern-sync.json`, the state file `cistern sync` leaves in each mirrored folder, is
+local state, never committed (see `.gitignore`).
+
 ## Licence
 
 Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE). Free for commercial use,
