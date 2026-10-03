@@ -64,4 +64,4 @@ fi
 
 echo "[memory-revoke] revoked. To see what $webid did while granted, as the owner:"
 encoded_webid=$(printf '%s' "$webid" | python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(), safe=""))')
-echo "  curl -H \"Authorization: Bearer \$CISTERN_TOKEN\" \"$base_url/?receipts&agent=$encoded_webid\""
+echo "  printf 'header = \"Authorization: Bearer %s\"\\n' \"\$CISTERN_TOKEN\" | curl -K - \"$base_url/?receipts&agent=$encoded_webid\""

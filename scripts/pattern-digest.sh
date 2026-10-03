@@ -6,17 +6,19 @@
 # Usage: scripts/pattern-digest.sh [--pod] [base-url]
 #   base-url defaults to http://localhost:8080
 #   --pod appends, per pattern, the last reviewer verdict and the read-receipt count from the
-#         owner's Cistern pod (issue #82) — "last verdict" from the newest file under
-#         /memory/verdicts/*/<pattern-id>-*.yaml, "reads" from the ALLOWED READ receipts on
-#         /memory/patterns/<pattern-id>/… (GET /memory/patterns/?receipts). Needs
-#         CISTERN_BASE_URL and CISTERN_TOKEN (the owner token) in the environment; without
-#         them this prints "pod: not configured" and falls back to the local columns only.
-#         Without --pod at all, this script is byte-identical to #81's.
+#         owner's Cistern pod (issue #82) — "last verdict" from the newest verdict file whose
+#         `pattern` field names it, under /memory/verdicts/*/, "reads" from the ALLOWED READ
+#         receipts of each of the pattern's files (one `<file>?receipts` query per file: a
+#         container's receipts never cover its children). Needs CISTERN_BASE_URL and
+#         CISTERN_TOKEN (the owner token) in the environment; without them this prints
+#         "pod: not configured" and falls back to the local columns only. Without --pod at
+#         all, this script is byte-identical to #81's.
 #
 # Reads the basic-auth credentials from the same env vars README.md documents for a running
 # instance (AGENT_AUTH_USERNAME, default "admin"; AGENT_AUTH_PASSWORD, required) — never from
 # an argument, so the password never ends up in shell history. curl gets them through a config
-# read from its stdin (`-K -`), not through `-u`, so they are not in its argv either.
+# read from its stdin (`-K -`), not through `-u`, so they are not in its argv either. The pod
+# calls hand the owner token to curl the same way (a `header =` line on stdin), never as -H.
 set -eu
 
 pod_requested=0
@@ -44,6 +46,12 @@ pod_active=0
 verdicts_file=""
 receipts_file=""
 
+# curl against the pod: the Authorization header goes in through -K - (curl's config on
+# stdin), so the owner token is never in curl's argv. Extra -H flags and the URL follow.
+pod_curl() {
+    printf 'header = "Authorization: Bearer %s"\n' "$CISTERN_TOKEN" | curl -s -K - "$@"
+}
+
 if [ "$pod_requested" -eq 1 ]; then
     if [ -z "${CISTERN_BASE_URL:-}" ] || [ -z "${CISTERN_TOKEN:-}" ]; then
         echo "pod: not configured"
@@ -57,8 +65,8 @@ if [ "$pod_requested" -eq 1 ]; then
         : >"$receipts_file"
 
         # --- enumerate /memory/verdicts/<slug>/ and collect every <pattern-id>-*.yaml file ---
-        verdicts_root_status=$(curl -s -o "$work/verdicts-root.ttl" -w '%{http_code}' \
-            -H "Authorization: Bearer $CISTERN_TOKEN" -H 'Accept: text/turtle' \
+        verdicts_root_status=$(pod_curl -o "$work/verdicts-root.ttl" -w '%{http_code}' \
+            -H 'Accept: text/turtle' \
             "$CISTERN_BASE_URL/memory/verdicts/") || verdicts_root_status="000"
         : >"$work/verdict-files.txt"
         if [ "$verdicts_root_status" = "200" ]; then
@@ -78,8 +86,8 @@ PYEOF
             # $slugs is a deliberate newline/space-split list of container names, each one
             # already a path segment with no internal whitespace.
             for slug in $slugs; do
-                slug_status=$(curl -s -o "$work/slug.ttl" -w '%{http_code}' \
-                    -H "Authorization: Bearer $CISTERN_TOKEN" -H 'Accept: text/turtle' \
+                slug_status=$(pod_curl -o "$work/slug.ttl" -w '%{http_code}' \
+                    -H 'Accept: text/turtle' \
                     "$CISTERN_BASE_URL/memory/verdicts/$slug/") || slug_status="000"
                 if [ "$slug_status" = "200" ]; then
                     python3 - "$work/slug.ttl" "$slug" <<'PYEOF' >>"$work/verdict-files.txt"
@@ -102,8 +110,7 @@ PYEOF
         # --- fetch every verdict file found; newest-per-pattern selection happens in Python ---
         while IFS="$(printf '\t')" read -r slug file; do
             [ -n "${file:-}" ] || continue
-            content_status=$(curl -s -o "$work/content.yaml" -w '%{http_code}' \
-                -H "Authorization: Bearer $CISTERN_TOKEN" \
+            content_status=$(pod_curl -o "$work/content.yaml" -w '%{http_code}' \
                 "$CISTERN_BASE_URL/memory/verdicts/$slug/$file") || content_status="000"
             if [ "$content_status" = "200" ]; then
                 python3 - "$file" "$work/content.yaml" <<'PYEOF' >>"$verdicts_file"
@@ -126,8 +133,7 @@ PYEOF
         # CISTERN_OWNER_WEBID is set: the column is about who else read the pattern.
         cd "$(dirname "$0")/.."
         find patterns -type f ! -name '.cistern-sync.json' | sort | while IFS= read -r rel; do
-            file_status=$(curl -s -o "$work/one.ndjson" -w '%{http_code}' \
-                -H "Authorization: Bearer $CISTERN_TOKEN" \
+            file_status=$(pod_curl -o "$work/one.ndjson" -w '%{http_code}' \
                 "$CISTERN_BASE_URL/memory/$rel?receipts") || file_status="000"
             if [ "$file_status" = "200" ]; then
                 cat "$work/one.ndjson" >>"$receipts_file"

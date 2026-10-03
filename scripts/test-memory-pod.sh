@@ -62,14 +62,16 @@ sh scripts/memory-grant.sh reviewer "$REVIEWER_WEBID" --as "$slug" --base "$CIST
 expect_status() {
     label="$1"; expected="$2"; method="$3"; bearer="$4"; path="$5"; data_file="${6:-}"
     check_count=$((check_count + 1))
+    # Either token reaches curl through -K - (its config on stdin), never as -H on argv.
     if [ -n "$data_file" ]; then
-        got=$(curl -s -o /dev/null -w '%{http_code}' -X "$method" \
-            -H "Authorization: Bearer $bearer" -H 'If-None-Match: *' \
+        got=$(printf 'header = "Authorization: Bearer %s"\n' "$bearer" \
+            | curl -s -K - -o /dev/null -w '%{http_code}' -X "$method" \
+            -H 'If-None-Match: *' \
             -H 'Content-Type: application/yaml' --data-binary "@$data_file" \
             "$CISTERN_BASE_URL$path")
     else
-        got=$(curl -s -o /dev/null -w '%{http_code}' -X "$method" \
-            -H "Authorization: Bearer $bearer" \
+        got=$(printf 'header = "Authorization: Bearer %s"\n' "$bearer" \
+            | curl -s -K - -o /dev/null -w '%{http_code}' -X "$method" \
             "$CISTERN_BASE_URL$path")
     fi
     if [ "$got" = "$expected" ]; then
@@ -116,8 +118,8 @@ expect_status "reviewer GET the manifest again, after revoke" 403 GET \
 
 echo "=== test-memory-pod: owner checks the receipts ==="
 encoded_webid=$(printf '%s' "$REVIEWER_WEBID" | python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(), safe=""))')
-receipts=$(curl -sf -H "Authorization: Bearer $CISTERN_TOKEN" \
-    "$CISTERN_BASE_URL/?receipts&agent=$encoded_webid&from=$run_started_at")
+receipts=$(printf 'header = "Authorization: Bearer %s"\n' "$CISTERN_TOKEN" \
+    | curl -sf -K - "$CISTERN_BASE_URL/?receipts&agent=$encoded_webid&from=$run_started_at")
 
 receipts_status=0
 python3 - "$receipts" "$check_count" <<'PYEOF' || receipts_status=$?
