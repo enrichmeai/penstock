@@ -1,0 +1,20 @@
+id: 2026-01-15-valid-fixture
+date: 2026-01-15
+project: penstock
+asked: a fixture episode that satisfies every rule
+issue: enrichmeai/penstock#1
+built:
+  - pr: enrichmeai/penstock#2
+    merged: 0123abc
+    files: [scripts/example.sh]
+decided:
+  - what: keep the fixture small
+    why: the rules, not the content, are under test
+refused:
+  - what: a second built entry
+    why: one is enough to exercise the pr shape
+learned:
+  - the secret for this fixture lives in SECRET_MANAGER_NAME, by name only
+open:
+  - nothing
+patterns: []

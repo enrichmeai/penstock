@@ -37,6 +37,13 @@ existing pattern and a prior merged PR already built the same area once). The
 draft still reaches this directory only through that task's own PR, reviewed
 like any other file in the diff — the script itself never writes to `main`.
 
+## Episodes
+
+A pattern is the distilled "how"; the "what happened" around it — the task that produced it,
+what was decided and refused, what was learned — is an episode under [`episodes/`](../episodes/README.md)
+(#86). `scripts/write-episode.sh` drafts one from the task's PR and commits; a `learned` line
+there is the usual way a convention first gets written down before it becomes a fact.
+
 ## Staleness and use
 
 A catalogue nobody prunes becomes the folklore it replaced (issue #81) — two

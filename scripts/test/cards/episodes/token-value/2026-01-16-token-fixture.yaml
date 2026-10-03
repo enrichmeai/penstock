@@ -1,0 +1,12 @@
+# Test fixture for scripts/test-check-cards.sh: the hex string below is deliberate, made-up test
+# data (not a credential) that the episode credential rule must refuse by path, never by value.
+id: 2026-01-16-token-fixture
+date: 2026-01-16
+project: penstock
+asked: a fixture whose learned line carries a credential value
+built: []
+decided: []
+refused: []
+learned:
+  - "the pod token: 0123456789abcdef0123456789abcdef"
+open: []

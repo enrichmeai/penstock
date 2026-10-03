@@ -1,0 +1,47 @@
+# Drafted by scripts/write-episode.sh from the task's own evidence, then edited by the owner's
+# session (2026-10-03). A learned line is a fact by reference, never a value.
+id: 2026-10-02-memory-3-propose-after-success
+date: 2026-10-02
+project: penstock
+asked: After a task succeeds, propose a pattern from its own commits and issue, so the owner reviews a
+  draft instead of writing from scratch.
+issue: enrichmeai/penstock#77
+built:
+- pr: enrichmeai/penstock#79
+  merged: 93ae75c
+  files:
+  - .claude/skills/compound/SKILL.md
+  - .claude/skills/promote-pattern/SKILL.md
+  - .github/workflows/build.yml
+  - .gitignore
+  - patterns/README.md
+  - scripts/lib/credential-grep.sh
+  - scripts/lib/promote_pattern_generate.py
+  - scripts/promote-pattern.sh
+  - scripts/test-promote-pattern.sh
+  - scripts/test/credential-fixture/skeleton/application-snippet.yml
+  - src/main/java/com/example/agent/memory/PatternCatalog.java
+decided:
+- what: the draft is scaffolded from the commits in a range that mention the issue, and rides the task's
+    own PR
+  why: a proposal reviewed like any other file in the diff; the script never writes to main
+- what: credential grep before any write, exit 2 with path and line only
+  why: a skeleton must never carry a value, and the refusal must not print one
+- what: an existing pattern is never overwritten without --replace; --out is confined to the repo
+  why: a re-run must not destroy a reviewed pattern or write outside the tree
+- what: a bar in the skill decides when to run the script; the script never enforces it
+  why: an agent that proposes after every task trains the owner to stop reading proposals
+refused:
+- what: letting the script decide the bar from its own diagnostics
+  why: judgement about the built-twice test is the skill's job, printed for a person to read
+learned:
+- the seed pattern regenerates in dry-run at 77 percent trigger and 67 percent signature overlap
+- the pattern-candidate label does not exist yet, so the bar's first condition cannot fire until the owner
+  creates it
+open:
+- 'owner: create the pattern-candidate label in penstock'
+patterns:
+- stdio-json-rpc-agent
+commits:
+- '93ae75c memory 3: propose after success — promote-pattern script and skill, drafts reach main by PR
+  only (#79)'

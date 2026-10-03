@@ -101,6 +101,11 @@
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-fast-gates.sh",
             "timeout": 600
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/episode-draft.sh",
+            "timeout": 10
           }
         ]
       }

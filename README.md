@@ -412,7 +412,7 @@ as it's produced, which the SSE controller relays to the client.
 
 **Harden for production** — swap `InMemoryUserDetailsManager` for a real user store; enforce HTTPS (put behind nginx / a load balancer); add rate limits; persist audit logs of tool calls.
 
-**Project memory** — `requests/`, `references/` and `patterns/` at the repo root record what was wanted, what was trusted, and how it was built, as plain YAML/Markdown; start at `requests/README.md`.
+**Project memory** — `requests/`, `references/`, `patterns/` and `episodes/` at the repo root record what was wanted, what was trusted, how it was built, and what happened (asked, built, decided, refused, learned, open), as plain YAML/Markdown; start at `requests/README.md`, and see `episodes/README.md` for how `scripts/write-episode.sh` drafts an episode from a task's own PR and commits.
 
 ## Safety notes
 
