@@ -114,9 +114,13 @@ esac
 verdicts_path="/memory/verdicts/$slug/"
 
 echo "[memory-grant] creating $verdicts_path (owner PUT, If-None-Match: *)"
+# A container's representation is an RDF source (Solid Protocol §4.2), so the empty body is
+# declared as Turtle: without the header curl sends application/x-www-form-urlencoded and the
+# server answers 409. Solid §5.3 has the server create the missing /memory/verdicts/ parent.
 http_status=$(curl -s -o /dev/null -w '%{http_code}' -X PUT \
     -H "Authorization: Bearer $CISTERN_TOKEN" \
     -H 'If-None-Match: *' \
+    -H 'Content-Type: text/turtle' \
     --data-binary '' \
     "$base_url$verdicts_path")
 case "$http_status" in

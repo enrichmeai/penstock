@@ -47,6 +47,11 @@ verdict_file="$pattern_id-$today.yaml"
 status=0
 check_count=0
 
+# Receipts are counted from here on, so a pod the reviewer identity touched before this run
+# (a smoke test, an earlier run) does not make the count below fail. ISO instant, half-open
+# [from, to) as the receipts query defines it.
+run_started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
 echo "=== test-memory-pod: publish ==="
 sh scripts/memory-publish.sh --base "$CISTERN_BASE_URL"
 
@@ -112,7 +117,7 @@ expect_status "reviewer GET the manifest again, after revoke" 403 GET \
 echo "=== test-memory-pod: owner checks the receipts ==="
 encoded_webid=$(printf '%s' "$REVIEWER_WEBID" | python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(), safe=""))')
 receipts=$(curl -sf -H "Authorization: Bearer $CISTERN_TOKEN" \
-    "$CISTERN_BASE_URL/?receipts&agent=$encoded_webid")
+    "$CISTERN_BASE_URL/?receipts&agent=$encoded_webid&from=$run_started_at")
 
 receipts_status=0
 python3 - "$receipts" "$check_count" <<'PYEOF' || receipts_status=$?
@@ -123,7 +128,7 @@ receipts_text = sys.argv[1]
 expected_count = int(sys.argv[2])
 
 records = [json.loads(line) for line in receipts_text.splitlines() if line.strip()]
-print(f"[test-memory-pod] receipts for the reviewer: {len(records)} decision(s)")
+print(f"[test-memory-pod] receipts for the reviewer since this run started: {len(records)} decision(s)")
 for r in records:
     print(f"  {r.get('at')} {r.get('required')} {r.get('outcome')} {r.get('target')}")
 
