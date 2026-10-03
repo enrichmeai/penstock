@@ -1,0 +1,24 @@
+# Written by the owner's session from the 2026-10-03 Claude session transcript (screenshot on #85):
+# the episode that showed what the record was missing. No code was built; the learned lines are the point.
+id: 2026-10-03-valuedocs-cloud-sql-studio-walkthrough
+date: 2026-10-03
+project: valuedocs
+asked: Walk me through opening Cloud SQL Studio for the valuedocs-legal-bld corpus database and authenticating
+  as postgres.
+built: []
+decided:
+- what: the console password is copied from Secret Manager into Studio's password box, never pasted into
+    the chat
+  why: a credential value must not enter a transcript
+refused: []
+learned:
+- the GCP console for project valuedocs-legal-bld is used as joseph@valuedocs.co.in, not the googlemail
+  account
+- the secret valuedocs-corpus-db-password holds the corpus database's postgres password; valuedocs-db-password
+  is the app's own database, a different instance
+- the bld databases stop automatically at 11:27 UTC
+- the session re-sent the same two console links three times because nothing it could read held the account;
+  three owner-directed questions a fact card would have answered
+open:
+- record this account and the two secret names as facts once facts/ exists (#87)
+patterns: []

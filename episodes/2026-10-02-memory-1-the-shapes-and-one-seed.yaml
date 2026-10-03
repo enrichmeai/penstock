@@ -1,0 +1,56 @@
+# Drafted by scripts/write-episode.sh from the task's own evidence, then edited by the owner's
+# session (2026-10-03). A learned line is a fact by reference, never a value.
+id: 2026-10-02-memory-1-the-shapes-and-one-seed
+date: 2026-10-02
+project: penstock
+asked: Keep what was wanted, what was trusted and how it was built as plain files in the repo, seeded
+  with the ACP work.
+issue: enrichmeai/penstock#72
+built:
+- pr: enrichmeai/penstock#74
+  merged: d83e310
+  files:
+  - .github/workflows/build.yml
+  - CLAUDE.md
+  - README.md
+  - patterns/README.md
+  - patterns/stdio-json-rpc-agent/PATTERN.md
+  - patterns/stdio-json-rpc-agent/check.sh
+  - patterns/stdio-json-rpc-agent/manifest.yaml
+  - patterns/stdio-json-rpc-agent/skeleton/AcpModeSkeleton.java
+  - patterns/stdio-json-rpc-agent/skeleton/AcpStdioRunnerSkeleton.java
+  - patterns/stdio-json-rpc-agent/skeleton/ModeSwitchSkeleton.java
+  - patterns/stdio-json-rpc-agent/skeleton/stderr-logging-profile-snippet.xml
+  - references/README.md
+  - references/acp-java-sdk-0.18.0.yaml
+  - references/acp-protocol-v1.yaml
+  - references/jetbrains-air-custom-agent.yaml
+  - references/zed-agent-servers.yaml
+  - requests/README.md
+  - requests/acp-in-ide.yaml
+  - scripts/check-cards.sh
+decided:
+- what: 'three folders with a README each: requests/, references/, patterns/'
+  why: a card is a file a person can read, diff and review by PR; no database, no service
+- what: verified-against names a release tag, never a branch or a main commit
+  why: a pattern is only as trustworthy as the release it was last checked against
+- what: a pattern enters only with a passing check.sh, and the skeleton compiles against the real SDK
+    jars
+  why: a skeleton that does not compile is folklore, not memory
+refused:
+- what: a schema registry or JSON Schema for the cards
+  why: check-cards.sh with a few rules is enough at this size; a schema would be a second thing to keep
+    in step
+- what: embedding search over the cards
+  why: keyword triggers and file signatures are inspectable; a ranking nobody can read is not
+learned:
+- an ACP agent discards stdin written before its transport is up; hold the pipe open and wait for the
+  readiness line on stderr before sending
+- the builder ended its turn with the reviewer agent still running and posted no verdict; the owner's
+  session reviewed the branch instead
+open:
+- the two-different-days measure on a real task is still unrun
+patterns:
+- stdio-json-rpc-agent
+commits:
+- 'd83e310 memory 1: requests/, references/, patterns/ as docs, seeded with the ACP work (#74)'

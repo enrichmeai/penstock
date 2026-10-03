@@ -169,5 +169,20 @@ out=$(echo '{"stop_hook_active":false}' | (cd "$tmp" && CLAUDE_SKIP_STOP_GATES=1
 expect "" "$out" 'stop hook: CLAUDE_SKIP_STOP_GATES=1 skips the review gate'
 rm -f "$marker"
 
+
+# episode-draft (issue #86): silent on main; silent with no commits past origin/main; a hint,
+# never a block, on a task branch with commits; silent on the retry pass.
+ed() { echo "{\"stop_hook_active\":$1}" | (cd "$2" && CLAUDE_PROJECT_DIR="$2" "$here/episode-draft.sh" 2>/dev/null); }
+er=$(mktemp -d); git -C "$er" init -q -b main; git -C "$er" config user.email t@e; git -C "$er" config user.name t
+echo a >"$er/a"; git -C "$er" add -A; git -C "$er" commit -qm base; git -C "$er" update-ref refs/remotes/origin/main "$(git -C "$er" rev-parse HEAD)"
+expect "" "$(ed false "$er")" "episode-draft: silent on main"
+git -C "$er" checkout -q -b feat/86-episodes
+expect "" "$(ed false "$er")" "episode-draft: silent with no commits past origin/main"
+echo b >"$er/b"; git -C "$er" add -A; git -C "$er" commit -qm "work #86"
+out=$(ed false "$er")
+expect "hint" "$( [ -n "$out" ] && jq -e '.systemMessage | test("write-episode.sh --project .* --issue 86 --range")' <<<"$out" >/dev/null && ! jq -e '.decision' <<<"$out" >/dev/null 2>&1 && echo hint )" "episode-draft: hints the draft command on a task branch, never blocks"
+expect "" "$(ed true "$er")" "episode-draft: silent on the retry pass"
+rm -rf "$er"
+
 echo "hook tests: $n run, $([ $fail = 0 ] && echo 'all passed' || echo 'FAILURES above')"
 exit $fail

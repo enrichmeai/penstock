@@ -1,0 +1,51 @@
+# Drafted by scripts/write-episode.sh from the task's own evidence, then edited by the owner's
+# session (2026-10-03). A learned line is a fact by reference, never a value.
+id: 2026-10-02-memory-2-retrieve-before-reason
+date: 2026-10-02
+project: penstock
+asked: Load the matching patterns and references into the turn before the first model call, and log what
+  was loaded.
+issue: enrichmeai/penstock#73
+built:
+- pr: enrichmeai/penstock#76
+  merged: 6bed5fa
+  files:
+  - README.md
+  - src/main/java/com/example/agent/config/AgentProperties.java
+  - src/main/java/com/example/agent/memory/ContextAssembler.java
+  - src/main/java/com/example/agent/memory/PatternCatalog.java
+  - src/main/java/com/example/agent/memory/PatternManifest.java
+  - src/main/java/com/example/agent/memory/ReferenceCard.java
+  - src/main/java/com/example/agent/memory/RequestCard.java
+  - src/main/java/com/example/agent/service/AgentService.java
+  - src/main/java/com/example/agent/service/AuditLogger.java
+  - src/main/resources/application.yml
+  - src/test/java/com/example/agent/acp/AcpStdioIT.java
+  - src/test/java/com/example/agent/memory/ContextAssemblerTest.java
+  - src/test/java/com/example/agent/memory/MemoryRetrievalDisabledIT.java
+  - src/test/java/com/example/agent/memory/MemoryRetrievalIT.java
+  - src/test/java/com/example/agent/memory/PatternCatalogTest.java
+  - src/test/java/com/example/agent/service/AuditLoggerTest.java
+decided:
+- what: one ContextAssembler call before the model loop, from the user input only, never from the transcript
+  why: the block must be the same for the same input on any day; the transcript varies
+- what: at most three patterns and a 12 000-character cap, dropping whole entries from the end
+  why: a truncated skeleton is worse than none; a bounded block keeps the prompt predictable
+- what: agent.memory.enabled defaults to false
+  why: these folders are this project's own build memory, not every deployment's
+- what: every load is a pattern.loaded audit event and an INFO line
+  why: the ACP mode has no audit store, so the log line is the trail there
+refused:
+- what: walking the workspace once per signature glob
+  why: one walk per assemble() is enough and an UncheckedIOException must not abort the turn
+learned:
+- a test that asserts over patterns/ content must point agent.memory.root at an isolated fixture, not
+  this repo's own folder
+- memory-mode tests pass vacuously unless they replicate main()'s autoconfigure exclusions
+open:
+- retrieval reads the local folder only; a hosted session cannot see the store yet
+patterns:
+- stdio-json-rpc-agent
+commits:
+- '6bed5fa memory 2: retrieve before reason — load matching patterns into the turn, and log what was loaded
+  (#76)'

@@ -1,0 +1,55 @@
+# Drafted by scripts/write-episode.sh from the task's own evidence, then edited by the owner's
+# session (2026-10-03). A learned line is a fact by reference, never a value.
+id: 2026-10-03-memory-5-review-by-grant
+date: 2026-10-03
+project: penstock
+asked: Mirror the store into the owner's Cistern pod and let a reviewer read patterns and write verdicts
+  under a grant, every read receipted and revocable in one command.
+issue: enrichmeai/penstock#82
+built:
+- pr: enrichmeai/penstock#84
+  merged: 71b2a27
+  files:
+  - .gitignore
+  - CLAUDE.md
+  - README.md
+  - patterns/README.md
+  - scripts/memory-grant.sh
+  - scripts/memory-publish.sh
+  - scripts/memory-revoke.sh
+  - scripts/pattern-digest.sh
+  - scripts/test-memory-pod.sh
+decided:
+- what: a reviewer gets read on /memory/patterns/ and read+write on /memory/verdicts/<slug>/ only, never
+    the request or reference cards
+  why: the request cards carry the owner's reasons and refused options, the owner's to show
+- what: a verdict is one six-field file that changes nothing by itself
+  why: the pod holds the opinion, the repository holds the decision
+- what: every pod token reaches curl through its stdin config, never argv
+  why: the same file already kept the Penstock password off the process list; the owner token is more
+    sensitive, not less
+- what: the receipts count is bounded to the run's start time
+  why: an earlier probe by the same identity must not make six decisions into seven
+refused:
+- what: counting reads from the container's own receipts query
+  why: a resource's receipts cover exactly that resource, never its children; the digest asks each pattern
+    file
+- what: matching a verdict to a pattern by filename prefix
+  why: a pattern id that extends another's would be attributed to both; the verdict's own pattern field
+    is exact
+learned:
+- the verdict container must be created as text/turtle; curl's default form type gets a 409 from Cistern
+- Cistern's container listing writes ldp#contains as a full IRI and absolute member URLs
+- cistern sync creates the /memory/ intermediate container itself, so the pod-create fallback never fired
+- 'a fresh clone with no .cistern-sync.json cannot publish into a populated pod: every PUT is create-only
+  and exits 3 (enrichmeai/cistern#219)'
+- .yaml and .sh reach the pod as application/octet-stream until enrichmeai/cistern#218 ships; an MCP reader
+  sees a byte count for those files
+open:
+- 'the builder''s turn ended with the reviewer still running; no verdict was posted (data point 2 on #78)'
+- '--client and --until pass-throughs are untested until a delegation-enabled pod and Cistern #92 exist'
+patterns:
+- stdio-json-rpc-agent
+commits:
+- '71b2a27 memory 5: review by grant — the store mirrored into a Cistern pod, a reviewer granted read
+  on patterns and write on their own verdicts, every read receipted (#84)'

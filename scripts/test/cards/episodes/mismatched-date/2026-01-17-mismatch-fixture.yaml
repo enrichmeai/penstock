@@ -1,0 +1,9 @@
+id: 2026-01-17-mismatch-fixture
+date: 2026-01-18
+project: penstock
+asked: a fixture whose date field disagrees with its filename
+built: []
+decided: []
+refused: []
+learned: []
+open: []

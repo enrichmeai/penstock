@@ -13,8 +13,10 @@ status=0
 
 make_fixture_repo() {
     repo="$1"
-    mkdir -p "$repo/scripts" "$repo/references" "$repo/requests"
+    mkdir -p "$repo/scripts/lib" "$repo/references" "$repo/requests"
     cp scripts/check-cards.sh "$repo/scripts/check-cards.sh"
+    # the episode rules call this helper by its repo-relative path (#86)
+    cp scripts/lib/credential-grep.sh "$repo/scripts/lib/credential-grep.sh"
     git -C "$repo" init -q -b main
     git -C "$repo" config user.email test@example.com
     git -C "$repo" config user.name test
@@ -147,6 +149,75 @@ else
         cat "$out"
         status=1
     fi
+fi
+rm -rf "$repo" "$out"
+
+# --- episodes (issue #86) ---------------------------------------------------------------
+# Each fixture repo gets the fresh-tag pattern too, so the pattern rules stay green and the
+# only thing that can fail is the episode rule under test.
+episode_repo() {
+    repo=$(mktemp -d)
+    make_fixture_repo "$repo"
+    mkdir -p "$repo/patterns/fresh-tag-fixture" "$repo/episodes"
+    cp scripts/test/cards/fresh-tag/manifest.yaml "$repo/patterns/fresh-tag-fixture/manifest.yaml"
+    cp scripts/test/cards/fresh-tag/check.sh "$repo/patterns/fresh-tag-fixture/check.sh"
+    echo "$repo"
+}
+
+echo "=== test-check-cards: a valid episode passes ==="
+repo=$(episode_repo)
+cp scripts/test/cards/episodes/valid/2026-01-15-valid-fixture.yaml "$repo/episodes/"
+commit_fixture "$repo"
+git -C "$repo" tag v0.2.0
+set_origin_main "$repo"
+out=$(mktemp)
+if bash "$repo/scripts/check-cards.sh" >"$out" 2>&1 && grep -q "PASS: episodes/2026-01-15-valid-fixture.yaml" "$out"; then
+    echo "PASS: the valid episode was checked and passed"
+else
+    echo "FAIL: the valid episode did not pass, or was not checked at all"
+    cat "$out"
+    status=1
+fi
+rm -rf "$repo" "$out"
+
+echo "=== test-check-cards: a learned line carrying a credential value fails ==="
+repo=$(episode_repo)
+cp scripts/test/cards/episodes/token-value/2026-01-16-token-fixture.yaml "$repo/episodes/"
+commit_fixture "$repo"
+git -C "$repo" tag v0.2.0
+set_origin_main "$repo"
+out=$(mktemp)
+if bash "$repo/scripts/check-cards.sh" >"$out" 2>&1; then
+    echo "FAIL: check-cards.sh exited 0 for an episode carrying a token value"
+    cat "$out"
+    status=1
+elif grep -q "FAIL: episodes/2026-01-16-token-fixture.yaml has a credential-shaped value" "$out" \
+     && ! grep -q "0123456789abcdef" "$out"; then
+    echo "PASS: the credential-shaped line failed by path, and the value was not printed"
+else
+    echo "FAIL: expected FAIL message not found, or the value leaked into the output"
+    cat "$out"
+    status=1
+fi
+rm -rf "$repo" "$out"
+
+echo "=== test-check-cards: an episode whose date disagrees with its filename fails ==="
+repo=$(episode_repo)
+cp scripts/test/cards/episodes/mismatched-date/2026-01-17-mismatch-fixture.yaml "$repo/episodes/"
+commit_fixture "$repo"
+git -C "$repo" tag v0.2.0
+set_origin_main "$repo"
+out=$(mktemp)
+if bash "$repo/scripts/check-cards.sh" >"$out" 2>&1; then
+    echo "FAIL: check-cards.sh exited 0 for a mismatched episode date"
+    cat "$out"
+    status=1
+elif grep -q "FAIL: episodes/2026-01-17-mismatch-fixture.yaml date 2026-01-18 does not match its filename" "$out"; then
+    echo "PASS: the mismatched date failed with the expected message"
+else
+    echo "FAIL: expected FAIL message not found"
+    cat "$out"
+    status=1
 fi
 rm -rf "$repo" "$out"
 

@@ -1,0 +1,68 @@
+# Drafted by scripts/write-episode.sh from the task's own evidence, then edited by the owner's
+# session (2026-10-03). A learned line is a fact by reference, never a value.
+id: 2026-10-03-memory-4-staleness-and-digest
+date: 2026-10-03
+project: penstock
+asked: Re-check every pattern on a schedule and on release, and count how often each pattern is actually
+  loaded.
+issue: enrichmeai/penstock#81
+built:
+- pr: enrichmeai/penstock#83
+  merged: ff8a268
+  files:
+  - .github/workflows/build.yml
+  - .github/workflows/pattern-check.yml
+  - CLAUDE.md
+  - README.md
+  - patterns/README.md
+  - scripts/check-cards.sh
+  - scripts/pattern-digest.sh
+  - scripts/promote-pattern.sh
+  - scripts/test-check-cards.sh
+  - scripts/test/cards/fresh-tag/check.sh
+  - scripts/test/cards/fresh-tag/manifest.yaml
+  - scripts/test/cards/malformed/check.sh
+  - scripts/test/cards/malformed/manifest.yaml
+  - scripts/test/cards/null-tag/check.sh
+  - scripts/test/cards/null-tag/manifest.yaml
+  - scripts/test/cards/stale-tag/check.sh
+  - scripts/test/cards/stale-tag/manifest.yaml
+  - src/main/java/com/example/agent/config/AgentProperties.java
+  - src/main/java/com/example/agent/config/ErrorAdvice.java
+  - src/main/java/com/example/agent/controller/AuditController.java
+  - src/main/java/com/example/agent/controller/AuditStoreUnavailableException.java
+  - src/main/java/com/example/agent/memory/ContextAssembler.java
+  - src/main/java/com/example/agent/service/persistence/AuditEventRepository.java
+  - src/main/resources/application.yml
+  - src/test/java/com/example/agent/config/ErrorAdviceTest.java
+  - src/test/java/com/example/agent/controller/AuditControllerTest.java
+  - src/test/java/com/example/agent/controller/AuditPatternsIT.java
+  - src/test/java/com/example/agent/memory/ContextAssemblerTest.java
+  - src/test/java/com/example/agent/service/AuditLoggerTest.java
+decided:
+- what: a null verified-against.tag fails; a tag behind the newest release warns STALE and stays green
+  why: a missing tag is a broken promise, an old tag is a question for the owner
+- what: the weekly workflow keeps exactly one pattern-stale issue open and closes it when green
+  why: one place to look, no second inbox; the same shape the site's release sync uses
+- what: GET /api/audit/patterns lists never-loaded patterns last and returns 503 through ErrorAdvice in
+    memory storage
+  why: pruning is a reading of one table; an error response is a @SafeMessage exception plus a handler,
+    never a hand-built map
+refused:
+- what: owner-scoping the per-pattern aggregate
+  why: it names pattern ids and counts, never content; a single-owner instance does not need the split
+    yet
+learned:
+- with python3 - <<heredoc the heredoc is stdin, so a pipe into it is never read; pass data as an argument
+- gh --jq '.[0].number' prints the literal null on an empty list; use // empty before testing for emptiness
+- the builder's headless Bash allowlist only pre-approves specific prefixes; a bare python3 -c or curl
+  prompts and fails, so wrap one-offs in scripts/*.sh
+- the builder hit the 200-turn cap after finishing the code and the review round, before opening the PR
+open:
+- 'the reviewer''s round-two verdict was produced inside the run and never posted; the measure on #78
+  counts it as not on record'
+patterns:
+- stdio-json-rpc-agent
+commits:
+- 'ff8a268 memory 4: staleness and digest — every pattern re-checked weekly and on release, and a per-pattern
+  use count from the audit log (#83)'
