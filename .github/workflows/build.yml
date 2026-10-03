@@ -71,6 +71,11 @@ jobs:
         # --replace, bad slug/project/range exit 64 (#86).
         run: bash scripts/test-write-episode.sh
 
+      - name: Check consolidation and recall (scripts/test-facts.sh)
+        # Offline, in a scratch repo: new / confirm / supersede proposals, --write guards, the
+        # credential refusal, and fact.sh's matching and exit codes (#87).
+        run: bash scripts/test-facts.sh
+
       - name: Check pattern promotion (scripts/promote-pattern.sh)
         # Regenerates the seed pattern in --dry-run and asserts the overlap; proves the
         # credential refusal writes nothing (#77). GH_TOKEN lets the script read the issue;

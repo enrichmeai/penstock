@@ -9,6 +9,10 @@
 #      equals the filename stem, date equals the filename's date, project is one of the
 #      known projects, every built[].pr is owner/repo#n, ids are unique, and no learned or
 #      decided line carries a credential-shaped value (reported by path, never by value)
+#   7. every fact under facts/ has the shape facts/README.md states (issue #87): id equals the
+#      filename stem, kind/scope/status from the closed lists, every provenance episode resolves,
+#      supersedes/superseded_by are mutually consistent, no two active facts share a subject, and
+#      the statement carries no credential-shaped value (reported by path, never by value)
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -181,6 +185,159 @@ else
     echo "no episodes/ folder"
 fi
 
+echo "=== check-cards: facts ==="
+fact_status=0
+if [ -d facts ]; then
+    python3 - <<'PYEOF' || fact_status=$?
+import glob
+import os
+import re
+import subprocess
+import sys
+import tempfile
+
+import yaml
+
+# Kept in step with facts/README.md.
+KINDS = {"account", "identifier", "location-of-secret", "convention", "decision", "principle"}
+STATUSES = {"asserted", "inferred", "superseded"}
+SCOPE = re.compile(r"^(estate|project:[a-z0-9-]+|repo:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)$")
+ID_SHAPE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+GREP = "scripts/lib/credential-grep.sh"
+
+if not os.path.isfile(GREP):
+    print(f"FAIL: {GREP} is missing; facts cannot be checked for credential-shaped values")
+    sys.exit(1)
+
+episode_ids = {os.path.basename(p)[:-5] for p in glob.glob("episodes/*.yaml")}
+
+
+def fold(s):
+    return " ".join(str(s).split())
+
+
+def episode_learned(eid):
+    try:
+        with open(f"episodes/{eid}.yaml", encoding="utf-8") as f:
+            ep = yaml.safe_load(f) or {}
+    except Exception:
+        return set()
+    out = set()
+    for line in ep.get("learned") or []:
+        if isinstance(line, dict):
+            line = "; ".join(str(v) for v in line.values() if v is not None)
+        out.add(fold(line))
+    return out
+status = 0
+facts = {}
+
+
+def fail(path, message):
+    global status
+    print(f"FAIL: {path} {message}")
+    status = 1
+
+
+# pass 1: load and check each file on its own
+for path in sorted(glob.glob("facts/*.yaml")):
+    stem = os.path.basename(path)[:-5]
+    try:
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+    except Exception as exc:
+        fail(path, f"did not parse: {exc}")
+        continue
+    if not isinstance(data, dict):
+        fail(path, "is not a mapping")
+        continue
+    ok = True
+    if not ID_SHAPE.match(stem):
+        fail(path, "is not named <kebab-id>.yaml"); ok = False
+    if data.get("id") != stem:
+        fail(path, f"id {data.get('id')!r} does not match its filename"); ok = False
+    if not str(data.get("statement") or "").strip():
+        fail(path, "has no statement:"); ok = False
+    if data.get("kind") not in KINDS:
+        fail(path, f"kind {data.get('kind')!r} is not one of {sorted(KINDS)}"); ok = False
+    if not str(data.get("subject") or "").strip():
+        fail(path, "has no subject:"); ok = False
+    if not SCOPE.match(str(data.get("scope") or "")):
+        fail(path, f"scope {data.get('scope')!r} is not estate, project:<name> or repo:<owner/name>"); ok = False
+    if data.get("status") not in STATUSES:
+        fail(path, f"status {data.get('status')!r} is not one of {sorted(STATUSES)}"); ok = False
+    try:
+        c = float(data.get("confidence"))
+        if not 0.0 <= c <= 1.0:
+            raise ValueError
+    except (TypeError, ValueError):
+        fail(path, f"confidence {data.get('confidence')!r} is not a number in [0, 1]"); ok = False
+    prov = data.get("provenance") or []
+    if not isinstance(prov, list) or not prov:
+        fail(path, "has no provenance: list"); ok = False
+    else:
+        for entry in prov:
+            if not isinstance(entry, dict) or not ({"owner", "episode"} & set(entry)):
+                fail(path, f"provenance entry needs owner: <date> or episode: <id>: {entry!r}"); ok = False
+            elif "episode" in entry and entry["episode"] not in episode_ids:
+                fail(path, f"provenance episode {entry['episode']!r} is not a file under episodes/"); ok = False
+            elif "episode" in entry and not entry.get("learned"):
+                fail(path, f"provenance episode {entry['episode']} needs the learned: line it came from"); ok = False
+            elif "episode" in entry and fold(entry["learned"]) not in episode_learned(entry["episode"]):
+                fail(path, f"provenance learned text is not a learned line of episodes/{entry['episode']}.yaml"); ok = False
+    for key in ("first_seen", "last_confirmed"):
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", str(data.get(key))):
+            fail(path, f"{key} {data.get(key)!r} is not YYYY-MM-DD"); ok = False
+    if data.get("status") == "superseded" and not data.get("superseded_by"):
+        fail(path, "is superseded but names no superseded_by"); ok = False
+    if data.get("status") != "superseded" and data.get("superseded_by"):
+        fail(path, f"names superseded_by {data.get('superseded_by')} but its status is not superseded"); ok = False
+
+    with tempfile.TemporaryDirectory() as scratch:
+        with open(os.path.join(scratch, "fact-text.yaml"), "w") as f:
+            f.write(str(data.get("statement", "")) + "\n" + str(data.get("subject", "")) + "\n")
+        rc = subprocess.run(["sh", GREP, scratch], capture_output=True, text=True).returncode
+    if rc == 2:
+        fail(path, "has a credential-shaped value in statement/subject (a reference, never a value)"); ok = False
+    elif rc != 0:
+        fail(path, f"credential grep exited {rc}"); ok = False
+
+    facts[stem] = (path, data, ok)
+
+# pass 2: cross-file rules
+active_by_subject = {}
+for stem, (path, data, ok) in sorted(facts.items()):
+    sup = data.get("supersedes")
+    if sup:
+        if sup not in facts:
+            fail(path, f"supersedes {sup}, which is not a fact"); ok = False
+        else:
+            old_path, old, _ = facts[sup]
+            if old.get("superseded_by") != stem or old.get("status") != "superseded":
+                fail(path, f"supersedes {sup}, but {sup} is not superseded_by {stem} with status superseded"); ok = False
+    by = data.get("superseded_by")
+    if by:
+        if by not in facts:
+            fail(path, f"is superseded_by {by}, which is not a fact"); ok = False
+        elif facts[by][1].get("supersedes") != stem:
+            fail(path, f"is superseded_by {by}, but {by} does not name it under supersedes"); ok = False
+    if data.get("status") != "superseded":
+        subj = str(data.get("subject") or "")
+        if subj in active_by_subject:
+            fail(path, f"subject '{subj}' is also active in {active_by_subject[subj]}"); ok = False
+        else:
+            active_by_subject[subj] = path
+    facts[stem] = (path, data, ok)
+
+for stem, (path, data, ok) in sorted(facts.items()):
+    if ok:
+        print(f"PASS: {path}")
+
+sys.exit(status)
+PYEOF
+else
+    echo "no facts/ folder"
+fi
+
 echo "=== check-cards: pattern check.sh ==="
 pattern_status=0
 for manifest in patterns/*/manifest.yaml; do
@@ -247,4 +404,5 @@ status=0
 [ "$pattern_status" -eq 0 ] || status=1
 [ "$staleness_status" -eq 0 ] || status=1
 [ "$episode_status" -eq 0 ] || status=1
+[ "$fact_status" -eq 0 ] || status=1
 exit $status

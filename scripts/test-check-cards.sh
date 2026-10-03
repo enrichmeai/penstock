@@ -221,6 +221,59 @@ else
 fi
 rm -rf "$repo" "$out"
 
+# --- facts (issue #87) ------------------------------------------------------------------
+fact_repo() {
+    repo=$(episode_repo)
+    mkdir -p "$repo/facts"
+    echo "$repo"
+}
+run_facts() { # $1 repo, $2 out file -> exit code of check-cards.sh
+    commit_fixture "$1"; git -C "$1" tag v0.2.0; set_origin_main "$1"
+    bash "$1/scripts/check-cards.sh" >"$2" 2>&1
+}
+
+echo "=== test-check-cards: a valid fact passes ==="
+repo=$(fact_repo); cp scripts/test/cards/facts/valid/*.yaml "$repo/facts/"; out=$(mktemp)
+if run_facts "$repo" "$out" && grep -q "PASS: facts/console-account-fixture.yaml" "$out"; then
+    echo "PASS: the valid fact was checked and passed"
+else
+    echo "FAIL: the valid fact did not pass, or was not checked at all"; cat "$out"; status=1
+fi
+rm -rf "$repo" "$out"
+
+echo "=== test-check-cards: two active facts on one subject fail ==="
+repo=$(fact_repo); cp scripts/test/cards/facts/collide/*.yaml "$repo/facts/"; out=$(mktemp)
+if run_facts "$repo" "$out"; then
+    echo "FAIL: check-cards.sh exited 0 with two active facts on one subject"; cat "$out"; status=1
+elif grep -q "FAIL: facts/console-account-fixture-b.yaml subject 'fixture-console/fixture-proj' is also active in facts/console-account-fixture-a.yaml" "$out"; then
+    echo "PASS: the collision failed with the expected message"
+else
+    echo "FAIL: expected collision message not found"; cat "$out"; status=1
+fi
+rm -rf "$repo" "$out"
+
+echo "=== test-check-cards: a one-sided supersede fails ==="
+repo=$(fact_repo); cp scripts/test/cards/facts/one-sided/*.yaml "$repo/facts/"; out=$(mktemp)
+if run_facts "$repo" "$out"; then
+    echo "FAIL: check-cards.sh exited 0 for a one-sided supersede"; cat "$out"; status=1
+elif grep -q "FAIL: facts/old-fixture.yaml is superseded_by new-fixture, but new-fixture does not name it under supersedes" "$out"; then
+    echo "PASS: the one-sided supersede failed with the expected message"
+else
+    echo "FAIL: expected supersede message not found"; cat "$out"; status=1
+fi
+rm -rf "$repo" "$out"
+
+echo "=== test-check-cards: a statement carrying a credential value fails ==="
+repo=$(fact_repo); cp scripts/test/cards/facts/token-value/*.yaml "$repo/facts/"; out=$(mktemp)
+if run_facts "$repo" "$out"; then
+    echo "FAIL: check-cards.sh exited 0 for a fact carrying a token value"; cat "$out"; status=1
+elif grep -q "FAIL: facts/pod-token-fixture.yaml has a credential-shaped value" "$out" && ! grep -q "0123456789abcdef" "$out"; then
+    echo "PASS: the credential-shaped statement failed by path, and the value was not printed"
+else
+    echo "FAIL: expected FAIL message not found, or the value leaked"; cat "$out"; status=1
+fi
+rm -rf "$repo" "$out"
+
 echo "=== test-check-cards: this repo's own seed pattern still passes ==="
 out=$(mktemp)
 if bash scripts/check-cards.sh >"$out" 2>&1; then

@@ -1,0 +1,25 @@
+# Seed fact (#87): asserted by the owner on 2026-10-03.
+id: cistern-container-text-turtle-receipts-exact
+statement: A Cistern container is created with PUT as text/turtle (curl's default form type gets a 409),
+  and ?receipts on a resource covers exactly that resource, never its children.
+kind: convention
+subject: cistern/container-and-receipts
+scope: project:cistern
+status: asserted
+confidence: 1.0
+provenance:
+- episode: 2026-10-03-memory-5-review-by-grant
+  learned: the verdict container must be created as text/turtle; curl's default form type gets a 409 from
+    Cistern
+- owner: &id001 2026-10-03
+first_seen: *id001
+last_confirmed: *id001
+supersedes: null
+superseded_by: null
+triggers:
+- cistern
+- container
+- text/turtle
+- receipts
+- '409'
+- curl
