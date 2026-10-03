@@ -103,6 +103,34 @@ public class AuditLoggerTest {
     }
 
     @Test
+    public void testFactAndEpisodeLoaded_Success() {
+        auditLogger.factLoaded("alice", "session-1", "gcp-console-account", "asserted", 1.0);
+        auditLogger.episodeLoaded("alice", "session-1", "2026-10-02-memory-1", "2026-10-02");
+
+        assertEquals(2, mockRepo.saved.size());
+        AuditEventEntity fact = mockRepo.saved.get(0);
+        assertEquals("fact.loaded", fact.getEventType());
+        assertEquals("alice", fact.getUserId());
+        assertTrue(fact.getDetailJson().contains("\"factId\":\"gcp-console-account\""));
+        assertTrue(fact.getDetailJson().contains("\"status\":\"asserted\""));
+        assertTrue(fact.getDetailJson().contains("\"confidence\":1.0"));
+        AuditEventEntity episode = mockRepo.saved.get(1);
+        assertEquals("episode.loaded", episode.getEventType());
+        assertTrue(episode.getDetailJson().contains("\"episodeId\":\"2026-10-02-memory-1\""));
+        assertTrue(episode.getDetailJson().contains("\"date\":\"2026-10-02\""));
+    }
+
+    @Test
+    public void testFactAndEpisodeLoaded_NoRepository_DoNotThrow() {
+        AuditLogger auditLoggerNoRepo = new AuditLogger(null, mapper);
+
+        auditLoggerNoRepo.factLoaded("alice", "session-1", "f", "asserted", 1.0);
+        auditLoggerNoRepo.episodeLoaded("alice", "session-1", "e", "2026-10-02");
+
+        assertEquals(0, mockRepo.saved.size());
+    }
+
+    @Test
     public void testPatternLoaded_NoRepository_StillLogsButDoesNotThrow() {
         // The acp profile forces storage.type=memory, where there is no AuditEventRepository —
         // the log line is the only trail of what was loaded there, so this must never throw.

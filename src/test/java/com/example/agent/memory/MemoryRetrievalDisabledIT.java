@@ -90,7 +90,8 @@ class MemoryRetrievalDisabledIT {
         assertThat(LAST_SYSTEM_PROMPT.get()).isEqualTo(props.getLlm().getSystemPrompt());
 
         List<AuditEventEntity> events = awaitLlmCallEvent(sessionId);
-        assertThat(events).extracting(AuditEventEntity::getEventType).doesNotContain("pattern.loaded");
+        assertThat(events).extracting(AuditEventEntity::getEventType)
+                .doesNotContain("pattern.loaded", "fact.loaded", "episode.loaded");
     }
 
     private static String extractSessionId(String body) {

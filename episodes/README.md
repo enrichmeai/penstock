@@ -52,6 +52,15 @@ the line contradicts an active fact on the same subject; the proposals ride a PR
 reviews. Write a `learned` line as the belief you would want recalled next time, by reference:
 "the console for X is used as Y", "the secret NAME holds Z", "never do W because V".
 
+## What a turn recalled
+
+With `agent.memory.enabled=true`, a Penstock turn loads the project's latest episodes (asked,
+decided, refused, open) into its system prompt before the first model call, and audits each as
+`episode.loaded` (#88). `scripts/write-episode.sh --session <id>` (or `--audit <file>`) reads that
+session's audit log and writes the loaded pattern ids under `patterns:` and the loaded fact and
+episode ids under an optional `recalled:` list (`fact:<id>`, `episode:<id>`), so the episode
+says what the session already knew. A fact recalled is not a fact learned.
+
 ## Rules
 
 - One episode per piece of work. It is written on the day and not edited afterwards to say

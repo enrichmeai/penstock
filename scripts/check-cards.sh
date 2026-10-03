@@ -109,7 +109,10 @@ def fail(path, message):
 
 
 def text_lines(data):
+    # asked is included because a turn renders it into the system prompt (#88)
     out = []
+    if data.get("asked") is not None:
+        out.append(str(data.get("asked")))
     for key in ("learned", "decided", "refused", "open"):
         for item in data.get(key) or []:
             if isinstance(item, dict):
@@ -170,7 +173,7 @@ for path in sorted(glob.glob("episodes/*.yaml")):
             f.write("\n".join(text_lines(data)) + "\n")
         rc = subprocess.run(["sh", GREP, scratch], capture_output=True, text=True).returncode
     if rc == 2:
-        fail(path, "has a credential-shaped value in learned/decided/refused/open (a reference, never a value)")
+        fail(path, "has a credential-shaped value in asked/learned/decided/refused/open (a reference, never a value)")
         ok = False
     elif rc not in (0, 2):
         fail(path, f"credential grep exited {rc}")

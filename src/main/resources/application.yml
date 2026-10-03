@@ -113,6 +113,20 @@ agent:
     # Bounds the per-turn workspace walk ContextAssembler uses for signature matching (#81) —
     # a file nested deeper than this is never considered, however large the workspace is.
     signature-depth: ${AGENT_MEMORY_SIGNATURE_DEPTH:8}
+    # Recall in the turn (#88): besides the patterns, the active facts whose triggers match the
+    # input (or that any turn in this project will need: account, identifier, location-of-secret)
+    # and the project's latest episodes join the block, under the same 12 000-character cap.
+    # Order in the block: facts, episodes, patterns — so patterns are dropped first when it is full.
+    max-facts: ${AGENT_MEMORY_MAX_FACTS:8}
+    max-episodes: ${AGENT_MEMORY_MAX_EPISODES:2}
+    # The project the workspace belongs to (the `project` of episodes/ and the `project:<p>`
+    # scope of facts/). Empty: derived from the workspace directory's name through the aliases.
+    project: ${AGENT_MEMORY_PROJECT:}
+    project-aliases:
+      penstock: penstock
+      cistern: cistern
+      valuedocs: valuedocs
+      enrichmeai.github.io: site
 
   rate-limit:
     enabled: ${AGENT_RATE_LIMIT_ENABLED:true}

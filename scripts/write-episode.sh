@@ -5,6 +5,7 @@
 # The owner edits the draft; it reaches main by PR like every other card.
 #
 # Usage: write-episode.sh --project <p> [--issue <n>] [--pr <n>] [--range <base>..<head>]
+#                         [--session <id> [--base <url>] | --audit <json file>]
 #                         [--slug <s>] [--date <YYYY-MM-DD>] [--repo owner/name]
 #                         [--dry-run] [--out <file>] [--replace]
 #
@@ -16,6 +17,12 @@
 #   --range     <base>..<head>; falls back to the whole range when no commit mentions the issue
 #   --slug      filename slug (default: from the issue or PR title); --date defaults to today
 #   --repo      GitHub repository for gh api calls (default enrichmeai/penstock)
+#   --session   a Penstock session id: its audit events (GET /api/sessions/<id>/audit on --base,
+#               default http://localhost:8080, Basic auth from AGENT_AUTH_USERNAME/_PASSWORD
+#               through curl's stdin config, never argv) fill `patterns:` with the pattern.loaded
+#               ids and add `recalled:` with the fact.loaded and episode.loaded ids (#88). A fact
+#               recalled is not a fact learned, so `learned` stays empty.
+#   --audit     the same, from a saved JSON file (offline)
 #   --dry-run   print the draft, write nothing
 #   --out       destination file, confined to this repository's episodes/ folder
 #   --replace   allow overwriting an existing episode (never by default)
@@ -30,9 +37,10 @@ cd "$(dirname "$0")/.."
 repo_root=$(pwd)
 
 project=""; issue=""; pr=""; range=""; slug=""; date=""; repo="enrichmeai/penstock"
+session=""; base_url="http://localhost:8080"; audit_file=""
 dry_run=0; out=""; replace=0
 
-usage() { sed -n '2,25p' "$0" >&2; }
+usage() { sed -n '2,32p' "$0" >&2; }
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -43,6 +51,9 @@ while [ $# -gt 0 ]; do
         --slug) slug="$2"; shift 2 ;;
         --date) date="$2"; shift 2 ;;
         --repo) repo="$2"; shift 2 ;;
+        --session) session="$2"; shift 2 ;;
+        --base) base_url="$2"; shift 2 ;;
+        --audit) audit_file="$2"; shift 2 ;;
         --dry-run) dry_run=1; shift ;;
         --out) out="$2"; shift 2 ;;
         --replace) replace=1; shift ;;
@@ -62,6 +73,10 @@ if [ -n "$range" ]; then
         *) echo "write-episode.sh: --range must be <base>..<head>, got '$range'" >&2; exit 64 ;;
     esac
 fi
+if [ -n "$session" ] && [ -n "$audit_file" ]; then
+    echo "write-episode.sh: pass --session or --audit, not both" >&2; exit 64
+fi
+case "$session" in ''|*[!A-Za-z0-9-]*) [ -z "$session" ] || { echo "write-episode.sh: --session must be a session id" >&2; exit 64; } ;; esac
 [ -n "$date" ] || date=$(date -u +%Y-%m-%d)
 case "$date" in
     [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
@@ -123,6 +138,27 @@ if [ -n "$pr" ]; then
             || { echo "write-episode.sh: could not read PR #$pr; continuing without it" >&2; rm -f "$work/pr.json"; }
         gh api "repos/$repo/pulls/$pr/files?per_page=100" >"$work/pr_files.json" 2>/dev/null || rm -f "$work/pr_files.json"
     fi
+fi
+
+# --- the session's audit log: what the turn recalled (#88) ---------------------------------
+if [ -n "$audit_file" ]; then
+    [ -f "$audit_file" ] || { echo "write-episode.sh: --audit file '$audit_file' not found" >&2; exit 64; }
+    cp "$audit_file" "$work/audit.json"
+elif [ -n "$session" ]; then
+    if [ -z "${AGENT_AUTH_PASSWORD:-}" ]; then
+        echo "write-episode.sh: --session needs AGENT_AUTH_PASSWORD (the running instance's password) in the environment" >&2
+        exit 64
+    fi
+    # Credentials reach curl through its config on stdin (-K -), never through -u or the URL.
+    if ! printf 'user = "%s:%s"\n' "${AGENT_AUTH_USERNAME:-admin}" "$AGENT_AUTH_PASSWORD" \
+            | curl -sf -K - "$base_url/api/sessions/$session/audit" >"$work/audit.json"; then
+        echo "write-episode.sh: could not read the audit log of session $session from $base_url; continuing without it" >&2
+        rm -f "$work/audit.json"
+    fi
+fi
+if [ -f "$work/audit.json" ] && ! python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if isinstance(d,list) else 1)' "$work/audit.json" 2>/dev/null; then
+    echo "write-episode.sh: the audit log is not a JSON list of events; ignoring it" >&2
+    rm -f "$work/audit.json"
 fi
 
 # --- slug and id --------------------------------------------------------------------------

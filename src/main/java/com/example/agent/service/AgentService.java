@@ -148,6 +148,12 @@ public class AgentService {
             if (assembled.isPresent()) {
                 systemPromptForTurn = assembled.get().block() + "\n\n" + systemPromptForTurn;
                 if (auditLogger != null) {
+                    for (ContextAssembler.LoadedFact f : assembled.get().loadedFacts()) {
+                        auditLogger.factLoaded(session.getUserId(), session.getId(), f.id(), f.status(), f.confidence());
+                    }
+                    for (ContextAssembler.LoadedEpisode e : assembled.get().loadedEpisodes()) {
+                        auditLogger.episodeLoaded(session.getUserId(), session.getId(), e.id(), e.date());
+                    }
                     for (ContextAssembler.LoadedPattern p : assembled.get().loadedPatterns()) {
                         auditLogger.patternLoaded(session.getUserId(), session.getId(), p.id(), p.version());
                     }

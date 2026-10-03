@@ -7,6 +7,8 @@ Reads a work directory containing (each optional, absent when the gather step ha
   pr.json        the GitHub pull request (title, body, merge_commit_sha, merged_at)
   pr_files.json  the pull request's files ([{filename}])
   commits.txt    the scoped commits, as "sha<TAB>subject<NUL>body" records
+  audit.json     the session's audit events from GET /api/sessions/{id}/audit (#88):
+                 pattern.loaded → patterns, fact.loaded + episode.loaded → recalled
 Writes the draft YAML to stdout. No network, no git: the shell wrapper owns those.
 
 Markers, case-insensitive, at the start of a line in a commit body or the PR body:
@@ -38,6 +40,7 @@ meta = load("meta.json") or {}
 issue = load("issue.json") or {}
 pr = load("pr.json") or {}
 pr_files = load("pr_files.json") or []
+audit = load("audit.json") or []
 
 MARK = re.compile(r"^\s*(decided|refused|learned|fact|open)\s*:\s*(.+?)\s*$", re.I)
 SPLIT_WHY = re.compile(r"\s+(?:--|—|;\s*why:)\s+", re.I)
@@ -129,7 +132,29 @@ draft["decided"] = decided
 draft["refused"] = refused
 draft["learned"] = learned
 draft["open"] = open_loops
-draft["patterns"] = []
+# What the session recalled before it reasoned (#88). Ids are de-duplicated in first-seen order;
+# a fact recalled is not a fact learned, so nothing here touches `learned`.
+recalled_patterns, recalled_cards = [], []
+for ev in audit if isinstance(audit, list) else []:
+    if not isinstance(ev, dict):
+        continue
+    detail = ev.get("detail") if isinstance(ev.get("detail"), dict) else {}
+    kind = ev.get("eventType")
+    if kind == "pattern.loaded" and detail.get("patternId"):
+        ref = str(detail["patternId"])
+        if ref not in recalled_patterns:
+            recalled_patterns.append(ref)
+    elif kind == "fact.loaded" and detail.get("factId"):
+        ref = "fact:" + str(detail["factId"])
+        if ref not in recalled_cards:
+            recalled_cards.append(ref)
+    elif kind == "episode.loaded" and detail.get("episodeId"):
+        ref = "episode:" + str(detail["episodeId"])
+        if ref not in recalled_cards:
+            recalled_cards.append(ref)
+draft["patterns"] = recalled_patterns
+if isinstance(audit, list) and audit:
+    draft["recalled"] = recalled_cards
 if commits:
     draft["commits"] = [f"{c['sha']} {c['subject']}" for c in commits]
 
