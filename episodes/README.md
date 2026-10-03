@@ -44,6 +44,14 @@ is closed and carried in three places besides this README: `PROJECTS` in `script
 `.claude/hooks/episode-draft.sh` (which maps a checkout to a project and so never yields `estate`).
 Adding a project is one PR that changes all four.
 
+## Learned lines become facts
+
+A `learned` line is a fact candidate. `scripts/consolidate.sh` (#87) reads every `learned` line
+no fact yet cites and proposes a new fact, a confirmation of an existing one, or a supersede when
+the line contradicts an active fact on the same subject; the proposals ride a PR the owner
+reviews. Write a `learned` line as the belief you would want recalled next time, by reference:
+"the console for X is used as Y", "the secret NAME holds Z", "never do W because V".
+
 ## Rules
 
 - One episode per piece of work. It is written on the day and not edited afterwards to say

@@ -1,0 +1,24 @@
+# Seed fact (#87): asserted by the owner on 2026-10-03.
+id: acp-agent-stdin-after-readiness
+statement: An ACP agent discards stdin written before its transport is up; hold the pipe open and wait
+  for the readiness line on stderr before sending.
+kind: convention
+subject: acp/stdin-timing
+scope: repo:enrichmeai/penstock
+status: asserted
+confidence: 1.0
+provenance:
+- episode: 2026-10-02-memory-1-the-shapes-and-one-seed
+  learned: an ACP agent discards stdin written before its transport is up; hold the pipe open and wait
+    for the readiness line on stderr before sending
+- owner: &id001 2026-10-03
+first_seen: *id001
+last_confirmed: *id001
+supersedes: null
+superseded_by: null
+triggers:
+- acp
+- stdin
+- readiness
+- stderr
+- transport

@@ -1,0 +1,14 @@
+id: new-fixture
+statement: The fixture console is used as new@fixture.example.
+kind: account
+subject: fixture-console/one-sided
+scope: project:penstock
+status: asserted
+confidence: 1.0
+provenance:
+  - owner: 2026-01-16
+first_seen: 2026-01-16
+last_confirmed: 2026-01-16
+supersedes: ~
+superseded_by: ~
+triggers: [fixture]
