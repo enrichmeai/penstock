@@ -154,7 +154,7 @@ public class ContextAssembler {
         if (workspace == null || !Files.isDirectory(workspace)) {
             return List.of();
         }
-        try (Stream<Path> walk = Files.walk(workspace)) {
+        try (Stream<Path> walk = Files.walk(workspace, props.getMemory().getSignatureDepth())) {
             return walk.filter(Files::isRegularFile)
                     .map(workspace::relativize)
                     .toList();

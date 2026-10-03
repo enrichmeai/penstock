@@ -172,4 +172,19 @@ class ContextAssemblerTest {
         assertThat(result.get().loadedPatterns()).extracting(ContextAssembler.LoadedPattern::id)
                 .doesNotContain("huge");
     }
+
+    @Test
+    void signatureHitBeyondTheConfiguredDepthIsNotCounted() throws IOException {
+        Path deep = workspace;
+        for (int i = 0; i < 12; i++) {
+            deep = deep.resolve("d" + i);
+        }
+        Files.createDirectories(deep);
+        Files.writeString(deep.resolve("marker.json"), "{}");
+        writePattern("p1", "1", List.of(), List.of("**/*.json"), "2026-01-01", "deep signature pattern");
+        AgentProperties props = props(true);
+        ContextAssembler assembler = new ContextAssembler(loadedCatalog(props), workspace, props);
+
+        assertThat(assembler.assemble("nothing in common with triggers")).isEmpty();
+    }
 }

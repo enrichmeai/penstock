@@ -110,6 +110,9 @@ agent:
     # folders are this project's own build memory, not every deployment's.
     enabled: ${AGENT_MEMORY_ENABLED:false}
     root: ${AGENT_MEMORY_ROOT:${user.dir}}
+    # Bounds the per-turn workspace walk ContextAssembler uses for signature matching (#81) —
+    # a file nested deeper than this is never considered, however large the workspace is.
+    signature-depth: ${AGENT_MEMORY_SIGNATURE_DEPTH:8}
 
   rate-limit:
     enabled: ${AGENT_RATE_LIMIT_ENABLED:true}

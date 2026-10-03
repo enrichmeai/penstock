@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import com.example.agent.controller.AuditStoreUnavailableException;
 import com.example.agent.controller.SessionNotFoundException;
 
 import java.util.HashMap;
@@ -98,6 +99,17 @@ class ErrorAdvice {
         // Message is already safe (e.g., "Session not found: id123")
         ApiError error = ApiError.of(ex.getMessage(), "bad_request", requestId);
         return ResponseEntity.badRequest().body(error);
+    }
+
+    /**
+     * 503 Service Unavailable: an audit query was asked of a storage mode with no audit table.
+     */
+    @ExceptionHandler(AuditStoreUnavailableException.class)
+    public ResponseEntity<ApiError> handleAuditStoreUnavailable(AuditStoreUnavailableException ex) {
+        String requestId = getRequestId();
+        log.debug("[{}] {}", requestId, ex.getMessage());
+        ApiError error = ApiError.of(ex.getMessage(), "service_unavailable", requestId);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error);
     }
 
     /**

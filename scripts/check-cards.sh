@@ -3,6 +3,8 @@
 #   1. every YAML card parses
 #   2. every id a request references under `references:`/`patterns:` resolves to a real card
 #   3. every pattern's own check.sh passes
+#   4. every pattern has a verified-against.tag (FAIL, exit 1 — issue #81)
+#   5. every pattern behind the newest release tag is flagged (STALE, a warning, exit 0)
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -81,7 +83,49 @@ for manifest in patterns/*/manifest.yaml; do
     fi
 done
 
+echo "=== check-cards: staleness ==="
+staleness_status=0
+latest_tag=$(git describe --tags --abbrev=0 origin/main 2>/dev/null) || latest_tag=""
+if [ -z "$latest_tag" ]; then
+    echo "not run: no tags"
+fi
+
+for manifest in patterns/*/manifest.yaml; do
+    [ -e "$manifest" ] || continue
+    # Guarded with `if !` rather than a bare assignment: under `set -e`, a bare
+    # `info=$(...)` would abort the whole script on a malformed manifest (already reported
+    # by the YAML cross-check above) instead of reporting it here and checking the rest.
+    if ! info=$(python3 - "$manifest" <<'PYEOF'
+import sys
+
+import yaml
+
+data = yaml.safe_load(open(sys.argv[1])) or {}
+verified = data.get("verified-against") or {}
+tag = verified.get("tag")
+print(f"{data.get('id', '')}\t{tag or ''}")
+PYEOF
+    ); then
+        echo "FAIL: $manifest could not be read for staleness checking"
+        staleness_status=1
+        continue
+    fi
+    id=$(printf '%s' "$info" | cut -f1)
+    tag=$(printf '%s' "$info" | cut -f2)
+
+    if [ -z "$tag" ]; then
+        echo "FAIL: $id has no verified-against.tag"
+        staleness_status=1
+        continue
+    fi
+
+    if [ -n "$latest_tag" ] && [ "$tag" != "$latest_tag" ]; then
+        echo "STALE: $id verified against $tag, latest release is $latest_tag"
+    fi
+done
+
 status=0
 [ "$yaml_status" -eq 0 ] || status=1
 [ "$pattern_status" -eq 0 ] || status=1
+[ "$staleness_status" -eq 0 ] || status=1
 exit $status

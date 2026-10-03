@@ -340,6 +340,7 @@ overridden with env vars or `--agent.*=value` command-line flags.
 | `agent.tools.file.max-bytes` | `1048576` | — | Max size for a single `read_file`. |
 | `agent.memory.enabled` | `false` | `AGENT_MEMORY_ENABLED` | "Retrieve before reason" (#73): load matching `patterns/` + `references/` into the turn's system prompt before the first model call. Off by default — these folders are this project's own build memory. |
 | `agent.memory.root` | `${user.dir}` | `AGENT_MEMORY_ROOT` | Directory containing `patterns/`, `requests/` and `references/`. |
+| `agent.memory.signature-depth` | `8` | `AGENT_MEMORY_SIGNATURE_DEPTH` | Max depth of the per-turn workspace walk used for signature matching; a file nested deeper is never considered. |
 
 ## REST API
 
@@ -354,6 +355,8 @@ overridden with env vars or `--agent.*=value` command-line flags.
 | `GET` | `/api/sessions/{id}` | — | Full message history |
 | `GET` | `/api/sessions/{id}/usage` | — | Token usage summary for a session |
 | `DELETE` | `/api/sessions/{id}` | — | Delete a session |
+| `GET` | `/api/sessions/{id}/audit` | — | Audit events for a session (tool/LLM calls), owner-scoped |
+| `GET` | `/api/audit/patterns` | — | Per-pattern `pattern.loaded` usage: `[{patternId, loads, lastLoadedAt, versions}]`, never-loaded patterns last. `[]` with `agent.memory.enabled=false`; `503` in memory storage mode (no audit table). |
 
 Interactive API docs at **`/swagger-ui.html`** when the app is running.
 

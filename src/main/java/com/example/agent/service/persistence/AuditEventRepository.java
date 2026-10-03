@@ -10,4 +10,6 @@ public interface AuditEventRepository extends JpaRepository<AuditEventEntity, Lo
     List<AuditEventEntity> findBySessionIdOrderByTimestampAsc(String sessionId);
 
     List<AuditEventEntity> findByUserIdOrderByTimestampDesc(String userId, Pageable pageable);
+
+    List<AuditEventEntity> findByEventTypeOrderByTimestampDesc(String eventType);
 }

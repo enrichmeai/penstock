@@ -401,11 +401,15 @@ public class AgentProperties {
         private boolean enabled = false;
         /** Directory containing patterns/, requests/ and references/. Defaults to the process cwd. */
         private String root;
+        /** Max depth of the per-turn workspace walk {@code ContextAssembler} uses for signature matching. */
+        private int signatureDepth = 8;
 
         public boolean isEnabled() { return enabled; }
         public void setEnabled(boolean enabled) { this.enabled = enabled; }
         public String getRoot() { return root; }
         public void setRoot(String root) { this.root = root; }
+        public int getSignatureDepth() { return signatureDepth; }
+        public void setSignatureDepth(int signatureDepth) { this.signatureDepth = signatureDepth; }
     }
 
     public static class Storage {

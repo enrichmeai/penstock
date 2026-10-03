@@ -1,0 +1,9 @@
+id: null-tag-fixture
+version: 1
+triggers:
+  - fixture
+signatures: []
+verified-against:
+  tag: null
+  date: 2026-01-01
+supersedes: ~

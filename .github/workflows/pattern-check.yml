@@ -1,0 +1,117 @@
+# Re-checks every pattern in patterns/ on a schedule and on every release, so a pattern that
+# silently stopped working, or was last verified against an old release, cannot sit quietly in
+# the catalogue (issue #81, slice 4 of #71; patterns/README.md § "Staleness and use").
+#
+#   - weekly, and whenever a release is published: runs scripts/check-cards.sh with full history
+#     and tags, so the STALE rule has a "latest release" to compare against;
+#   - on failure: opens or updates the single open issue labelled `pattern-stale` with the
+#     output, so there is one place to look and no second inbox;
+#   - on success: closes any open `pattern-stale` issue with a comment naming the run.
+#
+# Read-only except for issues: no deploy, no push, no secrets. The seed pattern's check.sh needs
+# only javac, the ACP SDK jars Gradle has already resolved, and the public v0.3.0 release jar.
+name: pattern-check
+
+on:
+  schedule:
+    - cron: '23 6 * * 1'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: pattern-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # check-cards.sh reads `git describe --tags --abbrev=0 origin/main` for the STALE rule;
+          # a shallow, tagless checkout would make it skip that rule ("not run: no tags").
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Cache Gradle
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Bootstrap Gradle wrapper (if missing)
+        run: |
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            chmod +x ./bootstrap.sh
+            ./bootstrap.sh
+          fi
+
+      - name: Resolve the compile classpath
+        # The seed pattern's check.sh compiles its skeleton against the ACP SDK jars in the
+        # Gradle cache and reports SKIP, not PASS, when they are absent. Resolving them first
+        # turns that skip into a real check.
+        run: ./gradlew --no-daemon -q compileJava
+
+      - name: Check every pattern
+        id: check
+        run: |
+          set +e
+          bash scripts/check-cards.sh > "$RUNNER_TEMP/report.txt" 2>&1
+          rc=$?
+          cat "$RUNNER_TEMP/report.txt"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          exit $rc
+
+      - name: Open or update the pattern-stale issue
+        if: always() && steps.check.outputs.rc != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LABEL: pattern-stale
+        run: |
+          gh label create "$LABEL" --color C5DEF5 --description "A pattern in patterns/ fails its check or is behind the latest release" 2>/dev/null || true
+          {
+            echo "The scheduled pattern check failed. A pattern's \`check.sh\` no longer passes, or a manifest has no \`verified-against.tag\`. Fix it by PR (patterns/README.md § \"Staleness and use\"); the next green run closes this issue."
+            echo
+            echo "STALE lines (a warning, not the failure):"
+            echo '```'
+            grep '^STALE:' "$RUNNER_TEMP/report.txt" || echo "(none)"
+            echo '```'
+            echo
+            echo "Full output:"
+            echo '```'
+            cat "$RUNNER_TEMP/report.txt"
+            echo '```'
+            echo
+            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } > "$RUNNER_TEMP/body.md"
+          n=$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$n" ]; then
+            gh issue edit "$n" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh issue create --title "A pattern in patterns/ fails its check" --label "$LABEL" --body-file "$RUNNER_TEMP/body.md"
+          fi
+
+      - name: Close the pattern-stale issue once every pattern is green
+        if: steps.check.outputs.rc == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LABEL: pattern-stale
+        run: |
+          for n in $(gh issue list --label "$LABEL" --state open --json number --jq '.[].number'); do
+            gh issue close "$n" --reason completed --comment "Every pattern passes again (run ${{ github.run_id }})."
+          done

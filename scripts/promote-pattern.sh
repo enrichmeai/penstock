@@ -220,7 +220,6 @@ while IFS= read -r sha; do
     [ -n "$sha" ] || continue
     git show --no-patch --format='%B' "$sha" >>"$bodies_file"
     printf '\n---PP-COMMIT-END---\n' >>"$bodies_file"
-    git show --no-patch --format='' "$sha" >/dev/null
     git diff-tree --no-commit-id --name-status -r "$sha" >>"$name_status_file"
 done <"$commits_file"
 
