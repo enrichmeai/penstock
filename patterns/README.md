@@ -62,3 +62,39 @@ mechanisms keep it honest:
 
 A pattern unused for a quarter, per that digest, is a candidate for removal —
 always by a PR that a person reviews, never automatically.
+
+## Review by grant
+
+The store (`requests/`, `references/` and this directory) is mirrored into the owner's own
+[Cistern](https://github.com/enrichmeai/cistern) pod under `/memory/` by
+`scripts/memory-publish.sh` — no copy leaves the owner's side. A reviewer (a colleague, or a
+hosted session) is granted into that pod by `scripts/memory-grant.sh reviewer <webid> --as
+<slug>`: **read** on `/memory/patterns/` only — never on `/memory/requests/` or
+`/memory/references/`, whose request cards carry the owner's own reasons and refused options —
+and **read + write** on their own `/memory/verdicts/<slug>/`, nowhere else. Every read and every
+refusal is receipted on the owner's side (`scripts/memory-revoke.sh` prints the query to see
+them); `scripts/memory-revoke.sh <webid> --as <slug>` ends the grant in one command.
+
+A verdict is one file per review, at `/memory/verdicts/<slug>/<pattern-id>-<YYYY-MM-DD>.yaml`:
+
+```yaml
+pattern: stdio-json-rpc-agent
+version: 1              # the manifest version reviewed
+verdict: keep           # keep | revise | retire
+reasons:
+  - one line each, specific
+reviewer: https://…/profile#me
+date: 2026-10-03
+```
+
+**A verdict changes nothing by itself.** `keep` needs no follow-up; `revise` and `retire`
+become a PR (or a `/new-issue`) opened by the owner after reading the verdict — the pod holds
+the opinion, this repository holds the decision. `scripts/pattern-digest.sh --pod` adds a `last
+verdict` and a `reads` column, read with the owner's own token straight from the pod's
+receipts, next to the local use digest above.
+
+Reading a pattern through MCP rather than plain HTTP currently gets `PATTERN.md` as text and
+`manifest.yaml` only as a byte count, until Cistern's media-type/MCP-text fix
+([enrichmeai/cistern#218](https://github.com/enrichmeai/cistern/issues/218)) ships — a reviewer
+reading `manifest.yaml` through `curl` or the `pod` tool gets the bytes either way; this is a
+caveat for an MCP-based reviewer, not a blocker.

@@ -19,3 +19,6 @@ gradle/wrapper/gradle-wrapper.jar
 
 # The agent's own scratch directory — runtime output, never source.
 agent-workspace/
+
+# `cistern sync`'s own state file (scripts/memory-publish.sh) — local bookkeeping, never source.
+.cistern-sync.json
