@@ -66,10 +66,13 @@ if [ "$pod_requested" -eq 1 ]; then
 import re
 import sys
 text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
-for m in re.finditer(r"ldp:contains\s+((?:<[^>]+>\s*,?\s*)+)", text):
+# The server writes the predicate as a full IRI and every member as an absolute URL; keep only
+# the last path segment of each child container.
+contains = r"(?:ldp:contains|<http://www\.w3\.org/ns/ldp#contains>)\s+((?:<[^>]+>\s*,?\s*)+)"
+for m in re.finditer(contains, text):
     for uri in re.findall(r"<([^>]+)>", m.group(1)):
         if uri.endswith("/"):
-            print(uri.rstrip("/"))
+            print(uri.rstrip("/").rsplit("/", 1)[-1])
 PYEOF
             )
             # $slugs is a deliberate newline/space-split list of container names, each one
@@ -84,10 +87,11 @@ import re
 import sys
 text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
 slug = sys.argv[2]
-for m in re.finditer(r"ldp:contains\s+((?:<[^>]+>\s*,?\s*)+)", text):
+contains = r"(?:ldp:contains|<http://www\.w3\.org/ns/ldp#contains>)\s+((?:<[^>]+>\s*,?\s*)+)"
+for m in re.finditer(contains, text):
     for uri in re.findall(r"<([^>]+)>", m.group(1)):
         if uri.endswith(".yaml"):
-            print(f"{slug}\t{uri}")
+            print(f"{slug}\t{uri.rsplit('/', 1)[-1]}")
 PYEOF
                 fi
             done
@@ -108,23 +112,33 @@ import sys
 import yaml
 filename, content_path = sys.argv[1], sys.argv[2]
 data = yaml.safe_load(open(content_path, encoding="utf-8")) or {}
-print(json.dumps({"filename": filename, **data}))
+# YAML turns `date: 2026-10-03` into a date object; default=str keeps it as the text it was.
+print(json.dumps({"filename": filename, **data}, default=str))
 PYEOF
             fi
         done <"$work/verdict-files.txt"
 
-        # --- receipts on /memory/patterns/: count + last ALLOWED READ per pattern id ---
-        receipts_status=$(curl -s -o "$receipts_file" -w '%{http_code}' \
-            -H "Authorization: Bearer $CISTERN_TOKEN" \
-            "$CISTERN_BASE_URL/memory/patterns/?receipts") || receipts_status="000"
-        if [ "$receipts_status" != "200" ]; then
-            echo "pattern-digest.sh: GET /memory/patterns/?receipts returned $receipts_status; no read counts shown" >&2
-            : >"$receipts_file"
-        fi
+        # --- receipts per pattern file: count + last ALLOWED READ per pattern id ---
+        # A resource's ?receipts lists decisions about exactly that resource, never its
+        # children (DecisionQuery), so the container query says nothing about the files a
+        # reviewer read. The files are known locally — the same tree memory-publish.sh
+        # mirrored — so each one is asked in turn. The owner's own reads are left out when
+        # CISTERN_OWNER_WEBID is set: the column is about who else read the pattern.
+        cd "$(dirname "$0")/.."
+        find patterns -type f ! -name '.cistern-sync.json' | sort | while IFS= read -r rel; do
+            file_status=$(curl -s -o "$work/one.ndjson" -w '%{http_code}' \
+                -H "Authorization: Bearer $CISTERN_TOKEN" \
+                "$CISTERN_BASE_URL/memory/$rel?receipts") || file_status="000"
+            if [ "$file_status" = "200" ]; then
+                cat "$work/one.ndjson" >>"$receipts_file"
+            elif [ "$file_status" != "404" ]; then
+                echo "pattern-digest.sh: GET /memory/$rel?receipts returned $file_status; its reads are not counted" >&2
+            fi
+        done
     fi
 fi
 
-python3 - "$response" "$pod_active" "$verdicts_file" "$receipts_file" <<'PYEOF'
+python3 - "$response" "$pod_active" "$verdicts_file" "$receipts_file" "${CISTERN_OWNER_WEBID:-}" <<'PYEOF'
 import json
 import sys
 
@@ -132,6 +146,7 @@ data = json.loads(sys.argv[1])
 pod_active = sys.argv[2] == "1"
 verdicts_path = sys.argv[3]
 receipts_path = sys.argv[4]
+owner_webid = sys.argv[5]
 
 loaded = [p for p in data if p.get("loads", 0) > 0]
 never = [p for p in data if p.get("loads", 0) == 0]
@@ -170,6 +185,8 @@ def reads_for(pattern_id):
                 continue
             rec = json.loads(line)
             if rec.get("required") != "READ" or rec.get("outcome") != "ALLOWED":
+                continue
+            if owner_webid and rec.get("agent") == owner_webid:
                 continue
             target = rec.get("target", "")
             if prefix not in target:
