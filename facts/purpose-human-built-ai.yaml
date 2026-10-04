@@ -6,14 +6,14 @@ statement: 'Penstock exists to build in AI what humans can do: a persona that ke
 kind: principle
 subject: principle/purpose
 scope: estate
-status: asserted
+status: superseded
 confidence: 1.0
 provenance:
 - owner: 2026-10-03
 first_seen: 2026-10-03
 last_confirmed: 2026-10-03
 supersedes: null
-superseded_by: null
+superseded_by: purpose-ai-extends-human-capabilities
 triggers:
 - persona
 - mental model
