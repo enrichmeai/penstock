@@ -20,7 +20,113 @@
 #      memory.yaml nor schema/ has not adopted the format and is skipped; one with memory.yaml and
 #      a missing schema or validator fails.
 set -eu
-cd "$(dirname "$0")/.."
+# --- which cards: --root <dir>, else MEMORY_ROOT, else this repository (#91) ---------------
+# The tools (scripts/lib, schema/) always come from this repository; the cards come from the root.
+# A root with a projects/ folder is sectioned (estate/ plus projects/<name>/, docs/memory-root.md):
+# the cross-section rules are checked first (estate/ exists, no card folder at the root, project
+# names from the closed list, fact scope matches its folder, ids and active subjects unique across
+# sections), then every section in turn against the root's memory.yaml, and every PASS/FAIL/WARN/
+# STALE line about a card names the card's path from the root. --section and --memory-yaml are
+# internal: the sectioned run passes them to itself.
+tooldir=$(cd "$(dirname "$0")/.." && pwd)
+root=""; section=""; section_yaml=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --root|--section|--memory-yaml)
+            [ $# -ge 2 ] && [ -n "$2" ] || { echo "check-cards.sh: $1 needs a value" >&2; exit 64; }
+            case "$1" in --root) root="$2" ;; --section) section="$2" ;; *) section_yaml="$2" ;; esac
+            shift 2 ;;
+        -h|--help) awk 'NR == 1 || /^set -eu/ { next } /^#/ { print; next } { exit }' "$0" >&2; exit 0 ;;
+        *) echo "check-cards.sh: unknown argument '$1'" >&2; exit 64 ;;
+    esac
+done
+if [ -n "$section" ] && [ -z "$section_yaml" ]; then
+    echo "check-cards.sh: --section is internal and needs --memory-yaml" >&2; exit 64
+fi
+[ -n "$root" ] || root="${MEMORY_ROOT:-$tooldir}"
+[ -d "$root" ] || { echo "check-cards.sh: root '$root' is not a directory" >&2; exit 64; }
+root=$(cd "$root" && pwd)
+# Only values this script sets reach the checks below; nothing is read from the caller's environment.
+export CARDS_LIB="$tooldir/scripts/lib"
+export SCHEMA_DIR="$tooldir/schema"
+unset MEMORY_YAML
+
+if [ -d "$root/projects" ] && [ -z "$section" ]; then
+    echo "=== check-cards: sectioned memory root $root ==="
+    sectioned_status=0
+    ROOT="$root" python3 - <<'PYEOF' || sectioned_status=1
+import glob, os, sys, yaml
+root = os.environ["ROOT"]
+os.chdir(root)
+PROJECTS = {"penstock", "cistern", "valuedocs", "site"}
+KINDS = ("requests", "references", "patterns", "episodes", "facts")
+status = 0
+def fail(msg):
+    global status
+    print(f"FAIL: {msg}"); status = 1
+if not os.path.isfile("memory.yaml"):
+    fail("memory.yaml is missing at the root of a sectioned memory root")
+if not os.path.isdir("estate"):
+    fail("a sectioned memory root needs an estate/ folder")
+for kind in KINDS:
+    if os.path.exists(kind):
+        fail(f"{kind}/ sits at the root of a sectioned memory root; cards live under estate/ or projects/<name>/")
+sections = ["estate"] if os.path.isdir("estate") else []
+for d in sorted(os.listdir("projects")):
+    if not os.path.isdir(os.path.join("projects", d)):
+        continue
+    if d not in PROJECTS:
+        fail(f"projects/{d} is not a known project ({', '.join(sorted(PROJECTS))})")
+        continue
+    sections.append(f"projects/{d}")
+seen_ids, active_subjects = {}, {}
+for sec in sections:
+    want = "estate" if sec == "estate" else "project:" + sec.split("/", 1)[1]
+    for kind in KINDS:
+        for path in sorted(glob.glob(f"{sec}/{kind}/*.yaml") + glob.glob(f"{sec}/{kind}/*/manifest.yaml")):
+            try:
+                data = yaml.safe_load(open(path)) or {}
+            except Exception:
+                continue  # the section's own check reports a card that does not parse
+            if not isinstance(data, dict):
+                continue
+            cid = str(data.get("id") or "")
+            if cid:
+                key = (kind, cid)
+                if key in seen_ids:
+                    fail(f"{kind[:-1]} id '{cid}' is used in both {seen_ids[key]} and {path}")
+                else:
+                    seen_ids[key] = path
+            if kind == "facts":
+                scope = str(data.get("scope") or "")
+                if scope != want:
+                    fail(f"{path} has scope {scope or '(none)'} but lives in {sec}/; it needs scope {want}")
+                subj = str(data.get("subject") or "")
+                if subj and data.get("status") != "superseded":
+                    if subj in active_subjects:
+                        fail(f"subject '{subj}' is active in both {active_subjects[subj]} and {path}")
+                    else:
+                        active_subjects[subj] = path
+            if kind == "episodes" and sec != "estate":
+                proj = str(data.get("project") or "")
+                if proj != sec.split("/", 1)[1]:
+                    fail(f"{path} has project {proj or '(none)'} but lives in {sec}/")
+sys.exit(status)
+PYEOF
+    for sec in "$root/estate" "$root"/projects/*; do
+        [ -d "$sec" ] || continue
+        rel=${sec#"$root"/}
+        case "$rel" in estate|projects/penstock|projects/cistern|projects/valuedocs|projects/site) ;; *) continue ;; esac
+        echo "### section $rel"
+        if out=$(sh "$0" --root "$sec" --section "$rel" --memory-yaml "$root/memory.yaml" 2>&1); then :; else sectioned_status=1; fi
+        printf '%s\n' "$out" | awk -v rel="$rel" '
+            /^(PASS|FAIL|WARN|STALE): (episodes|facts|patterns|requests|references)\// {
+                i = index($0, ": "); print substr($0, 1, i + 1) rel "/" substr($0, i + 2); next }
+            { print }'
+    done
+    exit $sectioned_status
+fi
+cd "$root"
 
 echo "=== check-cards: YAML + id cross-check ==="
 yaml_status=0
@@ -102,7 +208,7 @@ status = 0
 seen_ids = {}
 
 # `sh <missing file>` also exits 2, which would read as "credential found": check first.
-GREP = "scripts/lib/credential-grep.sh"
+GREP = os.path.join(os.environ.get("CARDS_LIB", "scripts/lib"), "credential-grep.sh")
 if not os.path.isfile(GREP):
     print(f"FAIL: {GREP} is missing; episodes cannot be checked for credential-shaped values")
     sys.exit(1)
@@ -212,7 +318,7 @@ KINDS = {"account", "identifier", "location-of-secret", "convention", "decision"
 STATUSES = {"asserted", "inferred", "superseded"}
 SCOPE = re.compile(r"^(estate|project:[a-z0-9-]+|repo:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)$")
 ID_SHAPE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
-GREP = "scripts/lib/credential-grep.sh"
+GREP = os.path.join(os.environ.get("CARDS_LIB", "scripts/lib"), "credential-grep.sh")
 
 if not os.path.isfile(GREP):
     print(f"FAIL: {GREP} is missing; facts cannot be checked for credential-shaped values")
@@ -405,7 +511,8 @@ done
 
 echo "=== check-cards: staleness ==="
 staleness_status=0
-latest_tag=$(git describe --tags --abbrev=0 origin/main 2>/dev/null) || latest_tag=""
+# Patterns are verified against this repository's releases, wherever the cards live.
+latest_tag=$(git -C "$tooldir" describe --tags --abbrev=0 origin/main 2>/dev/null) || latest_tag=""
 if [ -z "$latest_tag" ]; then
     echo "not run: no tags"
 fi
@@ -446,12 +553,13 @@ done
 
 echo "=== check-cards: memory format v1 ==="
 format_status=0
-if [ -f memory.yaml ]; then
-    if [ ! -f scripts/lib/memory_format.py ]; then
+memory_yaml="${section_yaml:-memory.yaml}"
+if [ -f "$memory_yaml" ]; then
+    if [ ! -f "$CARDS_LIB/memory_format.py" ]; then
         echo "FAIL: memory.yaml is present but scripts/lib/memory_format.py is missing"
         format_status=1
     else
-        python3 scripts/lib/memory_format.py . || format_status=$?
+        MEMORY_YAML="$memory_yaml" python3 "$CARDS_LIB/memory_format.py" . || format_status=$?
     fi
 elif [ -d schema ]; then
     echo "FAIL: schema/ is present but memory.yaml is not; the repository's boundary is undeclared"

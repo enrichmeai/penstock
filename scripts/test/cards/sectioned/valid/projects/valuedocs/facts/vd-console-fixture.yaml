@@ -1,0 +1,17 @@
+# Test fixture for #91 (a sectioned memory root: estate/ plus projects/<name>/).
+id: vd-console-fixture
+format: 1
+visibility: private
+statement: The valuedocs fixture console is used as owner@fixture.example.
+kind: account
+subject: fixture/vd-console-fixture
+scope: project:valuedocs
+status: asserted
+confidence: 1.0
+provenance:
+  - owner: 2026-01-31
+first_seen: 2026-01-31
+last_confirmed: 2026-01-31
+supersedes: ~
+superseded_by: ~
+triggers: [fixture, vd-console-fixture]

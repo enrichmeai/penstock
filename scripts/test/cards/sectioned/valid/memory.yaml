@@ -1,0 +1,4 @@
+# Test fixture for #91: a private, sectioned memory root.
+format: 1
+visibility: private
+layout: sectioned

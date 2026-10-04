@@ -109,6 +109,8 @@ agent:
     # references/ into the turn before the first model call. Off by default — the
     # folders are this project's own build memory, not every deployment's.
     enabled: ${AGENT_MEMORY_ENABLED:false}
+    # A flat root (this repository's own folders) or a sectioned one (estate/ plus projects/<name>/,
+    # the owner's enrichmeai/memory): a sectioned root loads the estate plus this workspace's project (#91).
     root: ${AGENT_MEMORY_ROOT:${user.dir}}
     # Bounds the per-turn workspace walk ContextAssembler uses for signature matching (#81) —
     # a file nested deeper than this is never considered, however large the workspace is.

@@ -122,7 +122,9 @@ def main():
 
     root = sys.argv[1]
     status = 0
-    cfg_path = os.path.join(root, "memory.yaml")
+    # a section of a sectioned root (#91) is checked against the root's memory.yaml
+    cfg_path = os.environ.get("MEMORY_YAML") or os.path.join(root, "memory.yaml")
+    schema_dir = os.environ.get("SCHEMA_DIR") or os.path.join(root, "schema")
     try:
         cfg = yaml.safe_load(open(cfg_path, encoding="utf-8"))
     except Exception as exc:
@@ -147,7 +149,7 @@ def main():
             status = 1
     valid = {}  # kind -> {id: card}, for the cross-card boundary rule
     for kind, pattern in KINDS.items():
-        schema_path = os.path.join(root, "schema", f"{kind}.schema.json")
+        schema_path = os.path.join(schema_dir, f"{kind}.schema.json")
         if not os.path.isfile(schema_path):
             print(f"FAIL: schema/{kind}.schema.json is missing")
             status = 1
