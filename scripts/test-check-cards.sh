@@ -326,6 +326,8 @@ format_case episode-nested 1 "FAIL: episodes/2026-01-20-ep-nested.yaml \$.built\
 format_case pattern-missing 1 "FAIL: patterns/fmt-pattern-fixture/manifest.yaml \$ is missing required 'triggers'" "a pattern manifest missing a required field fails its schema"
 format_case reference-missing 1 "FAIL: references/fmt-reference-fixture.yaml \$ is missing required 'holds'" "a reference missing a required field fails its schema"
 format_case request-missing 1 "FAIL: requests/fmt-request-fixture.yaml \$ is missing required 'done-when'" "a request missing a required field fails its schema"
+format_case reference-unreachable 0 "PASS: references/fmt-unreach-fixture.yaml (reference, format 1, public)" "a reference in the documented unreachable state (no read) passes"
+format_case reference-neither 1 "FAIL: references/fmt-neither-fixture.yaml needs read: (when the source was read) or unreachable: (why it could not be)" "a reference with neither read nor unreachable fails"
 format_case format-true 1 "FAIL: facts/format-true-fixture.yaml" "format: true is not format 1"
 format_case fact-wider 1 "FAIL: facts/fact-wider-fixture.yaml is public but cites episode 2026-01-21-private-src, which is private" "a fact wider than an episode it cites fails (the leak path)"
 format_case stray-file 1 "FAIL: facts/stray.yml is under a memory folder but matches no card kind" "a YAML file in a memory folder that is no card kind fails"

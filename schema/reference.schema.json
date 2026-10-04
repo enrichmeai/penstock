@@ -9,7 +9,6 @@
     "format",
     "visibility",
     "source",
-    "read",
     "trust",
     "holds"
   ],
@@ -55,6 +54,11 @@
       "items": {
         "type": "string"
       }
+    },
+    "unreachable": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Temporary: why and from where the source could not be read. Removed, and read: filled in, by the first run that can reach it. A reference carries read: or unreachable: (checked by scripts/lib/memory_format.py; JSON Schema alone cannot say 'one of')."
     }
   }
 }

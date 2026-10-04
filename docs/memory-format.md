@@ -32,7 +32,7 @@ Each kind has a JSON Schema (draft 2020-12) under [`schema/`](../schema/). Every
 | episode | `episodes/<YYYY-MM-DD>-<slug>.yaml` | [`episode.schema.json`](../schema/episode.schema.json) | asked, built, decided, refused, learned, open ([episodes/README.md](../episodes/README.md)) |
 | fact | `facts/<id>.yaml` | [`fact.schema.json`](../schema/fact.schema.json) | one belief, with kind, subject, scope, status, confidence, provenance, supersede links ([facts/README.md](../facts/README.md)) |
 | pattern | `patterns/<id>/manifest.yaml` | [`pattern.schema.json`](../schema/pattern.schema.json) | how something was built, its triggers and the release it was verified against ([patterns/README.md](../patterns/README.md)) |
-| reference | `references/<id>.yaml` | [`reference.schema.json`](../schema/reference.schema.json) | a trusted source, what it holds, when it was read ([references/README.md](../references/README.md)) |
+| reference | `references/<id>.yaml` | [`reference.schema.json`](../schema/reference.schema.json) | a trusted source, what it holds, when it was read, or, while it cannot be reached, `unreachable:` saying why ([references/README.md](../references/README.md)) |
 | request | `requests/<id>.yaml` | [`request.schema.json`](../schema/request.schema.json) | what was wanted and why, what done looks like, what was ruled out ([requests/README.md](../requests/README.md)) |
 
 `facts/rejected/lines.yaml` (learned lines reviewed and judged not to be beliefs) is a ledger,

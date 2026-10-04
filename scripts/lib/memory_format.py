@@ -166,6 +166,9 @@ def main():
                 status = 1
                 continue
             errs = validate(card, schema)
+            if kind == "reference" and isinstance(card, dict) and not card.get("read") and not card.get("unreachable"):
+                # references/README.md: read: once the source was read, unreachable: while it cannot be
+                errs.append("needs read: (when the source was read) or unreachable: (why it could not be)")
             if errs:
                 status = 1
                 for e in errs:

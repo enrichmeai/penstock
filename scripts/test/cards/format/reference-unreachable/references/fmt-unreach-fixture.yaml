@@ -1,0 +1,10 @@
+# Test fixture for scripts/test-check-cards.sh (#98): a reference in the documented unreachable state.
+id: fmt-unreach-fixture
+format: 1
+visibility: public
+source: https://example.test/blocked
+version: ~
+trust: secondary
+holds:
+  - a line that matters, to be confirmed once the source can be read
+unreachable: the session's network policy blocked example.test on 2026-01-20
