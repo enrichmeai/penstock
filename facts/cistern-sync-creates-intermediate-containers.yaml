@@ -1,0 +1,22 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject, scope and triggers
+# set by the owner's session in the first consolidation (#87). The owner promotes it by setting asserted.
+id: cistern-sync-creates-intermediate-containers
+statement: The Cistern server creates missing intermediate containers on PUT (Solid Protocol §5.3), so
+  penstock's memory-publish.sh pod-create fallback never fires.
+kind: convention
+subject: cistern/sync-intermediate-containers
+scope: project:cistern
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-03-memory-5-review-by-grant
+  learned: cistern sync creates the /memory/ intermediate container itself, so the pod-create fallback
+    never fired
+first_seen: 2026-10-03
+last_confirmed: 2026-10-03
+supersedes: null
+superseded_by: null
+triggers:
+- memory-publish
+- intermediate container
+- cistern

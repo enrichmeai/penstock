@@ -11,14 +11,13 @@ provenance:
 - episode: 2026-10-03-memory-5-review-by-grant
   learned: the verdict container must be created as text/turtle; curl's default form type gets a 409 from
     Cistern
-- owner: &id001 2026-10-03
-first_seen: *id001
-last_confirmed: *id001
+- owner: 2026-10-03
+first_seen: 2026-10-03
+last_confirmed: 2026-10-03
 supersedes: null
 superseded_by: null
 triggers:
 - cistern
-- container
 - text/turtle
 - receipts
 - '409'

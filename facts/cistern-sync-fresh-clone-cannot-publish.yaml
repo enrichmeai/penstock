@@ -1,0 +1,23 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject, scope and triggers
+# set by the owner's session in the first consolidation (#87). The owner promotes it by setting asserted.
+id: cistern-sync-fresh-clone-cannot-publish
+statement: 'On Cistern main (sync is not in v0.2.0), a fresh clone with no .cistern-sync.json cannot publish
+  into a populated pod: every PUT is create-only and exits 3 (enrichmeai/cistern#219).'
+kind: convention
+subject: cistern/sync-fresh-clone
+scope: project:cistern
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-03-memory-5-review-by-grant
+  learned: 'a fresh clone with no .cistern-sync.json cannot publish into a populated pod: every PUT is
+    create-only and exits 3 (enrichmeai/cistern#219)'
+first_seen: 2026-10-03
+last_confirmed: 2026-10-03
+supersedes: null
+superseded_by: null
+triggers:
+- cistern sync
+- fresh clone
+- second machine
+- cistern-sync.json

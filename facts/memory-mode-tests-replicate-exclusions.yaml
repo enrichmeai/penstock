@@ -1,0 +1,21 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject, scope and triggers
+# set by the owner's session in the first consolidation (#87). The owner promotes it by setting asserted.
+id: memory-mode-tests-replicate-exclusions
+statement: Memory-mode tests pass vacuously unless they replicate main()'s autoconfigure exclusions.
+kind: convention
+subject: tests/memory-mode-autoconfig
+scope: repo:enrichmeai/penstock
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-02-memory-2-retrieve-before-reason
+  learned: memory-mode tests pass vacuously unless they replicate main()'s autoconfigure exclusions
+first_seen: 2026-10-02
+last_confirmed: 2026-10-02
+supersedes: null
+superseded_by: null
+triggers:
+- memory mode
+- storage.type
+- autoconfigure
+- AgentApplication

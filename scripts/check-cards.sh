@@ -335,6 +335,42 @@ for stem, (path, data, ok) in sorted(facts.items()):
     if ok:
         print(f"PASS: {path}")
 
+# facts/rejected/lines.yaml: learned lines the owner reviewed and decided are not beliefs, so
+# consolidate.sh never proposes them again. Each must cite an episode that exists and quote one
+# of its learned lines verbatim, with a reason and the owner's date.
+REJ = "facts/rejected/lines.yaml"
+cited_by_facts = {}
+for _stem, (_path, _data, _ok) in facts.items():
+    for _e in (_data.get("provenance") or []) if isinstance(_data, dict) else []:
+        if isinstance(_e, dict) and _e.get("episode") and _e.get("learned"):
+            cited_by_facts[(_e["episode"], fold(_e["learned"]))] = _path
+if os.path.isfile(REJ):
+    try:
+        with open(REJ, encoding="utf-8") as f:
+            rej = yaml.safe_load(f) or {}
+    except Exception as exc:
+        fail(REJ, f"did not parse: {exc}")
+        rej = None
+    if rej is not None:
+        entries = rej.get("rejected") if isinstance(rej, dict) else None
+        if not isinstance(entries, list):
+            fail(REJ, "needs a top-level rejected: list")
+            entries = []
+        rej_ok = True
+        for i, e in enumerate(entries, 1):
+            if not isinstance(e, dict) or not e.get("episode") or not e.get("learned") or not e.get("reason"):
+                fail(REJ, f"entry {i} needs episode:, learned: and reason:"); rej_ok = False
+            elif e["episode"] not in episode_ids:
+                fail(REJ, f"entry {i} names episode {e['episode']!r}, which is not a file under episodes/"); rej_ok = False
+            elif fold(e["learned"]) not in episode_learned(e["episode"]):
+                fail(REJ, f"entry {i} learned text is not a learned line of episodes/{e['episode']}.yaml"); rej_ok = False
+            elif not re.match(r"^\d{4}-\d{2}-\d{2}$", str(e.get("owner"))):
+                fail(REJ, f"entry {i} owner {e.get('owner')!r} is not YYYY-MM-DD"); rej_ok = False
+            elif (e["episode"], fold(e["learned"])) in cited_by_facts:
+                fail(REJ, f"entry {i} is also cited by {cited_by_facts[(e['episode'], fold(e['learned']))]}: a line cannot be both a fact and rejected"); rej_ok = False
+        if rej_ok:
+            print(f"PASS: {REJ} ({len(entries)} rejected line(s))")
+
 sys.exit(status)
 PYEOF
 else

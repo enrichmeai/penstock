@@ -9,6 +9,8 @@
 #   7. a short, non-hex credential value never reaches stdout or stderr, even as a derived filename
 #   8. two uncited episodes on one subject before the first --write (a backlog) write cleanly
 #   9. a learned item that is a {what, why} mapping is flattened, not repr()'d
+#  10. a line the owner rejected in facts/rejected/lines.yaml is never proposed again, and
+#      check-cards fails a rejection whose learned text is not in its episode
 set -eu
 cd "$(dirname "$0")/.."
 status=0
@@ -118,6 +120,36 @@ out=$(run) || fail "dry run with a mapping item exited non-zero"
 printf '%s' "$out" | grep -q "fixture queue drains nightly; the fixture scheduler" && pass "a mapping item is flattened" || { fail "mapping item not flattened"; printf '%s\n' "$out" | grep -i queue; }
 printf '%s' "$out" | grep -q "{'what'" && fail "mapping item was repr()'d" || pass "no repr() in the proposal"
 rm -f "$repo/episodes/2026-02-14-map.yaml"
+
+echo "=== test-facts: a rejected line is not proposed again ==="
+ep rej 2026-02-15 "the fixture build took four minutes on that run"
+out=$(run); printf '%s' "$out" | grep -q 'four minutes' && pass "before rejection the line is proposed" || { fail "line not proposed before rejection"; printf '%s\n' "$out"; }
+mkdir -p "$repo/facts/rejected"
+cat >"$repo/facts/rejected/lines.yaml" <<'YAML'
+rejected:
+  - episode: 2026-02-15-rej
+    learned: the fixture build took four minutes on that run
+    reason: an event, not a belief
+    owner: 2026-02-16
+YAML
+out=$(run); printf '%s' "$out" | grep -q 'four minutes' && { fail "a rejected line was proposed again"; printf '%s\n' "$out"; } || pass "a rejected line is not proposed again"
+(cd "$repo" && git add -A && git commit -qm r && sh scripts/check-cards.sh >/dev/null 2>&1) && pass "a valid rejection passes check-cards" || { fail "check-cards failed on a valid rejection"; (cd "$repo" && sh scripts/check-cards.sh 2>&1 | grep FAIL); }
+cat >>"$repo/facts/rejected/lines.yaml" <<'YAML'
+  - episode: 2026-02-15-rej
+    learned: a line that episode never said
+    reason: drift
+    owner: 2026-02-16
+YAML
+(cd "$repo" && sh scripts/check-cards.sh 2>&1 | grep -q "facts/rejected/lines.yaml.*not a learned line") && pass "a rejection whose text is not in its episode fails check-cards" || fail "check-cards accepted a drifted rejection"
+cat >"$repo/facts/rejected/lines.yaml" <<'YAML'
+rejected:
+  - episode: 2026-02-01-first
+    learned: the fixture console for project fixture-proj is used as owner@fixture.example
+    reason: contradicts a fact
+    owner: 2026-02-16
+YAML
+(cd "$repo" && sh scripts/check-cards.sh 2>&1 | grep -q "facts/rejected/lines.yaml.*both a fact and rejected") && pass "a line both cited by a fact and rejected fails check-cards" || { fail "check-cards accepted a line that is both a fact and rejected"; (cd "$repo" && sh scripts/check-cards.sh 2>&1 | grep -i rejected); }
+rm -rf "$repo/facts/rejected" "$repo/episodes/2026-02-15-rej.yaml"
 
 echo "=== test-facts: fact.sh ==="
 (cd "$repo" && sh scripts/fact.sh fixture console >/dev/null 2>&1) && pass "fact.sh matches on words" || fail "fact.sh found nothing"

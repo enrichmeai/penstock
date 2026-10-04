@@ -1,0 +1,21 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject, scope and triggers
+# set by the owner's session in the first consolidation (#87). The owner promotes it by setting asserted.
+id: cistern-listing-full-iri-absolute-urls
+statement: Cistern's container listing writes ldp#contains as a full IRI and absolute member URLs.
+kind: convention
+subject: cistern/container-listing-shape
+scope: project:cistern
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-03-memory-5-review-by-grant
+  learned: Cistern's container listing writes ldp#contains as a full IRI and absolute member URLs
+first_seen: 2026-10-03
+last_confirmed: 2026-10-03
+supersedes: null
+superseded_by: null
+triggers:
+- ldp
+- ldp#contains
+- container listing
+- cistern
