@@ -1,6 +1,8 @@
 # Asserted by the owner on 2026-10-04 ("this is my bigger purpose of building all this"); supersedes the
 # 2026-10-03 seed purpose-human-built-ai, which stays as the record of the earlier wording.
 id: purpose-ai-extends-human-capabilities
+format: 1
+visibility: public
 statement: 'AI is a tool to extend human capabilities, not a genie. Penstock builds in AI what humans
   can do: a persona that keeps the person''s memory and mental models between sessions, read from a record
   they own and consulted before the network, so each person''s experience is their differentiator and

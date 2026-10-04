@@ -10,6 +10,8 @@ reads this folder can act on them without re-reading history.
 
 ```yaml
 id: gcp-console-account-valuedocs-legal-bld     # equals the filename stem, kebab-case
+format: 1                                       # memory format v1 (docs/memory-format.md)
+visibility: private                             # private | shareable | public
 statement: The GCP console for project valuedocs-legal-bld is used as joseph@valuedocs.co.in.
 kind: account            # account | identifier | location-of-secret | convention | decision | principle
 subject: gcp-console/valuedocs-legal-bld        # the key two facts collide on; free-form kebab path

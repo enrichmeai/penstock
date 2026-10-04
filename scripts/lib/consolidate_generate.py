@@ -110,6 +110,32 @@ def fold(s):
     return " ".join(str(s).lower().split()).rstrip(".")
 
 
+RANK = {"private": 0, "shareable": 1, "public": 2}
+
+
+def repo_memory():
+    try:
+        mem = load(os.path.join(root, "memory.yaml"))
+    except Exception:  # absent or malformed: no boundary is declared, so everything stays private
+        return {}
+    return mem if isinstance(mem, dict) else {}
+
+
+def fact_visibility(scope, ep):
+    """#98: the narrowest of (a) the scope default: this repository's own project takes the
+    repository's visibility, estate-wide and other projects' facts are private; and (b) the source
+    episode's visibility (or, when it has none, that episode's own default). A private episode's
+    line never comes back as a public fact. The owner widens by hand."""
+    mem = repo_memory()
+    proj, vis = mem.get("project"), mem.get("visibility")
+    known = vis in RANK
+    by_scope = vis if proj and known and (scope == f"project:{proj}" or scope.endswith(f"/{proj}")) else "private"
+    ep_vis = ep.get("visibility")
+    if ep_vis not in RANK:
+        ep_vis = vis if proj and known and ep.get("project") == proj else "private"
+    return min(by_scope, ep_vis, key=RANK.get)
+
+
 def project_scope(ep):
     p = ep.get("project")
     return "estate" if p in (None, "estate") else f"project:{p}"
@@ -147,6 +173,8 @@ for p in sorted(glob.glob(os.path.join(root, "episodes", "*.yaml"))):
         subject = subject_of(kind, text)
         draft = {
             "id": kebab(subject.split("/", 1)[1] + "-" + kind)[:60].strip("-"),
+            "format": 1,
+            "visibility": fact_visibility(project_scope(ep), ep),
             "statement": text[0].upper() + text[1:] + ("" if text.endswith(".") else "."),
             "kind": kind,
             "subject": subject,
@@ -173,6 +201,11 @@ for p in sorted(glob.glob(os.path.join(root, "episodes", "*.yaml"))):
             action = "confirm"
             draft = {"id": old["id"], "last_confirmed": str(ep.get("date")),
                      "provenance_add": {"episode": ep["id"], "learned": text}}
+            # #98: citing a narrower episode narrows the fact, so it is never wider than a source
+            if old.get("visibility") in RANK:
+                ep_vis = fact_visibility(project_scope(ep), ep) if ep.get("visibility") not in RANK else ep["visibility"]
+                if RANK[ep_vis] < RANK[old["visibility"]]:
+                    draft["visibility"] = ep_vis
         else:
             action = "supersede"
             draft["supersedes"] = old["id"]

@@ -1,6 +1,8 @@
 # Inferred by scripts/consolidate.sh from the episode it cites; kind, subject, scope and triggers
 # set by the owner's session in the first consolidation (#87). The owner promotes it by setting asserted.
 id: shell-python-heredoc-is-stdin
+format: 1
+visibility: public
 statement: With python3 - <<heredoc the heredoc is stdin, so a pipe into it is never read; pass data as
   an argument.
 kind: convention

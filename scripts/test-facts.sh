@@ -45,6 +45,7 @@ printf '%s' "$out" | grep -q '^new ' && pass "a new line proposes new" || { fail
 run --write >/dev/null && pass "--write exit 0" || fail "--write failed"
 n=$(ls "$repo/facts" | wc -l | tr -d ' '); [ "$n" = "1" ] && pass "one fact written" || fail "expected 1 fact, found $n"
 f=$(ls "$repo/facts"/*.yaml); grep -q 'kind: account' "$f" && grep -q 'status: inferred' "$f" && pass "kind account, status inferred" || { fail "wrong kind/status"; cat "$f"; }
+grep -q '^format: 1$' "$f" && grep -q '^visibility: private$' "$f" && pass "a written fact carries format 1 and defaults to private" || { fail "format/visibility missing"; cat "$f"; }
 (cd "$repo" && git add -A && git commit -qm f && git update-ref refs/remotes/origin/main "$(git rev-parse HEAD)" && sh scripts/check-cards.sh >/dev/null 2>&1) && pass "the written fact passes check-cards" || fail "check-cards failed on the written fact"
 
 echo "=== test-facts: already cited ==="
@@ -150,6 +151,30 @@ rejected:
 YAML
 (cd "$repo" && sh scripts/check-cards.sh 2>&1 | grep -q "facts/rejected/lines.yaml.*both a fact and rejected") && pass "a line both cited by a fact and rejected fails check-cards" || { fail "check-cards accepted a line that is both a fact and rejected"; (cd "$repo" && sh scripts/check-cards.sh 2>&1 | grep -i rejected); }
 rm -rf "$repo/facts/rejected" "$repo/episodes/2026-02-15-rej.yaml"
+
+echo "=== test-facts: visibility follows the repository and the source episode (#98) ==="
+printf 'format: 1\nproject: penstock\nvisibility: public\n' >"$repo/memory.yaml"
+ep vispub 2026-02-17 "the fixture widget for project fixture-wid is used as wid@fixture.example"
+run --write >/dev/null 2>&1
+g=$(grep -l 'wid@fixture.example' "$repo"/facts/*.yaml | head -1)
+grep -q '^visibility: public$' "$g" && pass "an own-project fact in a public repository is public" || { fail "own-project fact not public"; cat "$g"; }
+ep visconf 2026-02-17 "the fixture widget for project fixture-wid is used as wid@fixture.example"
+sed -i 's/^project: penstock$/project: penstock\nvisibility: private\nformat: 1/' "$repo/episodes/2026-02-17-visconf.yaml"
+out=$(run); printf '%s' "$out" | grep -q 'narrows to private' && pass "a confirm from a private episode says it narrows the public fact" || { fail "confirm from a private episode did not say it narrows"; printf '%s\n' "$out"; }
+run --write >/dev/null 2>&1
+g=$(grep -l 'wid@fixture.example' "$repo"/facts/*.yaml | head -1)
+grep -q '^visibility: private$' "$g" && pass "the confirmed fact is narrowed to private" || { fail "confirmed fact left public"; cat "$g"; }
+mkdir -p "$repo/schema"; cp schema/*.schema.json "$repo/schema/"; cp scripts/lib/memory_format.py "$repo/scripts/lib/"
+bout=$(cd "$repo" && python3 scripts/lib/memory_format.py . 2>&1 || true)
+printf '%s' "$bout" | grep -q "PASS: facts/" || { fail "the validator did not run over the facts"; printf '%s\n' "$bout" | tail -3; }
+printf '%s' "$bout" | grep -q "is public but cites episode" && fail "the confirm left a fact wider than its source" || pass "the tree passes the boundary rule after a confirm from a private episode"
+rm -rf "$repo/schema" "$repo/scripts/lib/memory_format.py"
+ep vispriv 2026-02-18 "the fixture gadget for project fixture-gad is used as gad@fixture.example"
+sed -i 's/^project: penstock$/project: penstock\nvisibility: private\nformat: 1/' "$repo/episodes/2026-02-18-vispriv.yaml"
+run --write >/dev/null 2>&1
+g=$(grep -l 'gad@fixture.example' "$repo"/facts/*.yaml | head -1)
+grep -q '^visibility: private$' "$g" && pass "a fact from a private episode is private, whatever its scope" || { fail "fact from a private episode was not private"; cat "$g"; }
+rm -f "$repo/memory.yaml"
 
 echo "=== test-facts: fact.sh ==="
 (cd "$repo" && sh scripts/fact.sh fixture console >/dev/null 2>&1) && pass "fact.sh matches on words" || fail "fact.sh found nothing"

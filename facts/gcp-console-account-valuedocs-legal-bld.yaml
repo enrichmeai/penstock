@@ -1,5 +1,7 @@
 # Seed fact (#87): asserted by the owner on 2026-10-03.
 id: gcp-console-account-valuedocs-legal-bld
+format: 1
+visibility: private
 statement: The GCP console for project valuedocs-legal-bld is used as joseph@valuedocs.co.in, not the
   googlemail account.
 kind: account

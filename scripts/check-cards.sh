@@ -13,6 +13,12 @@
 #      filename stem, kind/scope/status from the closed lists, every provenance episode resolves,
 #      supersedes/superseded_by are mutually consistent, no two active facts share a subject, and
 #      the statement carries no credential-shaped value (reported by path, never by value)
+#   8. memory format v1 (#98, docs/memory-format.md): when the repository has a memory.yaml, every
+#      card validates against schema/<kind>.schema.json (format, visibility and every field), and a
+#      card whose visibility is narrower than the repository's is reported (WARN until #91 moves
+#      private cards to the owner's private memory root, then FAIL). A repository with neither
+#      memory.yaml nor schema/ has not adopted the format and is skipped; one with memory.yaml and
+#      a missing schema or validator fails.
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -438,10 +444,27 @@ PYEOF
     fi
 done
 
+echo "=== check-cards: memory format v1 ==="
+format_status=0
+if [ -f memory.yaml ]; then
+    if [ ! -f scripts/lib/memory_format.py ]; then
+        echo "FAIL: memory.yaml is present but scripts/lib/memory_format.py is missing"
+        format_status=1
+    else
+        python3 scripts/lib/memory_format.py . || format_status=$?
+    fi
+elif [ -d schema ]; then
+    echo "FAIL: schema/ is present but memory.yaml is not; the repository's boundary is undeclared"
+    format_status=1
+else
+    echo "no memory.yaml or schema/; this repository has not adopted the memory format"
+fi
+
 status=0
 [ "$yaml_status" -eq 0 ] || status=1
 [ "$pattern_status" -eq 0 ] || status=1
 [ "$staleness_status" -eq 0 ] || status=1
 [ "$episode_status" -eq 0 ] || status=1
 [ "$fact_status" -eq 0 ] || status=1
+[ "$format_status" -eq 0 ] || status=1
 exit $status

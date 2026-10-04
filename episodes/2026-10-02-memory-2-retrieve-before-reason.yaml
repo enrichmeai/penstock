@@ -1,6 +1,8 @@
 # Drafted by scripts/write-episode.sh from the task's own evidence, then edited by the owner's
 # session (2026-10-03). A learned line is a fact by reference, never a value.
 id: 2026-10-02-memory-2-retrieve-before-reason
+format: 1
+visibility: public
 date: 2026-10-02
 project: penstock
 asked: Load the matching patterns and references into the turn before the first model call, and log what

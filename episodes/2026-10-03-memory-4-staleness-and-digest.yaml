@@ -1,6 +1,8 @@
 # Drafted by scripts/write-episode.sh from the task's own evidence, then edited by the owner's
 # session (2026-10-03). A learned line is a fact by reference, never a value.
 id: 2026-10-03-memory-4-staleness-and-digest
+format: 1
+visibility: public
 date: 2026-10-03
 project: penstock
 asked: Re-check every pattern on a schedule and on release, and count how often each pattern is actually

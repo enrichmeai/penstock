@@ -1,6 +1,8 @@
 # Inferred by scripts/consolidate.sh from the episode it cites; kind, subject, scope and triggers
 # set by the owner's session in the first consolidation (#87). The owner promotes it by setting asserted.
 id: cistern-listing-full-iri-absolute-urls
+format: 1
+visibility: public
 statement: Cistern's container listing writes ldp#contains as a full IRI and absolute member URLs.
 kind: convention
 subject: cistern/container-listing-shape

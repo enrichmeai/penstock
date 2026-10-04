@@ -27,3 +27,5 @@ issue: <issue number this came from>
 - Every id a card lists under `references:` or `patterns:` must resolve to a real
   file — `scripts/check-cards.sh` checks this and fails the build if it doesn't.
 - `outcome:` stays empty until the work actually shipped; don't pre-fill it.
+
+Every card here also carries `format: 1` and `visibility` after its `id`, and validates against its schema under `schema/` ([memory format v1](../docs/memory-format.md)).

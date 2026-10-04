@@ -1,4 +1,6 @@
 id: acp-in-ide
+format: 1
+visibility: public
 want: Penstock runs inside JetBrains Air and Zed as a selectable coding agent, speaking the Agent Client Protocol over stdio, with mutating tools gated behind the editor's own permission prompt
 why: let developers use Penstock's workspace-sandboxed tool loop and audit trail from inside their editor, next to the vendor agents, without opening a second window
 done-when:

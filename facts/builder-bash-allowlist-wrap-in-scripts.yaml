@@ -1,6 +1,8 @@
 # Inferred by scripts/consolidate.sh from the episode it cites; kind, subject, scope and triggers
 # set by the owner's session in the first consolidation (#87). The owner promotes it by setting asserted.
 id: builder-bash-allowlist-wrap-in-scripts
+format: 1
+visibility: public
 statement: The builder's headless Bash allowlist only pre-approves specific prefixes; a bare python3 -c
   or curl prompts and fails, so wrap one-offs in scripts/*.sh.
 kind: convention

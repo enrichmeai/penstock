@@ -1,0 +1,11 @@
+# Test fixture for scripts/test-check-cards.sh (#98, memory format v1).
+id: fmt-pattern-fixture
+format: 1
+visibility: public
+version: 1
+signatures: []
+inputs: []
+verified-against:
+  tag: v0.2.0
+  date: 2026-01-20
+supersedes: ~

@@ -1,0 +1,19 @@
+# Test fixture for scripts/test-check-cards.sh (#98, memory format v1).
+id: 2026-01-20-ep-nested
+format: 1
+visibility: public
+date: 2026-01-20
+project: penstock
+asked: a fixture episode
+issue: enrichmeai/penstock#1
+built:
+  - pr: enrichmeai/penstock#2
+    merged: 0123abc
+    files: [scripts/example.sh]
+    size: large
+decided: []
+refused: []
+learned:
+  - a fixture line
+open: []
+patterns: []

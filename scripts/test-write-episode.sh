@@ -43,6 +43,21 @@ printf '%s' "$out" | grep -q 'FIXTURE_SECRET_NAME, by name only' || ok=0
 printf '%s' "$out" | grep -q '^- nothing yet' || ok=0
 [ "$ok" -eq 1 ] && pass "markers harvested into decided/refused/learned/open" || { fail "draft did not carry the markers"; printf '%s\n' "$out"; }
 
+echo "=== test-write-episode: drafts carry memory format v1 (#98) ==="
+out=$(run --project valuedocs --slug fmt --date 2026-02-06 --dry-run 2>/dev/null) || fail "format dry run failed"
+printf '%s' "$out" | grep -q '^format: 1$' && pass "a draft carries format: 1" || { fail "no format: 1"; printf '%s\n' "$out" | head -5; }
+printf '%s' "$out" | grep -q '^visibility: private$' && pass "with no memory.yaml (or another project) a draft defaults to private" || { fail "visibility not private"; printf '%s\n' "$out" | head -5; }
+out=$(run --project penstock --slug fmt1 --date 2026-02-06 --dry-run 2>/dev/null)
+printf '%s' "$out" | grep -q '^visibility: private$' && pass "with no memory.yaml even the repository's own project defaults to private" || fail "own project without memory.yaml not private"
+printf 'format: 1\nproject: penstock\nvisibility: public\n' >"$repo/memory.yaml"
+out=$(run --project penstock --slug fmt2 --date 2026-02-06 --dry-run 2>/dev/null)
+printf '%s' "$out" | grep -q '^visibility: public$' && pass "an episode of the repository's own project takes the repository's visibility" || { fail "own-project visibility wrong"; printf '%s\n' "$out" | head -5; }
+out=$(run --project valuedocs --slug fmt3 --date 2026-02-06 --dry-run 2>/dev/null)
+printf '%s' "$out" | grep -q '^visibility: private$' && pass "another project's episode stays private in a public repository" || fail "other-project visibility not private"
+printf 'visibility: [public\n' >"$repo/memory.yaml"
+out=$(run --project penstock --slug fmt4 --date 2026-02-06 --dry-run 2>&1) && printf '%s' "$out" | grep -q '^visibility: private$' && ! printf '%s' "$out" | grep -q Traceback && pass "a malformed memory.yaml makes the draft private, never a crash" || { fail "malformed memory.yaml crashed or widened the draft"; printf '%s\n' "$out" | tail -3; }
+rm -f "$repo/memory.yaml"
+
 echo "=== test-write-episode: a credential-shaped Learned: line is refused ==="
 before=$(ls "$repo/episodes" | wc -l)
 # `if` so the expected failure does not trip set -e

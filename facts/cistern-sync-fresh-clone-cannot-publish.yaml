@@ -1,6 +1,8 @@
 # Inferred by scripts/consolidate.sh from the episode it cites; kind, subject, scope and triggers
 # set by the owner's session in the first consolidation (#87). The owner promotes it by setting asserted.
 id: cistern-sync-fresh-clone-cannot-publish
+format: 1
+visibility: public
 statement: 'On Cistern main (sync is not in v0.2.0), a fresh clone with no .cistern-sync.json cannot publish
   into a populated pod: every PUT is create-only and exits 3 (enrichmeai/cistern#219).'
 kind: convention

@@ -1,5 +1,7 @@
 # Seed fact (#87): asserted by the owner on 2026-10-03.
 id: acp-agent-stdin-after-readiness
+format: 1
+visibility: public
 statement: An ACP agent discards stdin written before its transport is up; hold the pipe open and wait
   for the readiness line on stderr before sending.
 kind: convention

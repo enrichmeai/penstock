@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/enrichmeai/penstock/main/schema/episode.schema.json",
+  "title": "Episode",
+  "description": "What happened in one piece of work: asked, built, decided, refused, learned, open (episodes/<date>-<slug>.yaml). Necessary, not sufficient: cross-file rules (id = filename, provenance, supersede pairs, one active fact per subject, credential grep) live in scripts/check-cards.sh.",
+  "type": "object",
+  "required": [
+    "id",
+    "format",
+    "visibility",
+    "date",
+    "project",
+    "asked",
+    "built",
+    "decided",
+    "refused",
+    "learned",
+    "open"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "type": "integer",
+      "const": 1,
+      "description": "Major version of the memory format (docs/memory-format.md). A reader accepts a card whose major it knows."
+    },
+    "visibility": {
+      "type": "string",
+      "enum": [
+        "private",
+        "shareable",
+        "public"
+      ],
+      "description": "Who may see this card: the owner only; people or agents the owner grants; anyone."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[a-z0-9][a-z0-9-]*$"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "project": {
+      "type": "string",
+      "enum": [
+        "penstock",
+        "cistern",
+        "valuedocs",
+        "site",
+        "estate"
+      ]
+    },
+    "asked": {
+      "type": "string",
+      "pattern": "\\S"
+    },
+    "issue": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#\\d+$"
+    },
+    "built": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "pr"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "pr": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#\\d+$"
+          },
+          "merged": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "decided": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "what",
+          "why"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "what": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "refused": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "what",
+          "why"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "what": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "learned": {
+      "type": "array",
+      "items": {
+        "type": [
+          "string",
+          "object"
+        ]
+      }
+    },
+    "open": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "patterns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "recalled": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "commits": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

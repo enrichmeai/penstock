@@ -1,6 +1,8 @@
 # Inferred by scripts/consolidate.sh from the episode it cites; kind, subject, scope and triggers
 # set by the owner's session in the first consolidation (#87). The owner promotes it by setting asserted.
 id: memory-mode-tests-replicate-exclusions
+format: 1
+visibility: public
 statement: Memory-mode tests pass vacuously unless they replicate main()'s autoconfigure exclusions.
 kind: convention
 subject: tests/memory-mode-autoconfig

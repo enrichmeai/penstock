@@ -1,0 +1,17 @@
+# Test fixture for scripts/test-check-cards.sh (#98, memory format v1).
+id: format-major-fixture
+format: 2
+visibility: public
+statement: The fixture console for project fixture-proj is used as owner@fixture.example.
+kind: account
+subject: fixture-console/format-major-fixture
+scope: project:penstock
+status: asserted
+confidence: 1.0
+provenance:
+  - owner: 2026-01-15
+first_seen: 2026-01-15
+last_confirmed: 2026-01-15
+supersedes: ~
+superseded_by: ~
+triggers: [fixture, console, fixture-proj]

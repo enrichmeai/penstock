@@ -159,4 +159,20 @@ class PatternCatalogTest {
         assertThat(ref.id()).isEqualTo("ref1");
         assertThat(ref.holds()).containsExactly("fact one", "fact two");
     }
+
+    @Test
+    void formatV1CardsLoadAndAQuotedHoldsLineStaysASentence() throws IOException {
+        // #98: format and visibility are ignored by the Java reader; a holds line with ": " in it
+        // must be quoted, and then loads as the sentence it is (unquoted, YAML made it a mapping).
+        Path references = root.resolve("references");
+        Files.createDirectories(references);
+        Files.writeString(references.resolve("ref2.yaml"),
+                "id: ref2\nformat: 1\nvisibility: public\nversion: \"1\"\nholds:\n" +
+                "  - 'a Zed entry adds a type: custom field'\n");
+        PatternCatalog catalog = catalog(true);
+        catalog.initialLoad();
+
+        assertThat(catalog.references()).extracting(ReferenceCard::id).containsExactly("ref2");
+        assertThat(catalog.references().get(0).holds()).containsExactly("a Zed entry adds a type: custom field");
+    }
 }

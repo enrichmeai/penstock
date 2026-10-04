@@ -1,0 +1,18 @@
+# Test fixture for scripts/test-check-cards.sh (#98, memory format v1).
+id: fact-wider-fixture
+format: 1
+visibility: public
+statement: The fixture vault is at vault.fixture.example.
+kind: identifier
+subject: fixture/vault
+scope: project:penstock
+status: inferred
+confidence: 0.7
+provenance:
+  - episode: 2026-01-21-private-src
+    learned: the fixture vault is at vault.fixture.example
+first_seen: 2026-01-21
+last_confirmed: 2026-01-21
+supersedes: ~
+superseded_by: ~
+triggers: [vault]

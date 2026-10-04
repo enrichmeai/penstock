@@ -1,6 +1,8 @@
 # Inferred by scripts/consolidate.sh from the episode it cites; kind, subject, scope and triggers
 # set by the owner's session in the first consolidation (#87). The owner promotes it by setting asserted.
 id: test-memory-root-isolated-fixture
+format: 1
+visibility: public
 statement: A test that asserts over patterns/ content must point agent.memory.root at an isolated fixture,
   not this repo's own folder.
 kind: convention

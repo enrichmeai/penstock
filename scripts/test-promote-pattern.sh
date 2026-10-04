@@ -50,6 +50,17 @@ if not m:
 draft = yaml.safe_load(m.group(1)) or {}
 seed = yaml.safe_load(open("patterns/stdio-json-rpc-agent/manifest.yaml", encoding="utf-8"))
 
+# memory format v1 (#98): a drafted manifest is born in the format, with the repository's visibility
+try:
+    repo_vis = (yaml.safe_load(open("memory.yaml", encoding="utf-8")) or {}).get("visibility")
+except FileNotFoundError:
+    repo_vis = "private"  # no boundary declared: drafts default to private
+if draft.get("format") != 1 or draft.get("visibility") != repo_vis:
+    print(f"FAIL: the drafted manifest must carry format: 1 and visibility: {repo_vis}, got "
+          f"format={draft.get('format')!r} visibility={draft.get('visibility')!r}")
+    sys.exit(1)
+print(f"PASS: the drafted manifest carries format 1 and visibility {repo_vis}")
+
 WORD_RE = re.compile(r"[a-z0-9]+")
 
 

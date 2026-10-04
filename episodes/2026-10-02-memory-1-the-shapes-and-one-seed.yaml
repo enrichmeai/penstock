@@ -1,6 +1,8 @@
 # Drafted by scripts/write-episode.sh from the task's own evidence, then edited by the owner's
 # session (2026-10-03). A learned line is a fact by reference, never a value.
 id: 2026-10-02-memory-1-the-shapes-and-one-seed
+format: 1
+visibility: public
 date: 2026-10-02
 project: penstock
 asked: Keep what was wanted, what was trusted and how it was built as plain files in the repo, seeded
