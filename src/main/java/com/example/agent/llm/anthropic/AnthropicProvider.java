@@ -49,7 +49,7 @@ public class AnthropicProvider implements LlmProvider {
         this.cfg = props.getLlm().getAnthropic();
         this.mapper = mapper;
         this.metrics = metrics;
-        this.webClient = webClientBuilder
+        this.webClient = webClientBuilder.clone() // never add headers to the shared builder
                 .baseUrl(cfg.getBaseUrl())
                 .defaultHeader("x-api-key", cfg.getApiKey() == null ? "" : cfg.getApiKey())
                 .defaultHeader("anthropic-version", API_VERSION)

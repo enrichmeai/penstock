@@ -63,7 +63,7 @@ public class CisternTool implements Tool {
         this.baseUrl = trimTrailingSlash(cfg.getBaseUrl());
         this.serviceToken = BearerToken.of(cfg.getToken());
         this.mode = cfg.getCredentialMode();
-        this.webClient = webClientBuilder.build();
+        this.webClient = webClientBuilder.clone().build();
         this.credentials = credentials;
         this.readOnly = cfg.isReadOnly();
     }

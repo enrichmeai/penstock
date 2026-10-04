@@ -23,7 +23,7 @@ public class JiraTool implements Tool {
     public JiraTool(AgentProperties props, WebClient.Builder webClientBuilder) {
         this.baseUrl = props.getTools().getJira().getBaseUrl();
         this.token = props.getTools().getJira().getToken();
-        this.webClient = webClientBuilder.build();
+        this.webClient = webClientBuilder.clone().build();
     }
 
     @Override
