@@ -1,0 +1,25 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject, scope and triggers
+# set by the owner's session in the first consolidation (#87). The owner promotes it by setting asserted.
+id: builder-bash-allowlist-wrap-in-scripts
+statement: The builder's headless Bash allowlist only pre-approves specific prefixes; a bare python3 -c
+  or curl prompts and fails, so wrap one-offs in scripts/*.sh.
+kind: convention
+subject: builder/bash-allowlist
+scope: repo:enrichmeai/penstock
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-03-memory-4-staleness-and-digest
+  learned: the builder's headless Bash allowlist only pre-approves specific prefixes; a bare python3 -c
+    or curl prompts and fails, so wrap one-offs in scripts/*.sh
+first_seen: 2026-10-03
+last_confirmed: 2026-10-03
+supersedes: null
+superseded_by: null
+triggers:
+- builder
+- allowlist
+- claude label
+- headless
+- bash scripts
+- python3 -c

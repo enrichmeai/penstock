@@ -1,0 +1,22 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject, scope and triggers
+# set by the owner's session in the first consolidation (#87). The owner promotes it by setting asserted.
+id: cistern-yaml-sh-octet-stream
+statement: On Cistern main (sync is not in v0.2.0), .yaml and .sh reach the pod as application/octet-stream
+  until enrichmeai/cistern#218 ships; an MCP reader sees a byte count for those files.
+kind: convention
+subject: cistern/yaml-sh-media-type
+scope: project:cistern
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-03-memory-5-review-by-grant
+  learned: .yaml and .sh reach the pod as application/octet-stream until enrichmeai/cistern#218 ships;
+    an MCP reader sees a byte count for those files
+first_seen: 2026-10-03
+last_confirmed: 2026-10-03
+supersedes: null
+superseded_by: null
+triggers:
+- octet-stream
+- media type
+- cistern sync

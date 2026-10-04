@@ -1,0 +1,21 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject, scope and triggers
+# set by the owner's session in the first consolidation (#87). The owner promotes it by setting asserted.
+id: shell-python-heredoc-is-stdin
+statement: With python3 - <<heredoc the heredoc is stdin, so a pipe into it is never read; pass data as
+  an argument.
+kind: convention
+subject: shell/python-heredoc-stdin
+scope: estate
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-03-memory-4-staleness-and-digest
+  learned: with python3 - <<heredoc the heredoc is stdin, so a pipe into it is never read; pass data as
+    an argument
+first_seen: 2026-10-03
+last_confirmed: 2026-10-03
+supersedes: null
+superseded_by: null
+triggers:
+- heredoc
+- python3 -

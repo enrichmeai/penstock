@@ -1,0 +1,21 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject, scope and triggers
+# set by the owner's session in the first consolidation (#87). The owner promotes it by setting asserted.
+id: gh-jq-empty-list-null
+statement: '`gh --jq ''.[0].number''` prints the literal null on an empty list; use // empty before testing
+  for emptiness.'
+kind: convention
+subject: shell/gh-jq-empty-list
+scope: estate
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-03-memory-4-staleness-and-digest
+  learned: gh --jq '.[0].number' prints the literal null on an empty list; use // empty before testing
+    for emptiness
+first_seen: 2026-10-03
+last_confirmed: 2026-10-03
+supersedes: null
+superseded_by: null
+triggers:
+- gh --jq
+- // empty

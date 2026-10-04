@@ -60,7 +60,7 @@ fi
 
 count=$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))))' "$work/proposals.json")
 if [ "$count" -eq 0 ]; then
-    echo "consolidate.sh: every learned line is already cited by a fact; nothing to propose"
+    echo "consolidate.sh: every learned line is cited by a fact or listed in facts/rejected/lines.yaml; nothing to propose"
     exit 0
 fi
 

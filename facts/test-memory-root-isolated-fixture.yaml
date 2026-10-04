@@ -1,0 +1,23 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject, scope and triggers
+# set by the owner's session in the first consolidation (#87). The owner promotes it by setting asserted.
+id: test-memory-root-isolated-fixture
+statement: A test that asserts over patterns/ content must point agent.memory.root at an isolated fixture,
+  not this repo's own folder.
+kind: convention
+subject: tests/memory-root-fixture
+scope: repo:enrichmeai/penstock
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-02-memory-2-retrieve-before-reason
+  learned: a test that asserts over patterns/ content must point agent.memory.root at an isolated fixture,
+    not this repo's own folder
+first_seen: 2026-10-02
+last_confirmed: 2026-10-02
+supersedes: null
+superseded_by: null
+triggers:
+- agent.memory.root
+- patterns fixture
+- PatternCatalog
+- AuditPatternsIT

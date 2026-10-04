@@ -55,7 +55,7 @@ scripts/consolidate.sh [--since <YYYY-MM-DD>] [--write] [--replace]
 ```
 
 Dry-run by default. It collects every `learned` line of every episode (or those since `--since`)
-that no fact's provenance cites, and for each proposes one of:
+that no fact's provenance cites and `facts/rejected/lines.yaml` does not list, and for each proposes one of:
 
 | action | when | what it writes with `--write` |
 |---|---|---|
@@ -73,6 +73,15 @@ anything is written (exit 2, naming the episode and item or the draft and line, 
 writes stay under `facts/`; an existing id is never overwritten without `--replace`. A `confirm`
 or `supersede` rewrites the old file with `yaml.safe_dump`, so a comment above the YAML (the seed
 header) does not survive: the record is the fields, not the comment.
+
+## Lines that are not beliefs
+
+Some `learned` lines are events or one-off measurements ("the builder hit its turn cap on that
+run"), pending tasks, or turn out to be wrong. The owner records each such decision once in
+`facts/rejected/lines.yaml` (`episode`, the `learned` line verbatim, `reason`, `owner: <date>`), and
+`consolidate.sh` never proposes that line again. `check-cards.sh` fails an entry whose episode is
+missing or whose text is no longer one of that episode's learned lines. The file sits in a
+sub-folder so nothing that reads `facts/*.yaml` mistakes it for a fact.
 
 ## Asking the record
 

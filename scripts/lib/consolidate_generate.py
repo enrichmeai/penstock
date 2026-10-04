@@ -44,6 +44,19 @@ for d in facts.values():
         if isinstance(e, dict) and e.get("episode") and e.get("learned"):
             cited.add((e["episode"], " ".join(str(e["learned"]).split())))
 
+# Lines the owner reviewed and decided are not beliefs (events, one-off measurements, pending
+# tasks) live in facts/rejected/lines.yaml, so a drop is recorded once and never proposed again.
+rejected_path = os.path.join(root, "facts", "rejected", "lines.yaml")
+if os.path.isfile(rejected_path):
+    try:
+        rej = load(rejected_path)
+    except Exception as exc:
+        print(f"consolidate.sh: facts/rejected/lines.yaml did not parse ({exc}); ignoring it (check-cards.sh will fail it)", file=sys.stderr)
+        rej = {}
+    for e in (rej.get("rejected") if isinstance(rej, dict) else None) or []:
+        if isinstance(e, dict) and e.get("episode") and e.get("learned"):
+            cited.add((str(e["episode"]), " ".join(str(e["learned"]).split())))
+
 active_by_subject = {d["subject"]: d for d in facts.values() if d.get("status") != "superseded"}
 
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
