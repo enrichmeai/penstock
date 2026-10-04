@@ -6,30 +6,20 @@ rejected:
   learned: the builder ended its turn with the reviewer agent still running and posted no verdict; the
     owner's session reviewed the branch instead
   reason: an event from one build (#81), not a standing belief; the episode keeps it
-  owner: &id001 2026-10-04
+  owner: 2026-10-04
 - episode: 2026-10-02-memory-3-propose-after-success
   learned: the seed pattern regenerates in dry-run at 77 percent trigger and 67 percent signature overlap
   reason: a one-off measurement of the seed pattern, not a belief
-  owner: *id001
+  owner: 2026-10-04
 - episode: 2026-10-03-memory-4-staleness-and-digest
   learned: the builder hit the 200-turn cap after finishing the code and the review round, before opening
     the PR
   reason: an event from one build (#81); the builder limits live in builder-bash-allowlist-wrap-in-scripts
     and builder-cannot-write-workflows-or-claude-config
-  owner: *id001
-- episode: 2026-10-03-valuedocs-cloud-sql-studio-walkthrough
-  learned: the session re-sent the same two console links three times because nothing it could read held
-    the account; three owner-directed questions a fact card would have answered
-  reason: 'the evidence for #85, not a belief; its lesson is the gcp-console-account seed'
-  owner: *id001
-- episode: 2026-10-03-valuedocs-cloud-sql-studio-walkthrough
-  learned: the bld databases stop automatically at 11:27 UTC
-  reason: 'contradicts valuedocs main (60bed8a): db-power.yml says there is no auto-stop on purpose; likely
-    a one-time console observation. Re-add as a fact only if the owner confirms a schedule in GCP'
-  owner: *id001
+  owner: 2026-10-04
 - episode: 2026-10-02-memory-3-propose-after-success
   learned: the pattern-candidate label does not exist yet, so the bar's first condition cannot fire until
     the owner creates it
   reason: a pending owner task (create the label), not a belief; it would go false silently when the label
     is made
-  owner: *id001
+  owner: 2026-10-04

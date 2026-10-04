@@ -9,24 +9,24 @@ reads this folder can act on them without re-reading history.
 ## Shape
 
 ```yaml
-id: gcp-console-account-valuedocs-legal-bld     # equals the filename stem, kebab-case
+id: console-account-example-proj              # equals the filename stem, kebab-case
 format: 1                                       # memory format v1 (docs/memory-format.md)
 visibility: private                             # private | shareable | public
-statement: The GCP console for project valuedocs-legal-bld is used as joseph@valuedocs.co.in.
+statement: The cloud console for project example-proj is used as owner@example.com.
 kind: account            # account | identifier | location-of-secret | convention | decision | principle
-subject: gcp-console/valuedocs-legal-bld        # the key two facts collide on; free-form kebab path
+subject: cloud-console/example-proj            # the key two facts collide on; free-form kebab path
 scope: project:valuedocs                        # estate | project:<name> | repo:<owner/repo>
 status: asserted         # asserted (by the owner) | inferred (by consolidate.sh) | superseded
 confidence: 1.0          # 1.0 for asserted; inferred defaults to 0.7
 provenance:
-  - episode: 2026-10-03-valuedocs-cloud-sql-studio-walkthrough
-    learned: the GCP console for project valuedocs-legal-bld is used as joseph@valuedocs.co.in   # the line it came from
+  - episode: 2026-10-03-example-console-walkthrough
+    learned: the cloud console for project example-proj is used as owner@example.com   # the line it came from
   - owner: 2026-10-03
 first_seen: 2026-10-03
 last_confirmed: 2026-10-03
 supersedes: ~            # id of the fact this replaced, or ~
 superseded_by: ~         # set on the OLD fact when a new one replaces it; its status becomes superseded
-triggers: [gcp, console, valuedocs-legal-bld, google account]   # keywords for recall
+triggers: [console, example-proj, account]     # keywords for recall
 ```
 
 ## Rules

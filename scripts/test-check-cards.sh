@@ -320,7 +320,7 @@ format_case valid 0 "PASS: facts/format-valid-fixture.yaml (fact, format 1, publ
 format_case missing-field 1 "FAIL: facts/format-missing-fixture.yaml \$ is missing required 'kind'" "a card missing a required field fails by path"
 format_case bad-visibility 1 "FAIL: facts/format-badvis-fixture.yaml \$.visibility must be one of" "an unknown visibility fails"
 format_case unknown-major 1 "FAIL: facts/format-major-fixture.yaml is format 2; this checker knows format 1" "an unknown format major fails"
-format_case private-in-public 0 "WARN: facts/format-private-fixture.yaml is private but this repository is public" "a private card in a public repository is reported, not failed (until #91)"
+format_case private-in-public 1 "FAIL: facts/format-private-fixture.yaml is private but this repository is public" "a private card in a public repository fails (#91: private cards live in the private memory root)"
 format_case episode-missing 1 "FAIL: episodes/2026-01-20-ep-missing.yaml \$ is missing required 'asked'" "an episode missing a required field fails its schema"
 format_case episode-nested 1 "FAIL: episodes/2026-01-20-ep-nested.yaml \$.built\[0\] has 'size', which the format does not define" "an undefined field nested inside an episode fails"
 format_case pattern-missing 1 "FAIL: patterns/fmt-pattern-fixture/manifest.yaml \$ is missing required 'triggers'" "a pattern manifest missing a required field fails its schema"

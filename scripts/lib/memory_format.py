@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Memory format v1 (#98, designed by Joseph Antony Aruja): validate every card against its
-schema/<kind>.schema.json and report cards whose visibility is narrower than the repository's.
+schema/<kind>.schema.json and fail cards whose visibility is narrower than the repository's.
 
 A small validator over exactly the JSON Schema keywords the schemas use, so the check needs no
 dependency beyond PyYAML; the schemas themselves are standard draft 2020-12 and any validator
 can read them. SUPPORTED lists the keywords; test-check-cards.sh fails if a schema uses one
 outside it, so a schema can never silently ask for a rule this checker skips.
 
-Usage: memory_format.py <repo-root>      prints PASS/FAIL/WARN lines; exit 1 on any FAIL
+Usage: memory_format.py <repo-root>      prints PASS/FAIL lines; exit 1 on any FAIL
        memory_format.py --keywords <dir> prints any schema keyword not in SUPPORTED; exit 1 if any
 """
 import datetime
@@ -177,8 +177,9 @@ def main():
             valid.setdefault(kind, {})[str(card["id"])] = (rel, card)
             print(f"PASS: {rel} ({kind}, format 1, {card['visibility']})")
             if RANK[card["visibility"]] < RANK[repo_vis]:
-                print(f"WARN: {rel} is {card['visibility']} but this repository is {repo_vis}; "
-                      f"it moves to the private memory root with #91")
+                print(f"FAIL: {rel} is {card['visibility']} but this repository is {repo_vis}; "
+                      f"a card narrower than its repository lives in the owner's private memory root (#91)")
+                status = 1
     # A fact may be no wider than any episode it was learned from: a private episode's line must
     # not come back as a public belief (the leak #94/#95 showed).
     episodes = valid.get("episode", {})

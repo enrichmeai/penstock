@@ -29,19 +29,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Issue #73 ("retrieve before reason"): with {@code agent.memory.enabled=true}, a turn whose
- * input hits two of the seed pattern's triggers ({@code stdio}, {@code json-rpc}) must load
- * {@code patterns/stdio-json-rpc-agent} into that turn's system prompt and audit a
- * {@code pattern.loaded} event naming its id and version.
- *
- * <p>{@code agent.memory.root} is left at its default ({@code ${user.dir}}), which during
- * {@code ./gradlew test} is the project root — the same {@code patterns/} the real app would
- * read, so this proves the seed card actually loads, not a fixture standing in for it.
- *
- * <p>RED on {@code main}: {@code agent.memory.enabled} doesn't exist, {@code ContextAssembler}
- * doesn't exist, and {@code AuditLogger} has no {@code pattern.loaded} event — the system
- * prompt the stub sees never contains "stdio-json-rpc-agent" and no such audit event is ever
- * written, so both assertions below fail.
+ * #88, Metric A's local half, against a fixture memory root (#91 moved the owner's real account
+ * fact to the private memory root, so this no longer reads it): the account question is answered
+ * from the context block, and the fact and the project's episode are audited as loaded.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -53,14 +43,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "agent.memory.enabled=true",
         // the workspace is a temp dir, so name the project explicitly (#88)
         "agent.memory.project=penstock",
+        // a fixture root, never the owner's real cards (those live in the private memory root, #91)
+        "agent.memory.root=${user.dir}/src/test/resources/memory-fixtures/account-recall",
         // JPA store on H2: activates the audit repository without a real SQLite file.
         "agent.storage.type=sqlite",
-        "spring.datasource.url=jdbc:h2:mem:memory-retrieval-on;DB_CLOSE_DELAY=-1",
+        "spring.datasource.url=jdbc:h2:mem:memory-account-recall;DB_CLOSE_DELAY=-1",
         "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.flyway.enabled=false"
 })
-class MemoryRetrievalIT {
+class MemoryAccountRecallIT {
 
     private static final Pattern SESSION_ID = Pattern.compile("\"sessionId\":\"([0-9a-f-]+)\"");
 
@@ -84,36 +76,37 @@ class MemoryRetrievalIT {
         }
     }
 
+    /**
+     * #88, Metric A's local half: an account question is answered from the block, by trigger — the fact's statement is in the first prompt,
+     * {@code fact.loaded} and {@code episode.loaded} are audited, no tool call needed.
+     */
     @Test
-    void triggeringTurnLoadsTheSeedPatternAndAuditsIt() throws Exception {
+    void theAccountQuestionIsAnsweredFromTheFactAndAudited() throws Exception {
         MvcResult result = mvc.perform(post("/api/chat")
                         .contentType(APPLICATION_JSON)
-                        .content("{\"message\":\"How do I wire up a stdio json-rpc agent for the editor?\"}"))
+                        .content("{\"message\":\"which Google account for the fixture-proj console?\"}"))
                 .andExpect(status().isOk())
                 .andReturn();
-
         String sessionId = extractSessionId(result.getResponse().getContentAsString());
 
         assertThat(LAST_SYSTEM_PROMPT.get())
-                .as("the system prompt the provider received")
-                .contains("stdio-json-rpc-agent")
-                .contains("Established facts, recent episodes and patterns");
+                .contains("fact:console-account-fixture")
+                .contains("owner@fixture.example")
+                .contains("### episode:");
 
-        List<AuditEventEntity> events = awaitPatternLoadedEvents(sessionId);
-        assertThat(events).isNotEmpty();
-        AuditEventEntity event = events.get(0);
-        assertThat(event.getDetailJson()).contains("\"patternId\":\"stdio-json-rpc-agent\"");
-        assertThat(event.getDetailJson()).contains("\"version\":\"1\"");
+        List<AuditEventEntity> events = awaitEvents(sessionId, "fact.loaded");
+        assertThat(events).extracting(AuditEventEntity::getDetailJson)
+                .anyMatch(d -> d.contains("\"factId\":\"console-account-fixture\"")
+                        && d.contains("\"status\":\"asserted\"") && d.contains("\"confidence\":1.0"));
+        List<AuditEventEntity> episodes = awaitEvents(sessionId, "episode.loaded");
+        assertThat(episodes).isNotEmpty();
+        assertThat(episodes.get(0).getDetailJson()).contains("\"episodeId\":\"2026-01-30-fixture-console-session\"").contains("\"date\":\"2026-01-30\"");
     }
 
     private static String extractSessionId(String body) {
         Matcher m = SESSION_ID.matcher(body);
         assertThat(m.find()).as("response contains a sessionId: %s", body).isTrue();
         return m.group(1);
-    }
-
-    private List<AuditEventEntity> awaitPatternLoadedEvents(String sessionId) throws InterruptedException {
-        return awaitEvents(sessionId, "pattern.loaded");
     }
 
     private List<AuditEventEntity> awaitEvents(String sessionId, String type) throws InterruptedException {

@@ -1,0 +1,14 @@
+# Test fixture for MemoryAccountRecallIT (#88/#91).
+id: 2026-01-30-fixture-console-session
+format: 1
+visibility: public
+date: 2026-01-30
+project: penstock
+asked: Walk me through opening the fixture console as the right account.
+built: []
+decided: []
+refused: []
+learned:
+- the cloud console for project fixture-proj is used as owner@fixture.example
+open: []
+patterns: []
