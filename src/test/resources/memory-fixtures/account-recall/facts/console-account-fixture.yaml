@@ -1,0 +1,23 @@
+# Test fixture for MemoryAccountRecallIT (#88, moved off the owner's real card in #91): the account
+# a console is used as. Scoped to another project (fixture-proj), so only a trigger can select it:
+# the test proves trigger-based recall, not the kind-based path.
+id: console-account-fixture
+format: 1
+visibility: public
+statement: The cloud console for project fixture-proj is used as owner@fixture.example, not the personal account.
+kind: account
+subject: cloud-console/fixture-proj
+scope: project:fixture-proj
+status: asserted
+confidence: 1.0
+provenance:
+- episode: 2026-01-30-fixture-console-session
+  learned: the cloud console for project fixture-proj is used as owner@fixture.example
+first_seen: 2026-01-30
+last_confirmed: 2026-01-30
+supersedes: null
+superseded_by: null
+triggers:
+- console
+- google account
+- fixture-proj

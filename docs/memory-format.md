@@ -62,16 +62,16 @@ visibility: public # private | shareable | public
   - `public`: anyone.
 
   A store or repository declares its own visibility in `memory.yaml`. A card narrower than its
-  container is reported: today as a WARN ("moves to the private memory root with #91"), and as a
-  FAIL once [#91](https://github.com/enrichmeai/penstock/issues/91) gives private cards a home.
+  container fails `check-cards.sh` (since [#91](https://github.com/enrichmeai/penstock/issues/91)
+  gave private cards a home: the owner's private `enrichmeai/memory` repository).
   **A fact is never wider than an episode it was learned from**: `check-cards.sh` fails a public
   fact that cites a private episode. Writers default to `private` for anything outside the
   container's own project (and for everything when no `memory.yaml` is declared); a fact also
   takes the narrowest of its scope default and its source episode. The owner widens by hand.
 
   `facts/rejected/lines.yaml` is a ledger, not a card, and carries no visibility. It quotes
-  learned lines verbatim, including from private episodes, so it moves with those episodes when
-  #91 gives them a private home.
+  learned lines verbatim, so an entry quoting a private episode lives with that episode in the
+  private root.
 
 ## What a card may contain
 
