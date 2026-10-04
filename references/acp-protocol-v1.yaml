@@ -1,4 +1,6 @@
 id: acp-protocol-v1
+format: 1
+visibility: public
 source: https://github.com/agentclientprotocol/agent-client-protocol
 read: 2026-10-02
 version: "1"
@@ -7,6 +9,6 @@ holds:
   - a JSON-RPC protocol that lets an editor run an external program as its coding agent over stdin/stdout
   - initialize and session/new negotiate a session before any prompt streams
   - session/new carries an absolute cwd and a list of MCP servers; the protocol leaves what the agent accepts as cwd to the agent (Penstock's rule is in requests/acp-in-ide.yaml)
-  - session/request_permission offers options of kind allow_once, allow_always, reject_once, reject_always; the outcome is the selected option or cancelled. How long an "always" answer lasts is the agent's decision (Penstock: the session)
+  - 'session/request_permission offers options of kind allow_once, allow_always, reject_once, reject_always; the outcome is the selected option or cancelled. How long an "always" answer lasts is the agent''s decision (Penstock: the session)'
   - session/cancel is a notification, not a request; the agent stops and answers the in-flight prompt with stopReason cancelled, never an error
   - the agent must write nothing to stdout except protocol frames; stderr is free for logs

@@ -1,5 +1,7 @@
 # Seed fact (#87): asserted by the owner on 2026-10-03.
 id: cistern-container-text-turtle-receipts-exact
+format: 1
+visibility: public
 statement: A Cistern container is created with PUT as text/turtle (curl's default form type gets a 409),
   and ?receipts on a resource covers exactly that resource, never its children.
 kind: convention

@@ -13,6 +13,8 @@ week and why without a chat transcript.
 
 ```yaml
 id: 2026-10-03-memory-5-review-by-grant     # equals the filename stem
+format: 1                                    # memory format v1 (docs/memory-format.md)
+visibility: public                           # private | shareable | public
 date: 2026-10-03                             # equals the filename's date
 project: penstock                            # see § Projects
 asked: one sentence, the request as the owner put it

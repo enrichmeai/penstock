@@ -1,6 +1,8 @@
 # Written by the owner's session from the 2026-10-03 Claude session transcript (screenshot on #85):
 # the episode that showed what the record was missing. No code was built; the learned lines are the point.
 id: 2026-10-03-valuedocs-cloud-sql-studio-walkthrough
+format: 1
+visibility: private
 date: 2026-10-03
 project: valuedocs
 asked: Walk me through opening Cloud SQL Studio for the valuedocs-legal-bld corpus database and authenticating

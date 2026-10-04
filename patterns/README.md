@@ -105,3 +105,5 @@ Reading a pattern through MCP rather than plain HTTP currently gets `PATTERN.md`
 ([enrichmeai/cistern#218](https://github.com/enrichmeai/cistern/issues/218)) ships — a reviewer
 reading `manifest.yaml` through `curl` or the `pod` tool gets the bytes either way; this is a
 caveat for an MCP-based reviewer, not a blocker.
+
+Every card here also carries `format: 1` and `visibility` after its `id`, and validates against its schema under `schema/` ([memory format v1](../docs/memory-format.md)).

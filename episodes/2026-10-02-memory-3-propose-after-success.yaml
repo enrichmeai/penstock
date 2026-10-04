@@ -1,6 +1,8 @@
 # Drafted by scripts/write-episode.sh from the task's own evidence, then edited by the owner's
 # session (2026-10-03). A learned line is a fact by reference, never a value.
 id: 2026-10-02-memory-3-propose-after-success
+format: 1
+visibility: public
 date: 2026-10-02
 project: penstock
 asked: After a task succeeds, propose a pattern from its own commits and issue, so the owner reviews a

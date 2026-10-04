@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/enrichmeai/penstock/main/schema/request.schema.json",
+  "title": "Request",
+  "description": "What was wanted and why, what done looks like, and what was ruled out (requests/<id>.yaml). Necessary, not sufficient: cross-file rules (id = filename, provenance, supersede pairs, one active fact per subject, credential grep) live in scripts/check-cards.sh.",
+  "type": "object",
+  "required": [
+    "id",
+    "format",
+    "visibility",
+    "want",
+    "why",
+    "done-when"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "type": "integer",
+      "const": 1,
+      "description": "Major version of the memory format (docs/memory-format.md). A reader accepts a card whose major it knows."
+    },
+    "visibility": {
+      "type": "string",
+      "enum": [
+        "private",
+        "shareable",
+        "public"
+      ],
+      "description": "Who may see this card: the owner only; people or agents the owner grants; anyone."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "want": {
+      "type": "string"
+    },
+    "why": {
+      "type": "string"
+    },
+    "done-when": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "not": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "patterns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "outcome": {
+      "type": "string"
+    },
+    "issue": {
+      "type": [
+        "integer",
+        "string"
+      ]
+    }
+  }
+}

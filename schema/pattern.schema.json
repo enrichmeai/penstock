@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/enrichmeai/penstock/main/schema/pattern.schema.json",
+  "title": "Pattern manifest",
+  "description": "How something was built, reusable: triggers, signatures, inputs and the release it was verified against (patterns/<id>/manifest.yaml). Necessary, not sufficient: cross-file rules (id = filename, provenance, supersede pairs, one active fact per subject, credential grep) live in scripts/check-cards.sh.",
+  "type": "object",
+  "required": [
+    "id",
+    "format",
+    "visibility",
+    "version",
+    "triggers",
+    "verified-against"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "type": "integer",
+      "const": 1,
+      "description": "Major version of the memory format (docs/memory-format.md). A reader accepts a card whose major it knows."
+    },
+    "visibility": {
+      "type": "string",
+      "enum": [
+        "private",
+        "shareable",
+        "public"
+      ],
+      "description": "Who may see this card: the owner only; people or agents the owner grants; anyone."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "version": {
+      "type": [
+        "integer",
+        "string"
+      ]
+    },
+    "triggers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "signatures": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "verified-against": {
+      "type": "object",
+      "required": [
+        "tag",
+        "date"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tag": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        }
+      }
+    },
+    "supersedes": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

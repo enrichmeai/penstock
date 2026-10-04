@@ -1,0 +1,8 @@
+# Test fixture for scripts/test-check-cards.sh (#98): a reference with neither read nor unreachable.
+id: fmt-neither-fixture
+format: 1
+visibility: public
+source: https://example.test/spec
+trust: primary
+holds:
+  - a line

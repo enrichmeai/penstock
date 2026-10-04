@@ -381,8 +381,21 @@ with open(os.path.join(DRAFT, "PATTERN.md"), "w", encoding="utf-8") as f:
 # ---------------------------------------------------------------------------
 # manifest.yaml
 # ---------------------------------------------------------------------------
+def repo_visibility():
+    """#98: a drafted pattern takes memory.yaml's visibility; private when none is declared."""
+    try:
+        with open(os.path.join(ROOT, "memory.yaml"), encoding="utf-8") as f:
+            mem = yaml.safe_load(f)
+    except Exception:
+        return "private"
+    vis = mem.get("visibility") if isinstance(mem, dict) else None
+    return vis if vis in ("private", "shareable", "public") else "private"
+
+
 manifest = {
     "id": PATTERN_ID,
+    "format": 1,
+    "visibility": repo_visibility(),
     "version": 1,
     "triggers": triggers,
     "signatures": signatures,

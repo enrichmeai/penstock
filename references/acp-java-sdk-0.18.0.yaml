@@ -1,4 +1,6 @@
 id: acp-java-sdk-0.18.0
+format: 1
+visibility: public
 source: https://github.com/agentclientprotocol/java-sdk
 read: 2026-10-02
 version: 0.18.0

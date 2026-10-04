@@ -1,4 +1,6 @@
 id: stdio-json-rpc-agent
+format: 1
+visibility: public
 version: 1
 triggers:
   - acp

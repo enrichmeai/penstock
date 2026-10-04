@@ -295,6 +295,60 @@ else
 fi
 rm -rf "$repo" "$out"
 
+# --- memory format v1 (#98): every card validated against schema/, visibility vs the repo ---
+format_repo() {
+    repo=$(fact_repo)
+    mkdir -p "$repo/schema" "$repo/scripts/lib"
+    cp schema/*.schema.json "$repo/schema/"
+    cp scripts/lib/memory_format.py "$repo/scripts/lib/"
+    printf 'format: 1\nproject: penstock\nvisibility: public\n' >"$repo/memory.yaml"
+    # the shared fixture's pattern card predates the format; give it the two fields
+    for m in "$repo"/patterns/*/manifest.yaml; do
+        [ -f "$m" ] && sed -i '/^id:/a format: 1\nvisibility: public' "$m"
+    done
+    echo "$repo"
+}
+format_case() { # $1 fixture dir, $2 expected exit (0|1), $3 grep pattern, $4 label
+    repo=$(format_repo); cp -r "scripts/test/cards/format/$1/." "$repo/"; out=$(mktemp)
+    if run_facts "$repo" "$out"; then rc=0; else rc=1; fi
+    if [ "$rc" = "$2" ] && grep -q -- "$3" "$out"; then echo "PASS: $4"
+    else echo "FAIL: $4 (exit $rc, expected $2; pattern '$3')"; cat "$out"; status=1; fi
+    rm -rf "$repo" "$out"
+}
+echo "=== test-check-cards: memory format v1 ==="
+format_case valid 0 "PASS: facts/format-valid-fixture.yaml (fact, format 1, public)" "a valid format-1 card passes the schema"
+format_case missing-field 1 "FAIL: facts/format-missing-fixture.yaml \$ is missing required 'kind'" "a card missing a required field fails by path"
+format_case bad-visibility 1 "FAIL: facts/format-badvis-fixture.yaml \$.visibility must be one of" "an unknown visibility fails"
+format_case unknown-major 1 "FAIL: facts/format-major-fixture.yaml is format 2; this checker knows format 1" "an unknown format major fails"
+format_case private-in-public 0 "WARN: facts/format-private-fixture.yaml is private but this repository is public" "a private card in a public repository is reported, not failed (until #91)"
+format_case episode-missing 1 "FAIL: episodes/2026-01-20-ep-missing.yaml \$ is missing required 'asked'" "an episode missing a required field fails its schema"
+format_case episode-nested 1 "FAIL: episodes/2026-01-20-ep-nested.yaml \$.built\[0\] has 'size', which the format does not define" "an undefined field nested inside an episode fails"
+format_case pattern-missing 1 "FAIL: patterns/fmt-pattern-fixture/manifest.yaml \$ is missing required 'triggers'" "a pattern manifest missing a required field fails its schema"
+format_case reference-missing 1 "FAIL: references/fmt-reference-fixture.yaml \$ is missing required 'holds'" "a reference missing a required field fails its schema"
+format_case request-missing 1 "FAIL: requests/fmt-request-fixture.yaml \$ is missing required 'done-when'" "a request missing a required field fails its schema"
+format_case reference-unreachable 0 "PASS: references/fmt-unreach-fixture.yaml (reference, format 1, public)" "a reference in the documented unreachable state (no read) passes"
+format_case reference-neither 1 "FAIL: references/fmt-neither-fixture.yaml needs read: (when the source was read) or unreachable: (why it could not be)" "a reference with neither read nor unreachable fails"
+format_case format-true 1 "FAIL: facts/format-true-fixture.yaml" "format: true is not format 1"
+format_case fact-wider 1 "FAIL: facts/fact-wider-fixture.yaml is public but cites episode 2026-01-21-private-src, which is private" "a fact wider than an episode it cites fails (the leak path)"
+format_case stray-file 1 "FAIL: facts/stray.yml is under a memory folder but matches no card kind" "a YAML file in a memory folder that is no card kind fails"
+repo=$(format_repo); printf 'format: 2\nproject: penstock\nvisibility: public\n' >"$repo/memory.yaml"; out=$(mktemp)
+if run_facts "$repo" "$out"; then echo "FAIL: memory.yaml format 2 was accepted"; cat "$out"; status=1
+elif grep -q "FAIL: memory.yaml is format 2" "$out"; then echo "PASS: memory.yaml of an unknown format fails"
+else echo "FAIL: memory.yaml format 2 not reported as expected"; cat "$out"; status=1; fi
+rm -rf "$repo" "$out"
+repo=$(format_repo); printf 'visibility: [public\n' >"$repo/memory.yaml"; out=$(mktemp)
+if run_facts "$repo" "$out"; then echo "FAIL: a malformed memory.yaml was accepted"; status=1
+elif grep -q "FAIL: memory.yaml did not parse" "$out" && ! grep -q "Traceback" "$out"; then echo "PASS: a malformed memory.yaml fails by name, without a traceback"
+else echo "FAIL: malformed memory.yaml not reported cleanly"; cat "$out"; status=1; fi
+rm -rf "$repo" "$out"
+if out=$(python3 scripts/lib/memory_format.py --keywords schema 2>&1); then echo "PASS: every schema keyword is one the validator implements"
+else echo "FAIL: a schema uses a keyword the validator does not implement: $out"; status=1; fi
+repo=$(format_repo); rm "$repo/schema/fact.schema.json"; cp -r scripts/test/cards/format/valid/. "$repo/"; out=$(mktemp)
+if run_facts "$repo" "$out"; then echo "FAIL: a missing schema went unnoticed"; cat "$out"; status=1
+elif grep -q "FAIL: schema/fact.schema.json is missing" "$out"; then echo "PASS: a repository with memory.yaml but a missing schema fails"
+else echo "FAIL: missing schema not reported as expected"; cat "$out"; status=1; fi
+rm -rf "$repo" "$out"
+
 echo "=== test-check-cards: this repo's own seed pattern still passes ==="
 out=$(mktemp)
 if bash scripts/check-cards.sh >"$out" 2>&1; then

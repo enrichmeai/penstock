@@ -1,0 +1,4 @@
+# Test fixture for scripts/test-check-cards.sh (#98, memory format v1).
+id: stray
+format: 9
+visibility: everyone

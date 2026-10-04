@@ -1,0 +1,6 @@
+# This repository's memory boundary (memory format v1, #98; docs/memory-format.md).
+# scripts/check-cards.sh validates every card against schema/ and reports any card whose
+# visibility is narrower than the repository's (private < shareable < public).
+format: 1
+project: penstock       # the project this repository's cards belong to; writers use it for defaults
+visibility: public      # this repository is public on GitHub: every card here is readable by anyone

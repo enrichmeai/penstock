@@ -1,6 +1,8 @@
 # Inferred by scripts/consolidate.sh from the episode it cites; kind, subject, scope and triggers
 # set by the owner's session in the first consolidation (#87). The owner promotes it by setting asserted.
 id: gh-jq-empty-list-null
+format: 1
+visibility: public
 statement: '`gh --jq ''.[0].number''` prints the literal null on an empty list; use // empty before testing
   for emptiness.'
 kind: convention

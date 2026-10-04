@@ -1,4 +1,6 @@
 id: jetbrains-air-custom-agent
+format: 1
+visibility: public
 source: https://www.jetbrains.com/help/air/select-agents-and-models.html
 read: 2026-10-02
 version: ~ # documentation page, no release tag

@@ -1,0 +1,9 @@
+# Test fixture for scripts/test-check-cards.sh (#98, memory format v1).
+id: fmt-request-fixture
+format: 1
+visibility: public
+want: a fixture request
+why: to test the schema
+not: []
+references: []
+patterns: []

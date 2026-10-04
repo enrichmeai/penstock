@@ -74,6 +74,8 @@ for r in rows:
     subj = f.get("subject") or (r.get("old") or "")
     stmt = f.get("statement") or f"(confirm {r['old']})"
     extra = f" (supersedes {r['old']})" if r["action"] == "supersede" else ""
+    if r["action"] == "confirm" and f.get("visibility"):
+        extra += f" (narrows to {f['visibility']}: the episode is {f['visibility']})"
     data.append([r["action"], subj, (stmt[:70] + "…" if len(stmt) > 71 else stmt) + extra, r["episode"]])
 w = [max(len(c), *(len(x[i]) for x in data)) for i, c in enumerate(cols)]
 print(" | ".join(c.ljust(w[i]) for i, c in enumerate(cols)))
@@ -125,6 +127,8 @@ for r in rows:
         old = load_fact(r["old"])
         old["last_confirmed"] = f["last_confirmed"]
         old.setdefault("provenance", []).append(f["provenance_add"])
+        if f.get("visibility"):
+            old["visibility"] = f["visibility"]
         dump(os.path.join(out, r["old"] + ".yaml"), old)
         plan.append(("put", r["old"] + ".yaml"))
 json.dump(plan, open(os.path.join(out, "..", "plan.json"), "w"))

@@ -28,3 +28,5 @@ work around it.
   if `holds:` doesn't change.
 - `unreachable:` is temporary. The first run that can reach the source removes
   it and fills in `read:`.
+
+Every card here also carries `format: 1` and `visibility` after its `id`, and validates against its schema under `schema/` ([memory format v1](../docs/memory-format.md)).

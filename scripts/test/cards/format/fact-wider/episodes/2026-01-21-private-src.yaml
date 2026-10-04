@@ -1,0 +1,18 @@
+# Test fixture for scripts/test-check-cards.sh (#98, memory format v1).
+id: 2026-01-21-private-src
+format: 1
+visibility: private
+date: 2026-01-21
+project: penstock
+asked: a fixture episode
+issue: enrichmeai/penstock#1
+built:
+  - pr: enrichmeai/penstock#2
+    merged: 0123abc
+    files: [scripts/example.sh]
+decided: []
+refused: []
+learned:
+  - the fixture vault is at vault.fixture.example
+open: []
+patterns: []
