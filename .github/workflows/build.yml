@@ -76,6 +76,11 @@ jobs:
         # credential refusal, and fact.sh's matching and exit codes (#87).
         run: bash scripts/test-facts.sh
 
+      - name: Check memory publish and grants (scripts/test-memory-publish.sh)
+        # Offline, with a fake cistern CLI on PATH: the sync plan for a flat and a sectioned root,
+        # exit codes, one-time provisioning, and the --project grant and revoke paths (#91).
+        run: bash scripts/test-memory-publish.sh
+
       - name: Check pattern promotion (scripts/promote-pattern.sh)
         # Regenerates the seed pattern in --dry-run and asserts the overlap; proves the
         # credential refusal writes nothing (#77). GH_TOKEN lets the script read the issue;
