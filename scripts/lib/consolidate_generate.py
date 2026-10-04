@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Propose facts from episodes' learned lines (issue #87). Text rules only: no model, no embedding.
 
-Usage: consolidate_generate.py <repo-root> [--since YYYY-MM-DD]
+Usage: consolidate_generate.py <repo-root> [--since YYYY-MM-DD] [--memory-yaml <path>] [--estate]
+  --memory-yaml  the memory.yaml that sets visibility (default <repo-root>/memory.yaml; a section of
+                 a sectioned memory root passes the root's, #91)
+  --estate       the estate section of a sectioned root: every fact is scoped `estate`, since the
+                 checker requires that scope under estate/ (#91)
 Prints a JSON list of proposals to stdout:
   {"action": "new"|"confirm"|"supersede", "episode": id, "learned": line, "learned_index": n,
    "fact": {...draft...}, "old": id-or-null}
@@ -18,11 +22,17 @@ import yaml
 
 root = sys.argv[1]
 since = None
+memory_yaml = os.path.join(root, "memory.yaml")
+estate_section = False
 args = sys.argv[2:]
 while args:
     a = args.pop(0)
     if a == "--since":
         since = args.pop(0)
+    elif a == "--memory-yaml":
+        memory_yaml = args.pop(0)
+    elif a == "--estate":
+        estate_section = True
 
 
 def load(path):
@@ -115,7 +125,7 @@ RANK = {"private": 0, "shareable": 1, "public": 2}
 
 def repo_memory():
     try:
-        mem = load(os.path.join(root, "memory.yaml"))
+        mem = load(memory_yaml)
     except Exception:  # absent or malformed: no boundary is declared, so everything stays private
         return {}
     return mem if isinstance(mem, dict) else {}
@@ -137,6 +147,8 @@ def fact_visibility(scope, ep):
 
 
 def project_scope(ep):
+    if estate_section:
+        return "estate"
     p = ep.get("project")
     return "estate" if p in (None, "estate") else f"project:{p}"
 

@@ -7,7 +7,7 @@
 # Usage: write-episode.sh --project <p> [--issue <n>] [--pr <n>] [--range <base>..<head>]
 #                         [--session <id> [--base <url>] | --audit <json file>]
 #                         [--slug <s>] [--date <YYYY-MM-DD>] [--repo owner/name]
-#                         [--dry-run] [--out <file>] [--replace]
+#                         [--dry-run] [--out <file>] [--replace] [--root <dir>]
 #
 #   --project   one of the projects episodes/README.md lists (required)
 #   --issue     scopes --range to the commits mentioning #<n> (git log --grep, as
@@ -24,7 +24,11 @@
 #               recalled is not a fact learned, so `learned` stays empty.
 #   --audit     the same, from a saved JSON file (offline)
 #   --dry-run   print the draft, write nothing
-#   --out       destination file, confined to this repository's episodes/ folder
+#   --root      the memory root to write into (else MEMORY_ROOT, else this repository; #91,
+#               docs/memory-root.md). In a sectioned root the draft goes to
+#               projects/<project>/episodes/, or estate/episodes/ for --project estate, and takes
+#               that root's memory.yaml visibility. Git and gh still read this repository.
+#   --out       destination file, confined to the root's episodes/ folder for --project
 #   --replace   allow overwriting an existing episode (never by default)
 #
 # GitHub reads go through `gh api` only, so the same script runs where gh is the real CLI and
@@ -33,14 +37,15 @@
 # only, via scripts/lib/credential-grep.sh). Exit codes: 0 ok, 1 failure, 2 credential shape,
 # 3 destination exists without --replace, 64 usage.
 set -eu
+caller_dir=$(pwd)   # a relative --root or MEMORY_ROOT means relative to where it was run
 cd "$(dirname "$0")/.."
 repo_root=$(pwd)
 
 project=""; issue=""; pr=""; range=""; slug=""; date=""; repo="enrichmeai/penstock"
 session=""; base_url="http://localhost:8080"; audit_file=""
-dry_run=0; out=""; replace=0
+dry_run=0; out=""; replace=0; root=""
 
-usage() { sed -n '2,32p' "$0" >&2; }
+usage() { awk 'NR == 1 || /^set -eu/ { next } /^#/ { print; next } { exit }' "$0" >&2; }
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -56,6 +61,9 @@ while [ $# -gt 0 ]; do
         --audit) audit_file="$2"; shift 2 ;;
         --dry-run) dry_run=1; shift ;;
         --out) out="$2"; shift 2 ;;
+        --root)
+            [ $# -ge 2 ] && [ -n "$2" ] || { echo "write-episode.sh: --root needs a directory" >&2; exit 64; }
+            root="$2"; shift 2 ;;
         --replace) replace=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "write-episode.sh: unknown argument '$1'" >&2; usage; exit 64 ;;
@@ -67,6 +75,17 @@ case "$project" in
     penstock|cistern|valuedocs|site|estate) ;;
     *) echo "write-episode.sh: --project must be one of penstock, cistern, valuedocs, site, estate" >&2; exit 64 ;;
 esac
+# --- where the draft goes: the root's episodes/ folder for this project (#91) ---------------
+[ -n "$root" ] || root="${MEMORY_ROOT:-$repo_root}"
+case "$root" in /*) ;; *) root="$caller_dir/$root" ;; esac
+[ -d "$root" ] || { echo "write-episode.sh: root '$root' is not a directory" >&2; exit 64; }
+root=$(cd "$root" && pwd)
+if [ -d "$root/projects" ]; then
+    if [ "$project" = estate ]; then episodes_rel=estate/episodes; else episodes_rel="projects/$project/episodes"; fi
+else
+    episodes_rel=episodes
+fi
+episodes_dir="$root/$episodes_rel"
 if [ -n "$range" ]; then
     case "$range" in
         *..*) ;;
@@ -176,10 +195,11 @@ case "$slug" in
 esac
 id="$date-$slug"
 
-python3 - "$work" "$id" "$date" "$project" "$issue_ref" "$pr_ref" <<'PYEOF'
+python3 - "$work" "$id" "$date" "$project" "$issue_ref" "$pr_ref" "$root/memory.yaml" <<'PYEOF'
 import json, sys
-work, id_, date, project, issue_ref, pr_ref = sys.argv[1:7]
-json.dump({"id": id_, "date": date, "project": project, "issue_ref": issue_ref, "pr_ref": pr_ref},
+work, id_, date, project, issue_ref, pr_ref, memory_yaml = sys.argv[1:8]
+json.dump({"id": id_, "date": date, "project": project, "issue_ref": issue_ref, "pr_ref": pr_ref,
+           "memory_yaml": memory_yaml},
           open(f"{work}/meta.json", "w"))
 PYEOF
 
@@ -191,7 +211,7 @@ if hits=$(sh scripts/lib/credential-grep.sh "$work/draft"); then :; else
     rc=$?
     if [ "$rc" -eq 2 ]; then
         echo "write-episode.sh: the draft contains a credential-shaped value; nothing written. Lines (path:line only):" >&2
-        printf '%s\n' "$hits" | sed "s|$work/draft/|episodes/|" >&2
+        printf '%s\n' "$hits" | sed "s|$work/draft/|$episodes_rel/|" >&2
         exit 2
     fi
     echo "write-episode.sh: credential-grep.sh exited $rc" >&2; exit 1
@@ -202,18 +222,18 @@ if [ "$dry_run" -eq 1 ]; then
     exit 0
 fi
 
-[ -n "$out" ] || out="episodes/$id.yaml"
+[ -n "$out" ] || out="$episodes_rel/$id.yaml"
 case "$out" in
     /*) out_abs="$out" ;;
-    *) out_abs="$repo_root/$out" ;;
+    *) out_abs="$root/$out" ;;
 esac
 out_abs=$(python3 -c 'import os,sys; print(os.path.normpath(sys.argv[1]))' "$out_abs")
 # `*` in a case glob also matches `/`, so refuse a sub-folder explicitly: check-cards.sh only
-# checks episodes/*.yaml, and a file one level down would never be validated.
+# checks <episodes>/*.yaml, and a file one level down would never be validated.
 case "$out_abs" in
-    "$repo_root"/episodes/*/*) echo "write-episode.sh: --out must be directly under episodes/, not a sub-folder, got '$out'" >&2; exit 64 ;;
-    "$repo_root"/episodes/*.yaml) ;;
-    *) echo "write-episode.sh: --out must be a .yaml file under episodes/ in this repository, got '$out'" >&2; exit 64 ;;
+    "$episodes_dir"/*/*) echo "write-episode.sh: --out must be directly under $episodes_rel/, not a sub-folder, got '$out'" >&2; exit 64 ;;
+    "$episodes_dir"/*.yaml) ;;
+    *) echo "write-episode.sh: --out must be a .yaml file under $episodes_rel/ in $root, got '$out'" >&2; exit 64 ;;
 esac
 if [ -e "$out_abs" ] && [ "$replace" -eq 0 ]; then
     echo "write-episode.sh: $out already exists; pass --replace to overwrite it deliberately (nothing written)" >&2
@@ -221,4 +241,4 @@ if [ -e "$out_abs" ] && [ "$replace" -eq 0 ]; then
 fi
 mkdir -p "$(dirname "$out_abs")"
 cp "$work/draft/$id.yaml" "$out_abs"
-echo "write-episode.sh: draft written to $out — edit it, then run scripts/check-cards.sh"
+echo "write-episode.sh: draft written to $out in $root — edit it, then run scripts/check-cards.sh --root $root"

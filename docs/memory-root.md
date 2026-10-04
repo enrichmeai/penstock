@@ -44,10 +44,20 @@ from the root.
 | `scripts/fact.sh` | Searches `estate/facts/` and every `projects/*/facts/`; each match names its section. |
 | `PatternCatalog` (recall in the turn, #88) | Loads `estate/` plus `projects/<project>/` for the workspace's project (`agent.memory.project`, or the workspace directory's name), never another project's section. With no project resolved, the estate only. Point `agent.memory.root` at the clone. |
 
+## Writing into a root
+
+| Tool | Sectioned root |
+|---|---|
+| `scripts/write-episode.sh --root` | The draft goes to `projects/<project>/episodes/` (or `estate/episodes/` for `--project estate`) and takes the root's `memory.yaml` visibility. `--out` is confined to that folder. Git and `gh` still read this repository, so an episode about another repository's work is drafted from its PR and issue, or filled in by hand. |
+| `scripts/consolidate.sh --root` | One section at a time: a section's episodes propose facts into that section's `facts/`, scoped `project:<name>`, or `estate` under `estate/` (whatever project the episode names), with the root's `memory.yaml` setting visibility. With `--write`, every section is checked first: a credential-shaped learned line in any section stops the run (exit 2, naming `projects/<name>/episodes/<file>`) before any section is written. Otherwise the first failing section's exit code is kept. |
+
+A relative `--root` or `MEMORY_ROOT` is resolved from the directory the command runs in.
+
 ## Not built yet (the rest of #91)
 
-- `write-episode.sh`, `consolidate.sh` and `promote-pattern.sh` still write into this repository;
-  `--root` for writers comes next.
+- `promote-pattern.sh` still writes into this repository: its draft is built from this
+  repository's git history and request cards, and splitting those from the destination is its own
+  change.
 - `memory-publish.sh` mirroring the whole root to the pod, `memory-grant.sh --project`, and the
   second-machine publish (needs enrichmeai/cistern#219).
 - A fact in `estate/` cannot yet cite an episode in a project section: provenance resolves within
