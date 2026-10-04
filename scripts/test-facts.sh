@@ -185,4 +185,13 @@ msg=$(cd "$repo" && sh scripts/fact.sh '*' 2>&1 >/dev/null || true)
 [ "$msg" = "no fact matches: *" ] && pass "fact.sh does not glob its words" || fail "fact.sh globbed '*' against the cwd: $msg"
 if (cd "$repo" && sh scripts/fact.sh nosuchword >/dev/null 2>&1); then fail "fact.sh exited 0 on no match"; else [ $? -eq 1 ] && pass "fact.sh exits 1 on no match" || fail "fact.sh wrong exit on no match"; fi
 
+echo "=== test-facts: fact.sh reads a sectioned memory root (#91) ==="
+S=scripts/test/cards/sectioned/valid
+out=$(sh scripts/fact.sh fixture --root "$S" 2>/dev/null) && printf '%s' "$out" | grep -q "estate-shell-fixture" && printf '%s' "$out" | grep -q "vd-console-fixture" \
+    && pass "fact.sh --root finds facts in estate/ and in every project" || { fail "fact.sh --root missed a section"; printf '%s\n' "$out"; }
+printf '%s' "$out" | grep -q "projects/valuedocs" && pass "each match names its section" || fail "matches do not name their section"
+out=$(MEMORY_ROOT="$S" sh scripts/fact.sh console 2>/dev/null) && printf '%s' "$out" | grep -q "vd-console-fixture" && pass "fact.sh honours MEMORY_ROOT" || fail "fact.sh ignored MEMORY_ROOT"
+if sh scripts/fact.sh fixture --root scripts/test/cards/sectioned/empty-projects >/dev/null 2>&1; then fail "fact.sh on an empty sectioned root exited 0"
+else [ $? -eq 1 ] && pass "fact.sh on a sectioned root with no facts exits 1" || fail "fact.sh on an empty root: wrong exit"; fi
+
 exit $status

@@ -349,6 +349,53 @@ elif grep -q "FAIL: schema/fact.schema.json is missing" "$out"; then echo "PASS:
 else echo "FAIL: missing schema not reported as expected"; cat "$out"; status=1; fi
 rm -rf "$repo" "$out"
 
+# --- a sectioned memory root (#91): estate/ plus projects/<name>/, checked with --root ---
+echo "=== test-check-cards: a sectioned memory root ==="
+out=$(mktemp)
+if bash scripts/check-cards.sh --root scripts/test/cards/sectioned/valid >"$out" 2>&1 \
+   && grep -q "PASS: estate/facts/estate-shell-fixture.yaml" "$out" \
+   && grep -q "PASS: projects/valuedocs/facts/vd-console-fixture.yaml (fact, format 1, private)" "$out" \
+   && ! grep -q "^FAIL" "$out"; then
+    echo "PASS: a valid sectioned root passes, every section checked and named by its path"
+else
+    echo "FAIL: a valid sectioned root did not pass section by section"; cat "$out"; status=1
+fi
+if bash scripts/check-cards.sh --root scripts/test/cards/sectioned/broken >"$out" 2>&1; then
+    echo "FAIL: a sectioned root with a broken project card exited 0"; cat "$out"; status=1
+elif grep -q "FAIL: projects/cistern/facts/cistern-bad-fixture.yaml" "$out"; then
+    echo "PASS: a broken card in a project section fails by its full path"
+else
+    echo "FAIL: the broken project card was not named by its full path"; cat "$out"; status=1
+fi
+if MEMORY_ROOT=scripts/test/cards/sectioned/valid bash scripts/check-cards.sh >"$out" 2>&1 \
+   && grep -q "PASS: estate/facts/estate-shell-fixture.yaml" "$out"; then
+    echo "PASS: MEMORY_ROOT selects the root when --root is not given"
+else
+    echo "FAIL: MEMORY_ROOT was not honoured"; cat "$out"; status=1
+fi
+sect_fail() { # $1 fixture, $2 expected FAIL text, $3 label
+    if bash scripts/check-cards.sh --root "scripts/test/cards/sectioned/$1" >"$out" 2>&1; then
+        echo "FAIL: $3 (exit 0)"; cat "$out"; status=1
+    elif grep -qF -- "$2" "$out"; then echo "PASS: $3"
+    else echo "FAIL: $3 (message missing: $2)"; cat "$out"; status=1; fi
+}
+sect_fail wrong-folder "FAIL: projects/cistern/facts/vd-in-cistern.yaml has scope project:valuedocs but lives in projects/cistern/" "a fact scoped to another project fails (no cross-project leak)"
+sect_fail shared-subject "subject 'console/shared' is active in both estate/facts/estate-acct.yaml and projects/valuedocs/facts/vd-acct.yaml" "an active subject shared by the estate and a project fails"
+sect_fail shared-id "fact id 'dup-id' is used in both estate/facts/dup-id.yaml and projects/valuedocs/facts/dup-id.yaml" "an id used in two sections fails"
+sect_fail unknown-project "FAIL: projects/weird-x is not a known project" "a project folder outside the closed list fails"
+sect_fail no-estate "FAIL: a sectioned memory root needs an estate/ folder" "a sectioned root without estate/ fails"
+sect_fail root-cards "FAIL: facts/ sits at the root of a sectioned memory root" "card folders at the root of a sectioned root fail"
+sect_fail empty-projects "FAIL: a sectioned memory root needs an estate/ folder" "a sectioned root with nothing in it fails"
+if CARDS_SECTION=1 bash scripts/check-cards.sh --root scripts/test/cards/sectioned/broken >"$out" 2>&1; then
+    echo "FAIL: CARDS_SECTION in the caller's environment turned a sectioned root into a flat one"; cat "$out"; status=1
+else echo "PASS: the caller's environment cannot switch off the sectioned check"; fi
+if bash scripts/check-cards.sh --root scripts/test/cards/sectioned/broken --section estate >"$out" 2>&1; then
+    echo "FAIL: --section without --memory-yaml checked a sectioned root as flat"; status=1
+else echo "PASS: --section on its own is refused"; fi
+if bash scripts/check-cards.sh --root >"$out" 2>&1; then echo "FAIL: --root without a value exited 0"; status=1
+else rc=$?; [ "$rc" -eq 64 ] && echo "PASS: --root without a value exits 64" || { echo "FAIL: --root without a value exited $rc"; status=1; }; fi
+rm -f "$out"
+
 echo "=== test-check-cards: this repo's own seed pattern still passes ==="
 out=$(mktemp)
 if bash scripts/check-cards.sh >"$out" 2>&1; then

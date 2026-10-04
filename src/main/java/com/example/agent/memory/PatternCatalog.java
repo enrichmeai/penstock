@@ -36,6 +36,10 @@ import java.util.Map;
 public class PatternCatalog {
 
     private static final Logger log = LoggerFactory.getLogger(PatternCatalog.class);
+    /** A project section name: lower-case letters, digits and dashes, never a path. */
+    private static final java.util.regex.Pattern PROJECT_NAME = java.util.regex.Pattern.compile("^[a-z0-9][a-z0-9-]*$");
+    /** The last refused project name, so the refusal is logged once and not on every reload. */
+    private volatile String refusedProject;
 
     /** How often {@link #scheduledReload()} re-reads the cards — bounded, not configurable. */
     private static final long RELOAD_INTERVAL_MS = 30_000;
@@ -84,16 +88,59 @@ public class PatternCatalog {
         return episodes;
     }
 
+    /** For tests in this package: the properties this catalogue reads on every reload. */
+    AgentProperties props() {
+        return props;
+    }
+
     private synchronized void reload() {
         if (!props.getMemory().isEnabled()) {
             return;
         }
         Path root = Paths.get(props.getMemory().getRoot());
-        patterns = loadPatterns(root.resolve("patterns"));
-        requests = loadRequests(root.resolve("requests"));
-        references = loadReferences(root.resolve("references"));
-        facts = loadFacts(root.resolve("facts"));
-        episodes = loadEpisodes(root.resolve("episodes"));
+        List<PatternManifest> ps = new ArrayList<>();
+        List<RequestCard> rs = new ArrayList<>();
+        List<ReferenceCard> refs = new ArrayList<>();
+        List<FactCard> fs = new ArrayList<>();
+        List<EpisodeCard> es = new ArrayList<>();
+        for (Path section : sections(root)) {
+            ps.addAll(loadPatterns(section.resolve("patterns")));
+            rs.addAll(loadRequests(section.resolve("requests")));
+            refs.addAll(loadReferences(section.resolve("references")));
+            fs.addAll(loadFacts(section.resolve("facts")));
+            es.addAll(loadEpisodes(section.resolve("episodes")));
+        }
+        fs.sort(Comparator.comparing(FactCard::id));
+        es.sort(Comparator.comparing(EpisodeCard::date).thenComparing(EpisodeCard::id).reversed());
+        patterns = List.copyOf(ps);
+        requests = List.copyOf(rs);
+        references = List.copyOf(refs);
+        facts = List.copyOf(fs);
+        episodes = List.copyOf(es);
+    }
+
+    /**
+     * The folders that hold cards (#91). A flat root (a repository's own folders) is itself the one
+     * section. A sectioned root (it has {@code projects/}) contributes {@code estate/} plus
+     * {@code projects/<project>/} for the workspace's project, never another project's section:
+     * a valuedocs session does not load cistern's cards. With no project resolved, the estate only.
+     */
+    private List<Path> sections(Path root) {
+        if (!Files.isDirectory(root.resolve("projects"))) {
+            return List.of(root);
+        }
+        String workspace = props.getWorkspace();
+        String project = ContextAssembler.resolveProject(
+                workspace == null || workspace.isBlank() ? null : Paths.get(workspace).toAbsolutePath().normalize(), props);
+        List<Path> out = new ArrayList<>();
+        out.add(root.resolve("estate"));
+        if (PROJECT_NAME.matcher(project).matches()) {
+            out.add(root.resolve("projects").resolve(project));
+        } else if (!project.isEmpty() && !project.equals(refusedProject)) {
+            refusedProject = project;
+            log.warn("Project name '{}' is not a plain folder name; loading the estate section only", project);
+        }
+        return out;
     }
 
     private List<FactCard> loadFacts(Path dir) {

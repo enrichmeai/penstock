@@ -1,0 +1,17 @@
+# Test fixture for #91 (a sectioned memory root).
+id: stray-at-root
+format: 1
+visibility: private
+statement: stray-at-root holds.
+kind: convention
+subject: fixture/stray-at-root
+scope: estate
+status: asserted
+confidence: 1.0
+provenance:
+  - owner: 2026-01-31
+first_seen: 2026-01-31
+last_confirmed: 2026-01-31
+supersedes: ~
+superseded_by: ~
+triggers: [fixture]

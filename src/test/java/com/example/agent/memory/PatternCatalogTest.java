@@ -160,6 +160,45 @@ class PatternCatalogTest {
         assertThat(ref.holds()).containsExactly("fact one", "fact two");
     }
 
+    // --- #91: a sectioned memory root (estate/ plus projects/<name>/) -------------------------
+
+    private void writeFactIn(Path dir, String id) throws IOException {
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve(id + ".yaml"), "id: " + id + "\nstatement: " + id + " holds.\nkind: convention\n" +
+                "subject: s/" + id + "\nscope: estate\nstatus: asserted\nconfidence: 1.0\nlast_confirmed: 2026-10-04\n");
+    }
+
+    @Test
+    void aSectionedRootLoadsTheEstateAndOnlyTheWorkspacesProject() throws IOException {
+        writeFactIn(root.resolve("estate/facts"), "estate-fact");
+        writeFactIn(root.resolve("projects/penstock/facts"), "penstock-fact");
+        writeFactIn(root.resolve("projects/valuedocs/facts"), "valuedocs-fact");
+        Path eps = root.resolve("projects/penstock/episodes");
+        Files.createDirectories(eps);
+        Files.writeString(eps.resolve("2026-10-04-p.yaml"), "id: 2026-10-04-p\ndate: 2026-10-04\nproject: penstock\nasked: A\n");
+        Path otherEps = root.resolve("projects/valuedocs/episodes");
+        Files.createDirectories(otherEps);
+        Files.writeString(otherEps.resolve("2026-10-04-v.yaml"), "id: 2026-10-04-v\ndate: 2026-10-04\nproject: valuedocs\nasked: V\n");
+        PatternCatalog catalog = catalog(true);
+        catalog.props().getMemory().setProject("penstock");
+        catalog.initialLoad();
+
+        assertThat(catalog.facts()).extracting(FactCard::id).containsExactly("estate-fact", "penstock-fact");
+        assertThat(catalog.episodes()).extracting(EpisodeCard::id).containsExactly("2026-10-04-p");
+    }
+
+    @Test
+    void aSectionedRootWithNoProjectLoadsTheEstateOnly() throws IOException {
+        writeFactIn(root.resolve("estate/facts"), "estate-fact");
+        writeFactIn(root.resolve("projects/penstock/facts"), "penstock-fact");
+        PatternCatalog catalog = catalog(true);
+        catalog.props().getMemory().setProject("");
+        catalog.props().setWorkspace(null);
+        catalog.initialLoad();
+
+        assertThat(catalog.facts()).extracting(FactCard::id).containsExactly("estate-fact");
+    }
+
     @Test
     void formatV1CardsLoadAndAQuotedHoldsLineStaysASentence() throws IOException {
         // #98: format and visibility are ignored by the Java reader; a holds line with ": " in it
@@ -174,5 +213,35 @@ class PatternCatalogTest {
 
         assertThat(catalog.references()).extracting(ReferenceCard::id).containsExactly("ref2");
         assertThat(catalog.references().get(0).holds()).containsExactly("a Zed entry adds a type: custom field");
+    }
+
+    @Test
+    void aSectionedRootTakesTheProjectFromTheWorkspaceFolderOrItsAlias() throws IOException {
+        writeFactIn(root.resolve("estate/facts"), "estate-fact");
+        writeFactIn(root.resolve("projects/valuedocs/facts"), "valuedocs-fact");
+        writeFactIn(root.resolve("projects/cistern/facts"), "cistern-fact");
+        PatternCatalog catalog = catalog(true);
+        catalog.props().getMemory().setProject("");
+        catalog.props().setWorkspace(root.resolve("work/valuedocs").toString());
+        catalog.initialLoad();
+        assertThat(catalog.facts()).extracting(FactCard::id).containsExactly("estate-fact", "valuedocs-fact");
+
+        catalog.props().setWorkspace(root.resolve("work/valuedocs-data-platform").toString());
+        catalog.props().getMemory().getProjectAliases().put("valuedocs-data-platform", "cistern");
+        catalog.initialLoad();
+        assertThat(catalog.facts()).extracting(FactCard::id).containsExactly("cistern-fact", "estate-fact");
+    }
+
+    @Test
+    void aSectionedRootRefusesAProjectNameThatIsAPath() throws IOException {
+        writeFactIn(root.resolve("estate/facts"), "estate-fact");
+        writeFactIn(root.resolve("projects/valuedocs/facts"), "valuedocs-fact");
+        writeFactIn(root.resolve("outside/facts"), "outside-fact");
+        PatternCatalog catalog = catalog(true);
+        for (String name : List.of("../outside", "projects/valuedocs", "..", "ValueDocs", "/tmp", "-x")) {
+            catalog.props().getMemory().setProject(name);
+            catalog.initialLoad();
+            assertThat(catalog.facts()).as(name).extracting(FactCard::id).containsExactly("estate-fact");
+        }
     }
 }
