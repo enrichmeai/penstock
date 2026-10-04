@@ -27,6 +27,32 @@ class ContextAssemblerTest {
         return props;
     }
 
+    private void writeFact(String id, String kind, String scope, String status, double confidence,
+                           String lastConfirmed, List<String> triggers, String statement) throws IOException {
+        Path facts = root.resolve("facts");
+        Files.createDirectories(facts);
+        String trig = triggers.isEmpty() ? " []" : "\n" + triggers.stream().map(t -> "  - " + t).reduce((a, b) -> a + "\n" + b).orElse("");
+        Files.writeString(facts.resolve(id + ".yaml"),
+                "id: " + id + "\nstatement: " + statement + "\nkind: " + kind + "\nsubject: s/" + id +
+                "\nscope: " + scope + "\nstatus: " + status + "\nconfidence: " + confidence +
+                "\nprovenance:\n  - owner: 2026-10-03\nfirst_seen: 2026-10-01\nlast_confirmed: " + lastConfirmed +
+                "\nsupersedes: ~\nsuperseded_by: ~\ntriggers:" + trig + "\n");
+    }
+
+    private void writeEpisode(String id, String date, String project, String asked, String openLine) throws IOException {
+        Path episodes = root.resolve("episodes");
+        Files.createDirectories(episodes);
+        Files.writeString(episodes.resolve(id + ".yaml"),
+                "id: " + id + "\ndate: " + date + "\nproject: " + project + "\nasked: " + asked +
+                "\nbuilt:\n  - pr: enrichmeai/penstock#1\n    files: [a.java, b.java, c.java]" +
+                "\ndecided:\n  - what: did the thing\n    why: because\nrefused: []\nlearned:\n  - a learned line" +
+                "\nopen:\n  - " + openLine + "\n");
+    }
+
+    private ContextAssembler assembler(AgentProperties props) {
+        return new ContextAssembler(loadedCatalog(props), workspace, props);
+    }
+
     private PatternCatalog loadedCatalog(AgentProperties props) {
         PatternCatalog catalog = new PatternCatalog(props);
         catalog.initialLoad();
@@ -90,6 +116,142 @@ class ContextAssemblerTest {
         assertThat(result).isPresent();
         assertThat(result.get().block()).contains("pattern:p1 (v3)").contains("Do the widget thing.");
         assertThat(result.get().loadedPatterns()).containsExactly(new ContextAssembler.LoadedPattern("p1", "3"));
+    }
+
+    // --- #88: facts and episodes join the block ---------------------------------------------
+
+    @Test
+    void aFactIsSelectedByAWholeWordTrigger() throws IOException {
+        writeFact("console-account", "account", "project:valuedocs", "asserted", 1.0, "2026-10-03",
+                List.of("console", "google account"), "The console is used as owner@example.test.");
+        AgentProperties props = props(true);
+        props.getMemory().setProject("penstock");
+
+        Optional<ContextAssembler.Assembled> hit = assembler(props).assemble("which account for the console?");
+        assertThat(hit).isPresent();
+        assertThat(hit.get().block()).contains(ContextAssembler.HEADER).contains("fact:console-account")
+                .contains("owner@example.test");
+        assertThat(hit.get().loadedFacts()).containsExactly(new ContextAssembler.LoadedFact("console-account", "asserted", 1.0));
+
+        // "consoled" contains the trigger but is not the word; no pattern or episode either
+        assertThat(assembler(props).assemble("he consoled her")).isEmpty();
+    }
+
+    @Test
+    void aProjectScopedAccountFactIsSelectedWithoutATrigger() throws IOException {
+        writeFact("vd-account", "account", "project:valuedocs", "asserted", 1.0, "2026-10-03", List.of("zzz"), "Account A.");
+        writeFact("vd-decision", "decision", "project:valuedocs", "asserted", 1.0, "2026-10-03", List.of("zzz"), "Decision B.");
+        writeFact("other-account", "account", "project:cistern", "asserted", 1.0, "2026-10-03", List.of("zzz"), "Account C.");
+        AgentProperties props = props(true);
+        props.getMemory().setProject("valuedocs");
+
+        Optional<ContextAssembler.Assembled> hit = assembler(props).assemble("anything at all");
+        assertThat(hit).isPresent();
+        assertThat(hit.get().loadedFacts()).extracting(ContextAssembler.LoadedFact::id).containsExactly("vd-account");
+    }
+
+    @Test
+    void aSupersededFactIsNeverSelected() throws IOException {
+        writeFact("old-account", "account", "project:valuedocs", "superseded", 1.0, "2026-01-01", List.of("console"), "Old account.");
+        AgentProperties props = props(true);
+        props.getMemory().setProject("valuedocs");
+
+        assertThat(assembler(props).assemble("the console please")).isEmpty();
+    }
+
+    @Test
+    void maxFactsIsHonouredByConfidenceThenLastConfirmed() throws IOException {
+        writeFact("low", "decision", "estate", "inferred", 0.7, "2026-10-03", List.of("alpha"), "Low.");
+        writeFact("high-old", "decision", "estate", "asserted", 1.0, "2026-01-01", List.of("alpha"), "High old.");
+        writeFact("high-new", "decision", "estate", "asserted", 1.0, "2026-09-01", List.of("alpha"), "High new.");
+        AgentProperties props = props(true);
+        props.getMemory().setMaxFacts(2);
+
+        Optional<ContextAssembler.Assembled> hit = assembler(props).assemble("alpha");
+        assertThat(hit).isPresent();
+        assertThat(hit.get().loadedFacts()).extracting(ContextAssembler.LoadedFact::id).containsExactly("high-new", "high-old");
+    }
+
+    @Test
+    void theProjectsLatestEpisodesAreRenderedWithoutBuiltOrLearned() throws IOException {
+        writeEpisode("2026-10-01-one", "2026-10-01", "penstock", "first ask", "open one");
+        writeEpisode("2026-10-02-two", "2026-10-02", "penstock", "second ask", "open two");
+        writeEpisode("2026-10-03-three", "2026-10-03", "penstock", "third ask", "open three");
+        writeEpisode("2026-10-03-other", "2026-10-03", "cistern", "cistern ask", "open cistern");
+        AgentProperties props = props(true);
+        props.getMemory().setProject("penstock");
+
+        Optional<ContextAssembler.Assembled> hit = assembler(props).assemble("where are we?");
+        assertThat(hit).isPresent();
+        assertThat(hit.get().loadedEpisodes()).extracting(ContextAssembler.LoadedEpisode::id)
+                .containsExactly("2026-10-03-three", "2026-10-02-two");
+        assertThat(hit.get().block()).contains("third ask").contains("did the thing — because").contains("open three")
+                .doesNotContain("a.java").doesNotContain("a learned line").doesNotContain("cistern ask");
+    }
+
+    @Test
+    void whenTheBlockIsFullAPatternIsDroppedBeforeAFact() throws IOException {
+        String hugeMd = "x".repeat(ContextAssembler.MAX_BLOCK_CHARS - 400);
+        writePattern("huge", "1", List.of("alpha"), List.of(), "2026-06-01", hugeMd);
+        writeFact("f1", "decision", "estate", "asserted", 1.0, "2026-10-03", List.of("alpha"), "y".repeat(600));
+        AgentProperties props = props(true);
+
+        Optional<ContextAssembler.Assembled> hit = assembler(props).assemble("alpha");
+        assertThat(hit).isPresent();
+        assertThat(hit.get().loadedFacts()).extracting(ContextAssembler.LoadedFact::id).containsExactly("f1");
+        assertThat(hit.get().loadedPatterns()).isEmpty();
+    }
+
+    @Test
+    void wholeWordHandlesMetacharactersAndMultiWordTriggers() {
+        assertThat(ContextAssembler.wholeWord("c++", "we write c++ here")).isTrue();
+        assertThat(ContextAssembler.wholeWord(".claude", "edit .claude/settings.json")).isTrue();
+        assertThat(ContextAssembler.wholeWord("text/turtle", "put as text/turtle please")).isTrue();
+        assertThat(ContextAssembler.wholeWord("google account", "which google account?")).isTrue();
+        assertThat(ContextAssembler.wholeWord("console", "he consoled her")).isFalse();
+        assertThat(ContextAssembler.wholeWord("409", "status 4095")).isFalse();
+        assertThat(ContextAssembler.wholeWord("", "anything")).isFalse();
+    }
+
+    @Test
+    void maxFactsZeroLoadsNoFactAndEpisodesOnTheSameDateOrderById() throws IOException {
+        writeFact("f1", "decision", "estate", "asserted", 1.0, "2026-10-03", List.of("alpha"), "F1.");
+        writeEpisode("2026-10-03-bbb", "2026-10-03", "penstock", "bbb ask", "open b");
+        writeEpisode("2026-10-03-aaa", "2026-10-03", "penstock", "aaa ask", "open a");
+        AgentProperties props = props(true);
+        props.getMemory().setMaxFacts(0);
+        props.getMemory().setProject("penstock");
+
+        Optional<ContextAssembler.Assembled> hit = assembler(props).assemble("alpha");
+        assertThat(hit).isPresent();
+        assertThat(hit.get().loadedFacts()).isEmpty();
+        assertThat(hit.get().block()).doesNotContain("### facts");
+        assertThat(hit.get().loadedEpisodes()).extracting(ContextAssembler.LoadedEpisode::id)
+                .containsExactly("2026-10-03-bbb", "2026-10-03-aaa");
+    }
+
+    @Test
+    void factsAloneBeyondTheCapAreDroppedWholeAndTheHeadingNeverStandsEmpty() throws IOException {
+        writeFact("huge", "decision", "estate", "asserted", 1.0, "2026-10-03", List.of("alpha"), "y".repeat(ContextAssembler.MAX_BLOCK_CHARS));
+        AgentProperties props = props(true);
+
+        assertThat(assembler(props).assemble("alpha")).isEmpty();
+
+        writeFact("small", "decision", "estate", "asserted", 0.9, "2026-10-03", List.of("alpha"), "fits.");
+        Optional<ContextAssembler.Assembled> hit = assembler(props).assemble("alpha");
+        assertThat(hit).isPresent();
+        assertThat(hit.get().loadedFacts()).extracting(ContextAssembler.LoadedFact::id).containsExactly("small");
+        assertThat(hit.get().block()).contains("### facts");
+    }
+
+    @Test
+    void theProjectIsDerivedFromTheWorkspaceDirectoryThroughTheAliases() {
+        AgentProperties props = props(true);
+        props.getMemory().getProjectAliases().put("enrichmeai.github.io", "site");
+        assertThat(ContextAssembler.resolveProject(Path.of("/w/enrichmeai.github.io"), props)).isEqualTo("site");
+        assertThat(ContextAssembler.resolveProject(Path.of("/w/penstock"), props)).isEqualTo("penstock");
+        props.getMemory().setProject("valuedocs");
+        assertThat(ContextAssembler.resolveProject(Path.of("/w/penstock"), props)).isEqualTo("valuedocs");
     }
 
     @Test

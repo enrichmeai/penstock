@@ -23,8 +23,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Reads {@code patterns/*}/manifest.yaml, {@code requests/*.yaml} and {@code references/*.yaml}
- * under {@code agent.memory.root} at startup, and again on a bounded interval so an edit to a
+ * Reads {@code patterns/*}/manifest.yaml, {@code requests/*.yaml}, {@code references/*.yaml},
+ * {@code facts/*.yaml} (#87) and {@code episodes/*.yaml} (#86) under {@code agent.memory.root}
+ * at startup, and again on a bounded interval so an edit to a
  * card is picked up without a restart. Invalid YAML is logged and skipped — never fatal, since
  * one bad card must not take retrieval down for every other one.
  *
@@ -44,6 +45,8 @@ public class PatternCatalog {
     private volatile List<PatternManifest> patterns = List.of();
     private volatile List<RequestCard> requests = List.of();
     private volatile List<ReferenceCard> references = List.of();
+    private volatile List<FactCard> facts = List.of();
+    private volatile List<EpisodeCard> episodes = List.of();
 
     public PatternCatalog(AgentProperties props) {
         this.props = props;
@@ -71,6 +74,16 @@ public class PatternCatalog {
         return references;
     }
 
+    /** Every parsed fact, superseded ones included; {@link ContextAssembler} filters on status. */
+    public List<FactCard> facts() {
+        return facts;
+    }
+
+    /** Every parsed episode, newest first. */
+    public List<EpisodeCard> episodes() {
+        return episodes;
+    }
+
     private synchronized void reload() {
         if (!props.getMemory().isEnabled()) {
             return;
@@ -79,6 +92,100 @@ public class PatternCatalog {
         patterns = loadPatterns(root.resolve("patterns"));
         requests = loadRequests(root.resolve("requests"));
         references = loadReferences(root.resolve("references"));
+        facts = loadFacts(root.resolve("facts"));
+        episodes = loadEpisodes(root.resolve("episodes"));
+    }
+
+    private List<FactCard> loadFacts(Path dir) {
+        if (!Files.isDirectory(dir)) {
+            return List.of();
+        }
+        List<FactCard> result = new ArrayList<>();
+        try (DirectoryStream<Path> entries = Files.newDirectoryStream(dir, "*.yaml")) {
+            for (Path file : entries) {
+                try {
+                    Map<String, Object> data = readYamlMapping(file);
+                    String id = requireString(data, "id", file);
+                    String statement = requireString(data, "statement", file);
+                    double confidence = data.get("confidence") instanceof Number n ? n.doubleValue() : 0.0;
+                    result.add(new FactCard(id, statement, stringify(data.get("kind")), stringify(data.get("subject")),
+                            stringify(data.get("scope")), stringify(data.get("status")), confidence,
+                            toLocalDate(data.get("last_confirmed")), stringList(data.get("triggers"))));
+                } catch (Exception e) {
+                    log.warn("Skipping invalid fact card {}: {}", file, e.getMessage());
+                }
+            }
+        } catch (IOException e) {
+            log.warn("Failed to list facts directory {}: {}", dir, e.getMessage());
+        }
+        result.sort(Comparator.comparing(FactCard::id));
+        return List.copyOf(result);
+    }
+
+    private List<EpisodeCard> loadEpisodes(Path dir) {
+        if (!Files.isDirectory(dir)) {
+            return List.of();
+        }
+        List<EpisodeCard> result = new ArrayList<>();
+        try (DirectoryStream<Path> entries = Files.newDirectoryStream(dir, "*.yaml")) {
+            for (Path file : entries) {
+                try {
+                    Map<String, Object> data = readYamlMapping(file);
+                    String id = requireString(data, "id", file);
+                    LocalDate date = toLocalDate(data.get("date"));
+                    if (date == null) {
+                        throw new IOException(file + " has no 'date'");
+                    }
+                    result.add(new EpisodeCard(id, date, stringify(data.get("project")), stringify(data.get("asked")),
+                            whatWhyList(data.get("decided")), whatWhyList(data.get("refused")), stringList(data.get("open"))));
+                } catch (Exception e) {
+                    log.warn("Skipping invalid episode card {}: {}", file, e.getMessage());
+                }
+            }
+        } catch (IOException e) {
+            log.warn("Failed to list episodes directory {}: {}", dir, e.getMessage());
+        }
+        // newest first; the id (date-slug) breaks ties within a day deterministically
+        result.sort(Comparator.comparing(EpisodeCard::date).thenComparing(EpisodeCard::id).reversed());
+        return List.copyOf(result);
+    }
+
+    /** A {@code what:}/{@code why:} entry renders as "what — why"; a plain string stays as is. */
+    @SuppressWarnings("unchecked")
+    private List<String> whatWhyList(Object v) {
+        if (!(v instanceof List)) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (Object o : (List<Object>) v) {
+            if (o instanceof Map<?, ?> m) {
+                String what = stringify(m.get("what"));
+                String why = stringify(m.get("why"));
+                if (!what.isBlank()) {
+                    out.add(why.isBlank() ? what : what + " — " + why);
+                }
+            } else if (o != null && !o.toString().isBlank()) {
+                out.add(o.toString());
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    private LocalDate toLocalDate(Object v) {
+        if (v instanceof LocalDate ld) {
+            return ld;
+        }
+        if (v instanceof Date d) {
+            return d.toInstant().atZone(ZoneOffset.UTC).toLocalDate();
+        }
+        if (v instanceof String s && !s.isBlank()) {
+            try {
+                return LocalDate.parse(s.trim());
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private List<PatternManifest> loadPatterns(Path dir) {

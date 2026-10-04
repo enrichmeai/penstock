@@ -51,6 +51,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "agent.auth.enabled=false",
         "agent.rate-limit.enabled=false",
         "agent.memory.enabled=true",
+        // the workspace is a temp dir, so name the project explicitly (#88)
+        "agent.memory.project=penstock",
         // JPA store on H2: activates the audit repository without a real SQLite file.
         "agent.storage.type=sqlite",
         "spring.datasource.url=jdbc:h2:mem:memory-retrieval-on;DB_CLOSE_DELAY=-1",
@@ -95,13 +97,41 @@ class MemoryRetrievalIT {
         assertThat(LAST_SYSTEM_PROMPT.get())
                 .as("the system prompt the provider received")
                 .contains("stdio-json-rpc-agent")
-                .contains("Established patterns");
+                .contains("Established facts, recent episodes and patterns");
 
         List<AuditEventEntity> events = awaitPatternLoadedEvents(sessionId);
         assertThat(events).isNotEmpty();
         AuditEventEntity event = events.get(0);
         assertThat(event.getDetailJson()).contains("\"patternId\":\"stdio-json-rpc-agent\"");
         assertThat(event.getDetailJson()).contains("\"version\":\"1\"");
+    }
+
+    /**
+     * #88, Metric A's local half: the account question that the 2026-10-03 Studio session asked
+     * three times is answered from the block — the seed fact's statement is in the first prompt,
+     * {@code fact.loaded} and {@code episode.loaded} are audited, no tool call needed.
+     */
+    @Test
+    void theAccountQuestionIsAnsweredFromTheSeedFactAndAudited() throws Exception {
+        MvcResult result = mvc.perform(post("/api/chat")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"message\":\"which Google account for the valuedocs console?\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        String sessionId = extractSessionId(result.getResponse().getContentAsString());
+
+        assertThat(LAST_SYSTEM_PROMPT.get())
+                .contains("fact:gcp-console-account-valuedocs-legal-bld")
+                .contains("joseph@valuedocs.co.in")
+                .contains("### episode:");
+
+        List<AuditEventEntity> events = awaitEvents(sessionId, "fact.loaded");
+        assertThat(events).extracting(AuditEventEntity::getDetailJson)
+                .anyMatch(d -> d.contains("\"factId\":\"gcp-console-account-valuedocs-legal-bld\"")
+                        && d.contains("\"status\":\"asserted\"") && d.contains("\"confidence\":1.0"));
+        List<AuditEventEntity> episodes = awaitEvents(sessionId, "episode.loaded");
+        assertThat(episodes).isNotEmpty();
+        assertThat(episodes.get(0).getDetailJson()).contains("\"episodeId\":\"").contains("\"date\":\"");
     }
 
     private static String extractSessionId(String body) {
@@ -111,10 +141,14 @@ class MemoryRetrievalIT {
     }
 
     private List<AuditEventEntity> awaitPatternLoadedEvents(String sessionId) throws InterruptedException {
+        return awaitEvents(sessionId, "pattern.loaded");
+    }
+
+    private List<AuditEventEntity> awaitEvents(String sessionId, String type) throws InterruptedException {
         long deadline = System.currentTimeMillis() + 5_000;
         while (System.currentTimeMillis() < deadline) {
             List<AuditEventEntity> events = auditRepo.findBySessionIdOrderByTimestampAsc(sessionId).stream()
-                    .filter(e -> "pattern.loaded".equals(e.getEventType()))
+                    .filter(e -> type.equals(e.getEventType()))
                     .toList();
             if (!events.isEmpty()) {
                 return events;

@@ -118,6 +118,47 @@ public class AuditLogger {
     }
 
     /**
+     * Records that a fact card joined a turn's context block (#88), as {@code fact.loaded}
+     * with {@code factId}, {@code status} and {@code confidence}; also an INFO line.
+     */
+    @Async
+    public void factLoaded(String userId, String sessionId, String factId, String status, double confidence) {
+        String user = normalise(userId);
+        log.info("fact.loaded user={} session={} factId={} status={} confidence={}", user, sessionId, factId, status, confidence);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("factId", factId);
+        detail.put("status", status);
+        detail.put("confidence", confidence);
+        saveMemoryEvent(user, sessionId, "fact.loaded", detail);
+    }
+
+    /**
+     * Records that an episode card joined a turn's context block (#88), as
+     * {@code episode.loaded} with {@code episodeId} and {@code date}; also an INFO line.
+     */
+    @Async
+    public void episodeLoaded(String userId, String sessionId, String episodeId, String date) {
+        String user = normalise(userId);
+        log.info("episode.loaded user={} session={} episodeId={} date={}", user, sessionId, episodeId, date);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("episodeId", episodeId);
+        detail.put("date", date);
+        saveMemoryEvent(user, sessionId, "episode.loaded", detail);
+    }
+
+    private void saveMemoryEvent(String user, String sessionId, String eventType, Map<String, Object> detail) {
+        if (repo == null) {
+            log.debug("Audit repository not available; skipping {} event", eventType);
+            return;
+        }
+        try {
+            repo.save(new AuditEventEntity(Instant.now(), user, sessionId, eventType, mapper.writeValueAsString(detail)));
+        } catch (Exception e) {
+            log.warn("Failed to log {} event", eventType, e);
+        }
+    }
+
+    /**
      * Log a pattern-retrieval event: {@code ContextAssembler} loaded this pattern into the
      * turn's system prompt. Logged at INFO regardless of whether a repository is available —
      * in {@code memory} storage mode (ACP's only supported mode) there is no audit table, so

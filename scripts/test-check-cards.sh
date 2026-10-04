@@ -180,6 +180,27 @@ else
 fi
 rm -rf "$repo" "$out"
 
+echo "=== test-check-cards: an asked line carrying a credential value fails (#88: asked reaches the prompt) ==="
+repo=$(episode_repo)
+cp scripts/test/cards/episodes/asked-value/2026-01-17-asked-fixture.yaml "$repo/episodes/"
+commit_fixture "$repo"
+git -C "$repo" tag v0.2.0
+set_origin_main "$repo"
+out=$(mktemp)
+if bash "$repo/scripts/check-cards.sh" >"$out" 2>&1; then
+    echo "FAIL: check-cards.sh exited 0 for an episode whose asked line carries a token value"
+    cat "$out"
+    status=1
+elif grep -q "FAIL: episodes/2026-01-17-asked-fixture.yaml has a credential-shaped value" "$out" \
+     && ! grep -q "0123456789abcdef" "$out"; then
+    echo "PASS: the credential-shaped asked line failed by path, and the value was not printed"
+else
+    echo "FAIL: expected FAIL message not found, or the value leaked into the output"
+    cat "$out"
+    status=1
+fi
+rm -rf "$repo" "$out"
+
 echo "=== test-check-cards: a learned line carrying a credential value fails ==="
 repo=$(episode_repo)
 cp scripts/test/cards/episodes/token-value/2026-01-16-token-fixture.yaml "$repo/episodes/"

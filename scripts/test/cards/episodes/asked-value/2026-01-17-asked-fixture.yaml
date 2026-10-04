@@ -1,0 +1,12 @@
+# Test fixture for scripts/test-check-cards.sh (#88): the hex string below is deliberate, made-up
+# test data (not a credential) placed in `asked:`, which a turn now renders into the system prompt,
+# so the episode credential rule must refuse it by path, never by value.
+id: 2026-01-17-asked-fixture
+date: 2026-01-17
+project: penstock
+asked: "open the console with password: 0123456789abcdef0123456789abcdef"
+built: []
+decided: []
+refused: []
+learned: []
+open: []

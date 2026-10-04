@@ -338,9 +338,12 @@ overridden with env vars or `--agent.*=value` command-line flags.
 | `agent.tools.shell.enabled` | `true` | — | |
 | `agent.tools.shell.timeout-seconds` | `60` | — | Per-command timeout. |
 | `agent.tools.file.max-bytes` | `1048576` | — | Max size for a single `read_file`. |
-| `agent.memory.enabled` | `false` | `AGENT_MEMORY_ENABLED` | "Retrieve before reason" (#73): load matching `patterns/` + `references/` into the turn's system prompt before the first model call. Off by default — these folders are this project's own build memory. |
-| `agent.memory.root` | `${user.dir}` | `AGENT_MEMORY_ROOT` | Directory containing `patterns/`, `requests/` and `references/`. |
+| `agent.memory.enabled` | `false` | `AGENT_MEMORY_ENABLED` | "Retrieve before reason" (#73) and "recall in the turn" (#88): load matching `facts/`, the project's latest `episodes/`, and matching `patterns/` + `references/` into the turn's system prompt before the first model call, in that order under one 12 000-character cap (entries dropped whole from the end, so patterns go first). Each load is audited (`fact.loaded`, `episode.loaded`, `pattern.loaded`). Off by default — these folders are this project's own build memory. |
+| `agent.memory.root` | `${user.dir}` | `AGENT_MEMORY_ROOT` | Directory containing `patterns/`, `requests/`, `references/`, `facts/` and `episodes/`. |
 | `agent.memory.signature-depth` | `8` | `AGENT_MEMORY_SIGNATURE_DEPTH` | Max depth of the per-turn workspace walk used for signature matching; a file nested deeper is never considered. |
+| `agent.memory.max-facts` | `8` | `AGENT_MEMORY_MAX_FACTS` | Recall in the turn (#88): at most this many active `facts/` join the block — those whose `triggers` occur in the input as whole words, plus the project's `account`, `identifier` and `location-of-secret` facts; by confidence, then `last_confirmed`. Superseded facts are never selected. |
+| `agent.memory.max-episodes` | `2` | `AGENT_MEMORY_MAX_EPISODES` | At most this many of the project's latest `episodes/` join the block (asked, decided, refused, open; never `built` file lists or `learned`). |
+| `agent.memory.project` | derived | `AGENT_MEMORY_PROJECT` | The project the workspace belongs to (`penstock`, `cistern`, `valuedocs`, `site`). Empty: the workspace directory's name through `agent.memory.project-aliases` (`enrichmeai.github.io` → `site`), logged once at startup. |
 
 ## REST API
 
@@ -412,7 +415,7 @@ as it's produced, which the SSE controller relays to the client.
 
 **Harden for production** — swap `InMemoryUserDetailsManager` for a real user store; enforce HTTPS (put behind nginx / a load balancer); add rate limits; persist audit logs of tool calls.
 
-**Project memory** — `requests/`, `references/`, `patterns/`, `episodes/` and `facts/` at the repo root record what was wanted, what was trusted, how it was built, what happened (asked, built, decided, refused, learned, open), and what the owner now believes (one fact per file, with provenance, superseded rather than overwritten), as plain YAML/Markdown; start at `requests/README.md`. `scripts/write-episode.sh` drafts an episode from a task's own PR and commits; `scripts/consolidate.sh` proposes facts from episodes' learned lines; `scripts/fact.sh <words>` asks the record before you ask the owner.
+**Project memory** — `requests/`, `references/`, `patterns/`, `episodes/` and `facts/` at the repo root record what was wanted, what was trusted, how it was built, what happened (asked, built, decided, refused, learned, open), and what the owner now believes (one fact per file, with provenance, superseded rather than overwritten), as plain YAML/Markdown; start at `requests/README.md`. `scripts/write-episode.sh` drafts an episode from a task's own PR and commits, and with `--session <id>` (or `--audit <file>`) lists under `recalled:` what the session's turns loaded; `scripts/consolidate.sh` proposes facts from episodes' learned lines; `scripts/fact.sh <words>` asks the record before you ask the owner. With `agent.memory.enabled=true` a turn recalls on its own: matching facts, the project's last episodes and matching patterns join the system prompt before the first model call (#88).
 
 ## Safety notes
 

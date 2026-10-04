@@ -73,6 +73,26 @@ if run --project penstock --slug twice --date 2026-02-04 >/dev/null 2>&1; then f
 [ "$sum1" = "$(cksum "$repo/episodes/2026-02-04-twice.yaml")" ] && pass "file untouched by the refused write" || fail "file changed"
 run --project penstock --slug twice --date 2026-02-04 --replace >/dev/null 2>&1 && pass "--replace overwrites deliberately" || fail "--replace failed"
 
+echo "=== test-write-episode: --audit fills patterns and recalled from the session's audit log (#88) ==="
+cat >"$repo/audit.json" <<'JSON'
+[{"timestamp":"2026-10-03T10:00:00Z","eventType":"fact.loaded","detail":{"factId":"gcp-console-account","status":"asserted","confidence":1.0}},
+ {"timestamp":"2026-10-03T10:00:00Z","eventType":"episode.loaded","detail":{"episodeId":"2026-10-02-memory-1","date":"2026-10-02"}},
+ {"timestamp":"2026-10-03T10:00:00Z","eventType":"pattern.loaded","detail":{"patternId":"stdio-json-rpc-agent","version":"1"}},
+ {"timestamp":"2026-10-03T10:00:01Z","eventType":"pattern.loaded","detail":{"patternId":"stdio-json-rpc-agent","version":"1"}},
+ {"timestamp":"2026-10-03T10:00:02Z","eventType":"llm_call","detail":{"provider":"stub"}}]
+JSON
+out=$(run --project penstock --slug recalled --date 2026-02-05 --audit "$repo/audit.json" --dry-run 2>/dev/null) || fail "--audit dry run failed"
+printf '%s' "$out" | grep -q '^patterns:' && printf '%s' "$out" | grep -A1 '^patterns:' | grep -q 'stdio-json-rpc-agent' && pass "patterns filled from pattern.loaded" || { fail "patterns not filled"; printf '%s\n' "$out"; }
+[ "$(printf '%s' "$out" | grep -c 'stdio-json-rpc-agent')" = "1" ] && pass "a pattern loaded twice is listed once" || fail "pattern duplicated"
+printf '%s' "$out" | grep -q 'fact:gcp-console-account' && printf '%s' "$out" | grep -q 'episode:2026-10-02-memory-1' && pass "recalled lists the fact and the episode" || { fail "recalled missing"; printf '%s\n' "$out"; }
+printf '%s' "$out" | grep -A1 '^learned:' | grep -q '^learned: \[\]' && pass "learned stays empty (a fact recalled is not a fact learned)" || { fail "learned was seeded"; printf '%s\n' "$out" | grep -A2 '^learned'; }
+printf '{"not":"a list"}' >"$repo/audit-obj.json"
+if err=$(run --project penstock --slug objaudit --date 2026-02-05 --audit "$repo/audit-obj.json" --dry-run 2>&1 >/dev/null); then
+    printf '%s' "$err" | grep -q "not a JSON list" && pass "an object-shaped audit file is ignored with a message" || fail "no 'not a JSON list' message: $err"
+else fail "object-shaped audit file made the draft fail"; fi
+if (cd "$repo" && sh scripts/write-episode.sh --project penstock --slug x --audit "$repo/audit.json" --session abc >/dev/null 2>&1); then fail "--session with --audit accepted"; else [ $? -eq 64 ] && pass "--session with --audit refused with exit 64" || fail "wrong exit for --session with --audit"; fi
+if (cd "$repo" && env -u AGENT_AUTH_PASSWORD sh scripts/write-episode.sh --project penstock --slug x --session abc >/dev/null 2>&1); then fail "--session without a password accepted"; else [ $? -eq 64 ] && pass "--session without AGENT_AUTH_PASSWORD refused with exit 64" || fail "wrong exit for --session without password"; fi
+
 echo "=== test-write-episode: bad slug, project and range are refused ==="
 for args in "--project penstock --slug aB --dry-run" "--project penstock --slug a..b --dry-run" "--project penstock --slug -x --dry-run" "--project nowhere --slug ok --dry-run" "--project penstock --range notarange --dry-run"; do
     # shellcheck disable=SC2086

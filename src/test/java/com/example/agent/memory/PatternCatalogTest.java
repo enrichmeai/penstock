@@ -45,6 +45,57 @@ class PatternCatalogTest {
         catalog.initialLoad();
 
         assertThat(catalog.patterns()).isEmpty();
+        assertThat(catalog.facts()).isEmpty();
+        assertThat(catalog.episodes()).isEmpty();
+    }
+
+    // --- #88: facts and episodes -----------------------------------------------------------
+
+    @Test
+    void loadsFactsAndSkipsAnInvalidOne() throws IOException {
+        Path facts = root.resolve("facts");
+        Files.createDirectories(facts);
+        Files.writeString(facts.resolve("good.yaml"), "id: good\nstatement: S.\nkind: account\nsubject: a/b\nscope: estate\n" +
+                "status: asserted\nconfidence: 1.0\nlast_confirmed: 2026-10-03\ntriggers: [x, y]\n");
+        Files.writeString(facts.resolve("no-statement.yaml"), "id: no-statement\nkind: account\n");
+        Files.writeString(facts.resolve("broken.yaml"), "[unclosed\n");
+        Files.writeString(facts.resolve("thin.yaml"), "id: thin\nstatement: T.\n"); // no confidence, triggers, date
+        PatternCatalog catalog = catalog(true);
+        catalog.initialLoad();
+
+        assertThat(catalog.facts()).extracting(FactCard::id).containsExactly("good", "thin");
+        FactCard good = catalog.facts().get(0);
+        assertThat(good.confidence()).isEqualTo(1.0);
+        assertThat(good.lastConfirmed()).isEqualTo(java.time.LocalDate.of(2026, 10, 3));
+        assertThat(good.triggers()).containsExactly("x", "y");
+        FactCard thin = catalog.facts().get(1);
+        assertThat(thin.confidence()).isEqualTo(0.0);
+        assertThat(thin.lastConfirmed()).isNull();
+        assertThat(thin.triggers()).isEmpty();
+        assertThat(thin.isActive()).isTrue();
+    }
+
+    @Test
+    void loadsEpisodesNewestFirstAndSkipsAnInvalidOne() throws IOException {
+        Path episodes = root.resolve("episodes");
+        Files.createDirectories(episodes);
+        Files.writeString(episodes.resolve("2026-10-01-a.yaml"), "id: 2026-10-01-a\ndate: \"2026-10-01\"\nproject: penstock\nasked: A\n" +
+                "decided:\n  - plain string decision\nrefused: ~\nopen: [o1]\n");
+        Files.writeString(episodes.resolve("2026-10-02-b.yaml"), "id: 2026-10-02-b\ndate: 2026-10-02\nproject: penstock\nasked: B\n" +
+                "decided:\n  - what: did\n    why: because\n");
+        Files.writeString(episodes.resolve("2026-10-02-c.yaml"), "id: 2026-10-02-c\ndate: 2026-10-02\nproject: penstock\nasked: C\n");
+        Files.writeString(episodes.resolve("2026-10-03-nodate.yaml"), "id: 2026-10-03-nodate\nproject: penstock\n");
+        Files.writeString(episodes.resolve("broken.yaml"), "- just\n- a list\n");
+        PatternCatalog catalog = catalog(true);
+        catalog.initialLoad();
+
+        assertThat(catalog.episodes()).extracting(EpisodeCard::id).containsExactly("2026-10-02-c", "2026-10-02-b", "2026-10-01-a");
+        EpisodeCard a = catalog.episodes().get(2);
+        assertThat(a.date()).isEqualTo(java.time.LocalDate.of(2026, 10, 1)); // quoted string parsed too
+        assertThat(a.decided()).containsExactly("plain string decision");
+        assertThat(a.refused()).isEmpty();
+        assertThat(a.open()).containsExactly("o1");
+        assertThat(catalog.episodes().get(1).decided()).containsExactly("did — because");
     }
 
     @Test

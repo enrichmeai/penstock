@@ -399,10 +399,18 @@ public class AgentProperties {
      */
     public static class Memory {
         private boolean enabled = false;
-        /** Directory containing patterns/, requests/ and references/. Defaults to the process cwd. */
+        /** Directory containing patterns/, requests/, references/, facts/ and episodes/. Defaults to the process cwd. */
         private String root;
         /** Max depth of the per-turn workspace walk {@code ContextAssembler} uses for signature matching. */
         private int signatureDepth = 8;
+        /** At most this many facts join a turn's block (#88). */
+        private int maxFacts = 8;
+        /** At most this many of the project's latest episodes join a turn's block (#88). */
+        private int maxEpisodes = 2;
+        /** The project of the workspace; empty means derive it from the workspace directory name through {@link #projectAliases}. */
+        private String project = "";
+        /** Workspace directory name → project, for the derivation ({@code enrichmeai.github.io} → {@code site}). */
+        private Map<String, String> projectAliases = new java.util.LinkedHashMap<>();
 
         public boolean isEnabled() { return enabled; }
         public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -410,6 +418,14 @@ public class AgentProperties {
         public void setRoot(String root) { this.root = root; }
         public int getSignatureDepth() { return signatureDepth; }
         public void setSignatureDepth(int signatureDepth) { this.signatureDepth = signatureDepth; }
+        public int getMaxFacts() { return maxFacts; }
+        public void setMaxFacts(int maxFacts) { this.maxFacts = maxFacts; }
+        public int getMaxEpisodes() { return maxEpisodes; }
+        public void setMaxEpisodes(int maxEpisodes) { this.maxEpisodes = maxEpisodes; }
+        public String getProject() { return project; }
+        public void setProject(String project) { this.project = project; }
+        public Map<String, String> getProjectAliases() { return projectAliases; }
+        public void setProjectAliases(Map<String, String> projectAliases) { this.projectAliases = projectAliases; }
     }
 
     public static class Storage {
