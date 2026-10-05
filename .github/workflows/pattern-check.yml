@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # check-cards.sh reads `git describe --tags --abbrev=0 origin/main` for the STALE rule;
           # a shallow, tagless checkout would make it skip that rule ("not run: no tags").
