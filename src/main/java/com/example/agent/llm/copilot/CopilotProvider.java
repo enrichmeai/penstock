@@ -66,7 +66,7 @@ public class CopilotProvider implements LlmProvider {
         this.mapper = mapper;
         this.metrics = metrics;
 
-        WebClient.Builder b = webClientBuilder
+        WebClient.Builder b = webClientBuilder.clone() // never add headers to the shared builder
                 .baseUrl(cfg.getBaseUrl())
                 .defaultHeader(HttpHeaders.AUTHORIZATION,
                         "Bearer " + (cfg.getApiKey() == null ? "" : cfg.getApiKey()))

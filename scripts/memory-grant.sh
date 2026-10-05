@@ -2,12 +2,16 @@
 # memory-grant.sh — grants one reviewer or one agent access into the owner's /memory/ pod
 # (issue #82, slice 5 of #71). Two forms:
 #
-#   scripts/memory-grant.sh reviewer <webid> --as <slug> [--client <uri>]... [--base <url>]
-#     read  /memory/patterns/
+#   scripts/memory-grant.sh reviewer <webid> --as <slug> [--project <name>] [--client <uri>]... [--base <url>]
+#     read  /memory/patterns/                 (or, with --project, /memory/projects/<name>/patterns/
+#                                              and nothing above it: a sectioned root, #91)
 #     read + write /memory/verdicts/<slug>/   (created first, owner PUT, If-None-Match: *)
 #
 #   scripts/memory-grant.sh agent <webid> [--base <url>]
-#     read  /memory/                          (the owner's own agent, e.g. a hosted session)
+#     read  /memory/                          (the owner's own agent, e.g. a hosted session).
+#                                              After a sectioned root is published (#91) that is
+#                                              every project's facts and episodes too: grant it
+#                                              only to an agent that acts as the owner.
 #
 # A reviewer never gets read on /memory/requests/ or /memory/references/ — those request cards
 # carry the owner's own reasons and refused options, the owner's to show, not the grant's
@@ -29,7 +33,7 @@ clients=""
 
 usage() {
     cat <<'USAGE' >&2
-Usage: memory-grant.sh reviewer <webid> --as <slug> [--client <uri>]... [--base <url>]
+Usage: memory-grant.sh reviewer <webid> --as <slug> [--project <name>] [--client <uri>]... [--base <url>]
        memory-grant.sh agent    <webid> [--base <url>]
 
 --client narrows the grant to requests through a named client (ADR 0004; Cistern main-only).
@@ -47,11 +51,18 @@ webid="$2"
 shift 2
 
 slug=""
+project=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        --as) slug="$2"; shift 2 ;;
-        --client) clients="$clients $2"; shift 2 ;;
-        --base) base_url="$2"; shift 2 ;;
+        --as|--client|--base|--project)
+            [ $# -ge 2 ] && [ -n "$2" ] || { echo "memory-grant.sh: $1 needs a value" >&2; usage; exit 64; }
+            case "$1" in
+                --as) slug="$2" ;;
+                --client) clients="$clients $2" ;;
+                --base) base_url="$2" ;;
+                *) project="$2" ;;
+            esac
+            shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "memory-grant.sh: unknown argument '$1'" >&2; usage; exit 64 ;;
     esac
@@ -88,8 +99,8 @@ grant_with_clients() {
 
 case "$form" in
     agent)
-        if [ -n "$slug" ]; then
-            echo "memory-grant.sh: --as is only for the 'reviewer' form" >&2
+        if [ -n "$slug" ] || [ -n "$project" ]; then
+            echo "memory-grant.sh: --as and --project are only for the 'reviewer' form" >&2
             exit 64
         fi
         grant_with_clients --read /memory/
@@ -110,6 +121,13 @@ case "$slug" in
         exit 64
         ;;
 esac
+patterns_path="/memory/patterns/"
+if [ -n "$project" ]; then
+    case "$project" in
+        penstock|cistern|valuedocs|site) patterns_path="/memory/projects/$project/patterns/" ;;
+        *) echo "memory-grant.sh: --project must be one of penstock, cistern, valuedocs, site; got '$project'" >&2; exit 64 ;;
+    esac
+fi
 
 verdicts_path="/memory/verdicts/$slug/"
 
@@ -133,15 +151,15 @@ case "$http_status" in
         ;;
 esac
 
-grant_with_clients --read /memory/patterns/
-echo "[memory-grant] granted: $webid may read /memory/patterns/"
+grant_with_clients --read "$patterns_path"
+echo "[memory-grant] granted: $webid may read $patterns_path"
 
 status=0
 grant_with_clients --read --write "$verdicts_path" || status=$?
 if [ "$status" -ne 0 ]; then
     echo "memory-grant.sh: granting read+write on $verdicts_path failed (exit $status) after the" \
-        "/memory/patterns/ read grant already succeeded. To undo that grant:" >&2
-    echo "  java -jar \"\$CISTERN_CLI_JAR\" revoke $webid /memory/patterns/ --base $base_url" >&2
+        "$patterns_path read grant already succeeded. To undo that grant:" >&2
+    echo "  java -jar \"\$CISTERN_CLI_JAR\" revoke $webid $patterns_path --base $base_url" >&2
     exit "$status"
 fi
 echo "[memory-grant] granted: $webid may read and write $verdicts_path"

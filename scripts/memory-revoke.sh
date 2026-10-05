@@ -3,7 +3,8 @@
 # #71). Revoking stops the *next* request; it does not undo anything already read or written,
 # and does not touch /memory/verdicts/<slug>/'s contents — a verdict already written stays.
 #
-#   scripts/memory-revoke.sh <webid> --as <slug>   # the reviewer form: both grants undone
+#   scripts/memory-revoke.sh <webid> --as <slug> [--project <name>]   # the reviewer form: both
+#                                                   grants undone (--project as it was granted)
 #   scripts/memory-revoke.sh <webid>                # the agent form: /memory/ undone
 #
 # Reads CISTERN_TOKEN (the owner token) from the environment; never printed or passed on argv.
@@ -12,9 +13,10 @@ cd "$(dirname "$0")/.."
 
 base_url="http://127.0.0.1:3737"
 slug=""
+project=""
 
 usage() {
-    echo "Usage: memory-revoke.sh <webid> [--as <slug>] [--base <url>]" >&2
+    echo "Usage: memory-revoke.sh <webid> [--as <slug> [--project <name>]] [--base <url>]" >&2
 }
 
 if [ $# -lt 1 ]; then
@@ -26,8 +28,10 @@ shift
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --as) slug="$2"; shift 2 ;;
-        --base) base_url="$2"; shift 2 ;;
+        --as|--base|--project)
+            [ $# -ge 2 ] && [ -n "$2" ] || { echo "memory-revoke.sh: $1 needs a value" >&2; usage; exit 64; }
+            case "$1" in --as) slug="$2" ;; --base) base_url="$2" ;; *) project="$2" ;; esac
+            shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "memory-revoke.sh: unknown argument '$1'" >&2; usage; exit 64 ;;
     esac
@@ -53,11 +57,19 @@ if [ -n "$slug" ]; then
             exit 64
             ;;
     esac
-    echo "[memory-revoke] cistern revoke $webid /memory/patterns/"
-    cistern revoke "$webid" /memory/patterns/ --base "$base_url"
+    patterns_path="/memory/patterns/"
+    if [ -n "$project" ]; then
+        case "$project" in
+            penstock|cistern|valuedocs|site) patterns_path="/memory/projects/$project/patterns/" ;;
+            *) echo "memory-revoke.sh: --project must be one of penstock, cistern, valuedocs, site; got '$project'" >&2; exit 64 ;;
+        esac
+    fi
+    echo "[memory-revoke] cistern revoke $webid $patterns_path"
+    cistern revoke "$webid" "$patterns_path" --base "$base_url"
     echo "[memory-revoke] cistern revoke $webid /memory/verdicts/$slug/"
     cistern revoke "$webid" "/memory/verdicts/$slug/" --base "$base_url"
 else
+    [ -z "$project" ] || { echo "memory-revoke.sh: --project needs --as (the reviewer form)" >&2; exit 64; }
     echo "[memory-revoke] cistern revoke $webid /memory/"
     cistern revoke "$webid" /memory/ --base "$base_url"
 fi

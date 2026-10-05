@@ -64,7 +64,7 @@ public class OllamaProvider implements LlmProvider {
         this.metrics = metrics;
         this.textToolCallParser = new TextToolCallParser(mapper);
         this.formatObserver = formatObserver;
-        this.webClient = webClientBuilder
+        this.webClient = webClientBuilder.clone() // never add headers to the shared builder
                 .baseUrl(cfg.getBaseUrl())
                 .defaultHeader("content-type", MediaType.APPLICATION_JSON_VALUE)
                 .build();
