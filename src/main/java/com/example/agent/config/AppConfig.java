@@ -1,7 +1,9 @@
 package com.example.agent.config;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Scope;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.scheduling.annotation.EnableAsync;
@@ -33,7 +35,13 @@ public class AppConfig {
         return p;
     }
 
+    /**
+     * A fresh builder for each injection point, as Spring Boot's own auto-configured builder is:
+     * the LLM providers add their credentials as default headers, and a shared builder carried
+     * them into every client built after it (the Anthropic key reached the pod and Jira).
+     */
     @Bean
+    @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
     public WebClient.Builder webClientBuilder() {
         return WebClient.builder();
     }

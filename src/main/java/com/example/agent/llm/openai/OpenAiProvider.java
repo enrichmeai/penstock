@@ -68,7 +68,7 @@ public class OpenAiProvider implements LlmProvider {
         this.mapper = mapper;
         this.metrics = metrics;
         this.credentials = credentials;
-        this.webClient = webClientBuilder
+        this.webClient = webClientBuilder.clone() // never add headers to the shared builder
                 .baseUrl(cfg.getBaseUrl())
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .build();
