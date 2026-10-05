@@ -482,9 +482,19 @@ document.getElementById('audit-session').addEventListener('click', async () => {
     const t = ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString() : '';
     const d = ev.detail || {};
     const ok = d.ok === false ? ' style="color:#e66"' : '';
+    // Memory recall (#88) is part of what the agent did: show which card reached the model,
+    // never as a model call. An event kind this view does not know is shown by its name.
     const what = ev.eventType === 'tool_call'
       ? `tool <b>${esc(d.tool)}</b> · ${d.ok ? 'ok' : 'failed'} · ${esc(d.contentBytes ?? 0)} bytes`
-      : `llm <b>${esc(d.provider)}</b> · ${d.ok ? 'ok' : 'failed'} · ${esc(d.inputTokens ?? 0)} in / ${esc(d.outputTokens ?? 0)} out`;
+      : ev.eventType === 'fact.loaded'
+      ? `memory · fact <b>${esc(d.factId)}</b> · ${esc(d.status)} ${esc(d.confidence)}`
+      : ev.eventType === 'episode.loaded'
+      ? `memory · episode <b>${esc(d.episodeId)}</b> · ${esc(d.date)}`
+      : ev.eventType === 'pattern.loaded'
+      ? `memory · pattern <b>${esc(d.patternId)}</b> · ${esc(d.version)}`
+      : ev.eventType === 'llm_call'
+      ? `llm <b>${esc(d.provider)}</b> · ${d.ok ? 'ok' : 'failed'} · ${esc(d.inputTokens ?? 0)} in / ${esc(d.outputTokens ?? 0)} out`
+      : `${esc(ev.eventType)}`;
     return `<div style="display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;">
       <span style="opacity:.6;white-space:nowrap">${esc(t)}</span>
       <span${ok}>${what}</span></div>`;
