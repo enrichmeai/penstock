@@ -42,14 +42,17 @@ from the root.
 |---|---|
 | `scripts/check-cards.sh` | First the rules across sections, each a FAIL: `memory.yaml` and `estate/` exist; no card folder sits at the root; every `projects/<name>` is one of penstock, cistern, valuedocs, site; a fact's scope matches its folder (`estate`, or `project:<name>`); an episode under `projects/<name>/` has `project: <name>`; ids (per kind) and active subjects are unique across sections. Then `estate/` and each `projects/<name>/` in turn, against the root's `memory.yaml`, under a `### section <path>` header; every PASS/FAIL/WARN/STALE line about a card gives the card's path from the root (`FAIL: projects/cistern/facts/x.yaml …`). Cross-references (provenance, supersede, rejected lines) resolve within one section. Staleness compares patterns with penstock's latest tag. |
 | `scripts/fact.sh` | Searches `estate/facts/` and every `projects/*/facts/`; each match names its section. |
+| `scripts/memory-publish.sh` | Mirrors the whole root to the pod after `check-cards.sh --root` passes: one `cistern sync` per card folder in `estate/` and each known `projects/<name>/`, to the same path under `/memory/` (`estate/facts` → `/memory/estate/facts/`). The pod is the owner's, so episodes and facts go too, sub-folders included (`facts/rejected/lines.yaml`). A re-run with nothing changed sends nothing. A folder in a section that is not a card folder is reported and skipped. `--delete` prunes inside the published containers only: a folder deleted locally stays on the pod until removed by hand. |
+| `scripts/memory-grant.sh`, `memory-revoke.sh` | `reviewer … --project <name>` grants read on `/memory/projects/<name>/patterns/` and nothing above it (another project, the estate, facts and episodes stay closed), plus read and write on `/memory/verdicts/<slug>/`. Revoke takes the same `--project`. The `agent` form still grants `/memory/`, which after a sectioned publish is **every project's facts and episodes**: grant it only to an agent that acts as you. |
 | `PatternCatalog` (recall in the turn, #88) | Loads `estate/` plus `projects/<project>/` for the workspace's project (`agent.memory.project`, or the workspace directory's name), never another project's section. With no project resolved, the estate only. Point `agent.memory.root` at the clone. |
 
 ## Not built yet (the rest of #91)
 
 - `write-episode.sh`, `consolidate.sh` and `promote-pattern.sh` still write into this repository;
   `--root` for writers comes next.
-- `memory-publish.sh` mirroring the whole root to the pod, `memory-grant.sh --project`, and the
-  second-machine publish (needs enrichmeai/cistern#219).
+- The second-machine publish: a fresh clone has no `.cistern-sync.json`, and `cistern sync` on
+  Cistern `main` has no `--adopt` yet (enrichmeai/cistern#219), so it cannot publish over a pod that
+  already holds the cards.
 - A fact in `estate/` cannot yet cite an episode in a project section: provenance resolves within
   one section.
 - `pattern-digest.sh` and `test-memory-pod.sh` still read this repository's layout.
