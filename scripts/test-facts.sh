@@ -194,4 +194,87 @@ out=$(MEMORY_ROOT="$S" sh scripts/fact.sh console 2>/dev/null) && printf '%s' "$
 if sh scripts/fact.sh fixture --root scripts/test/cards/sectioned/empty-projects >/dev/null 2>&1; then fail "fact.sh on an empty sectioned root exited 0"
 else [ $? -eq 1 ] && pass "fact.sh on a sectioned root with no facts exits 1" || fail "fact.sh on an empty root: wrong exit"; fi
 
+echo "=== test-facts: consolidate --root works one section at a time (#91) ==="
+R=$(mktemp -d); trap 'rm -rf "$repo" "$R"' EXIT
+mkdir -p "$R/estate/episodes" "$R/estate/facts" "$R/projects/valuedocs/episodes" "$R/projects/valuedocs/facts"
+printf 'format: 1\nvisibility: private\n' >"$R/memory.yaml"
+cat >"$R/projects/valuedocs/episodes/2026-03-01-vd.yaml" <<YAML
+id: 2026-03-01-vd
+format: 1
+visibility: private
+date: 2026-03-01
+project: valuedocs
+asked: fixture
+built: []
+decided: []
+refused: []
+learned:
+  - "the fixture ledger closes on the last working day"
+open: []
+YAML
+cat >"$R/estate/episodes/2026-03-02-owner.yaml" <<YAML
+id: 2026-03-02-owner
+format: 1
+visibility: private
+date: 2026-03-02
+project: penstock
+asked: fixture
+built: []
+decided: []
+refused: []
+learned:
+  - "the fixture laptop keeps its clones under one parent folder"
+open: []
+YAML
+rc=0; out=$(sh scripts/consolidate.sh --root "$R" 2>&1) || rc=$?
+[ $rc -eq 0 ] && printf '%s' "$out" | grep -q "### section projects/valuedocs" && printf '%s' "$out" | grep -q "ledger closes" \
+    && pass "a sectioned root is consolidated per section (dry run)" || { fail "sectioned dry run (exit $rc)"; printf '%s\n' "$out"; }
+[ -z "$(ls "$R/projects/valuedocs/facts")" ] && pass "the dry run wrote nothing" || fail "the dry run wrote a fact"
+rc=0; out=$(sh scripts/consolidate.sh --root "$R" --write 2>&1) || rc=$?
+vd=$(ls "$R/projects/valuedocs/facts"/*.yaml 2>/dev/null | head -1) || true; es=$(ls "$R/estate/facts"/*.yaml 2>/dev/null | head -1) || true
+[ $rc -eq 0 ] && [ -n "$vd" ] && grep -q '^scope: project:valuedocs$' "$vd" && grep -q '^visibility: private$' "$vd" \
+    && pass "a project section's episode becomes a fact in that section, scoped project:<name>, private" || { fail "project section write (exit $rc)"; printf '%s\n' "$out"; }
+[ -n "$es" ] && grep -q '^scope: estate$' "$es" && pass "an estate episode becomes an estate-scoped fact under estate/facts/" || fail "estate section write"
+rc=0; cs=$(sh scripts/check-cards.sh --root "$R" 2>&1) || rc=$?
+[ $rc -eq 0 ] && pass "check-cards --root passes on what consolidate wrote" || { fail "check-cards failed on the written root"; printf '%s\n' "$cs" | grep -E "^FAIL"; }
+cat >"$R/projects/valuedocs/episodes/2026-03-03-leak.yaml" <<YAML
+id: 2026-03-03-leak
+format: 1
+visibility: private
+date: 2026-03-03
+project: valuedocs
+asked: fixture
+built: []
+decided: []
+refused: []
+learned:
+  - "the fixture box password: hunter2abcdef1234"
+open: []
+YAML
+cat >"$R/estate/episodes/2026-03-04-clean.yaml" <<YAML
+id: 2026-03-04-clean
+format: 1
+visibility: private
+date: 2026-03-04
+project: penstock
+asked: fixture
+built: []
+decided: []
+refused: []
+learned:
+  - "the fixture printer sits on the second floor"
+open: []
+YAML
+before=$(find "$R" -path '*/facts/*.yaml' | sort | md5sum)
+rc=0; err=$(sh scripts/consolidate.sh --root "$R" --write 2>&1 >/dev/null) || rc=$?
+after=$(find "$R" -path '*/facts/*.yaml' | sort | md5sum)
+[ "$rc" -eq 2 ] && pass "a credential-shaped line in one section stops the sectioned --write with exit 2" || fail "credential in a section exited $rc"
+[ "$before" = "$after" ] && pass "nothing is written in any section, the clean estate section included" || fail "a section was written despite the credential stop"
+printf '%s' "$err" | grep -q "projects/valuedocs/episodes/2026-03-03-leak.yaml: learned item 1" \
+    && pass "the stop names the episode by its path from the root" || { fail "the credential stop does not name projects/valuedocs/episodes/..."; printf '%s\n' "$err"; }
+printf '%s' "$err" | grep -q hunter2 && fail "the credential value was printed" || pass "the value itself is never printed"
+rm -f "$R/projects/valuedocs/episodes/2026-03-03-leak.yaml" "$R/estate/episodes/2026-03-04-clean.yaml"
+if sh scripts/consolidate.sh --root >/dev/null 2>&1; then fail "--root without a value accepted"
+else [ $? -eq 64 ] && pass "consolidate --root without a value exits 64" || fail "consolidate --root without a value: wrong exit"; fi
+
 exit $status

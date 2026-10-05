@@ -1,7 +1,12 @@
 #!/bin/sh
 # consolidate.sh — proposes facts from episodes' learned lines (issue #87, slice 2 of #85).
 #
-# Usage: consolidate.sh [--since <YYYY-MM-DD>] [--write] [--replace]
+# Usage: consolidate.sh [--since <YYYY-MM-DD>] [--write] [--replace] [--root <dir>]
+#
+# --root <dir> (else MEMORY_ROOT, else this repository) chooses the memory root (#91,
+# docs/memory-root.md). A sectioned root is consolidated one section at a time: a section's
+# episodes propose facts into that section's facts/, scoped project:<name> (or estate under
+# estate/), with the root's memory.yaml setting visibility. --section and --memory-yaml are internal.
 #
 # Dry-run by default: prints one row per proposal, `action | subject | statement | from episode`,
 # where action is new (no active fact shares the subject), confirm (one does and says the same;
@@ -18,26 +23,70 @@
 # Exit codes: 0 ok (also when there is nothing to propose), 1 failure, 2 credential shape,
 # 3 destination exists without --replace, 64 usage.
 set -eu
-cd "$(dirname "$0")/.."
+caller_dir=$(pwd)   # a relative --root or MEMORY_ROOT means relative to where it was run
+tooldir=$(cd "$(dirname "$0")/.." && pwd)
 
-since=""; write=0; replace=0
+since=""; write=0; replace=0; root=""; section=""; section_yaml=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --since) since="$2"; shift 2 ;;
         --write) write=1; shift ;;
         --replace) replace=1; shift ;;
-        -h|--help) sed -n '2,21p' "$0" >&2; exit 0 ;;
+        --root|--section|--memory-yaml)
+            [ $# -ge 2 ] && [ -n "$2" ] || { echo "consolidate.sh: $1 needs a value" >&2; exit 64; }
+            case "$1" in --root) root="$2" ;; --section) section="$2" ;; *) section_yaml="$2" ;; esac
+            shift 2 ;;
+        -h|--help) awk 'NR == 1 || /^set -eu/ { next } /^#/ { print; next } { exit }' "$0" >&2; exit 0 ;;
         *) echo "consolidate.sh: unknown argument '$1'" >&2; exit 64 ;;
     esac
 done
 case "$since" in ""|[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;; *) echo "consolidate.sh: --since takes YYYY-MM-DD" >&2; exit 64 ;; esac
+if [ -n "$section" ] && [ -z "$section_yaml" ]; then echo "consolidate.sh: --section is internal and needs --memory-yaml" >&2; exit 64; fi
+[ -n "$root" ] || root="${MEMORY_ROOT:-$tooldir}"
+case "$root" in /*) ;; *) root="$caller_dir/$root" ;; esac
+[ -d "$root" ] || { echo "consolidate.sh: root '$root' is not a directory" >&2; exit 64; }
+root=$(cd "$root" && pwd)
+
+if [ -d "$root/projects" ] && [ -z "$section" ]; then
+    # one section at a time; with --write, every section is first checked without writing, so a
+    # credential-shaped line in one section stops the run before any section is written (exit 2)
+    run_sections() { # writes when $write_pass is 1
+        sectioned_status=0
+        for sec in "$root/estate" "$root"/projects/*; do
+            [ -d "$sec/episodes" ] || continue
+            rel=${sec#"$root"/}
+            case "$rel" in estate|projects/penstock|projects/cistern|projects/valuedocs|projects/site) ;;
+                *) echo "consolidate.sh: $rel is not a known section; skipped (check-cards.sh fails it)" >&2; continue ;; esac
+            echo "### section $rel"
+            set -- --root "$sec" --section "$rel" --memory-yaml "$root/memory.yaml"
+            [ -n "$since" ] && set -- "$@" --since "$since"
+            [ "$write_pass" -eq 1 ] && set -- "$@" --write
+            [ "$replace" -eq 1 ] && set -- "$@" --replace
+            rc=0; sh "$0" "$@" || rc=$?
+            [ "$rc" -eq 0 ] || [ "$sectioned_status" -ne 0 ] || sectioned_status=$rc
+        done
+    }
+    if [ "$write" -eq 1 ]; then
+        write_pass=0; run_sections >/dev/null
+        if [ "$sectioned_status" -eq 2 ]; then
+            echo "consolidate.sh: a credential-shaped learned line in a section (named above); nothing written in any section" >&2
+            exit 2
+        fi
+    fi
+    write_pass=$write; run_sections
+    exit "$sectioned_status"
+fi
+cd "$root"
+
 [ -d episodes ] || { echo "consolidate.sh: no episodes/ folder; nothing to consolidate"; exit 0; }
-[ -f scripts/lib/credential-grep.sh ] || { echo "consolidate.sh: scripts/lib/credential-grep.sh is missing; refusing to run without it" >&2; exit 1; }
+[ -f "$tooldir/scripts/lib/credential-grep.sh" ] || { echo "consolidate.sh: scripts/lib/credential-grep.sh is missing; refusing to run without it" >&2; exit 1; }
 
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 set -- "$(pwd)"
 [ -n "$since" ] && set -- "$@" --since "$since"
-python3 scripts/lib/consolidate_generate.py "$@" >"$work/proposals.json"
+[ -n "$section_yaml" ] && set -- "$@" --memory-yaml "$section_yaml"
+[ "$section" = estate ] && set -- "$@" --estate
+python3 "$tooldir/scripts/lib/consolidate_generate.py" "$@" >"$work/proposals.json"
 
 # --- the raw learned lines go through the credential grep before anything derived from them is shown
 # (as .yaml files: the grep's bare-value pass only reads config/doc extensions)
@@ -48,11 +97,11 @@ for r in json.load(open(sys.argv[1])):
     with open(os.path.join(sys.argv[2], f"{r['episode']}__{r['learned_index']}.yaml"), "w") as f:
         f.write(r["learned"] + "\n")
 PYEOF
-if hits=$(sh scripts/lib/credential-grep.sh "$work/learned"); then :; else
+if hits=$(sh "$tooldir/scripts/lib/credential-grep.sh" "$work/learned"); then :; else
     rc=$?
     if [ "$rc" -eq 2 ]; then
         echo "consolidate.sh: a learned line contains a credential-shaped value; nothing proposed or written. Fix the episode first:" >&2
-        printf '%s\n' "$hits" | sed -E "s|^$work/learned/(.*)__([0-9]+)\.yaml:[0-9]+.*|episodes/\1.yaml: learned item \2|" >&2
+        printf '%s\n' "$hits" | sed -E "s|^$work/learned/(.*)__([0-9]+)\.yaml:[0-9]+.*|${section:+$section/}episodes/\1.yaml: learned item \2|" >&2
         exit 2
     fi
     echo "consolidate.sh: credential-grep.sh exited $rc" >&2; exit 1
@@ -135,11 +184,11 @@ json.dump(plan, open(os.path.join(out, "..", "plan.json"), "w"))
 PYEOF
 rc=$?; [ "$rc" -eq 0 ] || exit "$rc"
 
-if hits=$(sh scripts/lib/credential-grep.sh "$work/draft"); then :; else
+if hits=$(sh "$tooldir/scripts/lib/credential-grep.sh" "$work/draft"); then :; else
     rc=$?
     if [ "$rc" -eq 2 ]; then
         echo "consolidate.sh: a draft contains a credential-shaped value; nothing written. Lines (path:line only):" >&2
-        printf '%s\n' "$hits" | sed -E "s|^$work/draft/(.*):([0-9]+).*|draft \1:\2|" >&2
+        printf '%s\n' "$hits" | sed -E "s|^$work/draft/(.*):([0-9]+).*|draft ${section:+$section/}facts/\1:\2|" >&2
         exit 2
     fi
     echo "consolidate.sh: credential-grep.sh exited $rc" >&2; exit 1
@@ -148,4 +197,4 @@ fi
 for f in "$work"/draft/*.yaml; do
     cp "$f" "facts/$(basename "$f")"
 done
-echo "consolidate.sh: wrote $(ls "$work/draft" | wc -l | tr -d ' ') file(s) under facts/ — review them, then run scripts/check-cards.sh"
+echo "consolidate.sh: wrote $(ls "$work/draft" | wc -l | tr -d ' ') file(s) under ${section:+$section/}facts/ — review them, then run scripts/check-cards.sh"

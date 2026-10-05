@@ -119,8 +119,9 @@ elif commits:
     built.append({"pr": "<fill in: owner/repo#n>", "files": []})
 
 def repo_memory():
-    """memory.yaml at the repository root (#98): its project and visibility, or None when absent."""
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "memory.yaml")
+    """memory.yaml at the memory root (#98, #91): its project and visibility, or None when absent.
+    write-episode.sh passes the root's path; this repository's own is the fallback."""
+    path = meta.get("memory_yaml") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "memory.yaml")
     try:
         with open(path, encoding="utf-8") as f:
             mem = yaml.safe_load(f)

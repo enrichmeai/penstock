@@ -115,4 +115,28 @@ for args in "--project penstock --slug aB --dry-run" "--project penstock --slug 
         rc=$?; [ "$rc" -eq 64 ] && pass "'$args' refused with exit 64" || fail "'$args' exited $rc, expected 64"; fi
 done
 
+echo "=== test-write-episode: --root writes into a memory root (#91) ==="
+mem=$(mktemp -d); trap 'rm -rf "$repo" "$mem" "$mem/../caller-wd"' EXIT
+mkdir -p "$mem/estate/facts" "$mem/projects/valuedocs"
+printf 'format: 1\nvisibility: private\n' >"$mem/memory.yaml"
+run --project valuedocs --slug rooted --date 2026-02-06 --root "$mem" >/dev/null 2>&1 \
+    && [ -f "$mem/projects/valuedocs/episodes/2026-02-06-rooted.yaml" ] && [ ! -e "$repo/episodes/2026-02-06-rooted.yaml" ] \
+    && pass "a sectioned root takes the draft in projects/<project>/episodes/" || fail "no draft at projects/valuedocs/episodes/ in the root"
+grep -q '^visibility: private$' "$mem/projects/valuedocs/episodes/2026-02-06-rooted.yaml" 2>/dev/null \
+    && pass "the draft takes the root's visibility (private)" || fail "the draft's visibility is not the root's"
+run --project estate --slug owner-wide --date 2026-02-06 --root "$mem" >/dev/null 2>&1 \
+    && [ -f "$mem/estate/episodes/2026-02-06-owner-wide.yaml" ] && pass "--project estate goes to estate/episodes/" || fail "no draft at estate/episodes/"
+(cd "$repo" && MEMORY_ROOT="$mem" PATH=/usr/bin:/bin sh scripts/write-episode.sh --project valuedocs --slug via-env --date 2026-02-06 >/dev/null 2>&1) \
+    && [ -f "$mem/projects/valuedocs/episodes/2026-02-06-via-env.yaml" ] && pass "MEMORY_ROOT chooses the root" || fail "MEMORY_ROOT was ignored"
+if run --project valuedocs --slug elsewhere --date 2026-02-06 --root "$mem" --out projects/cistern/episodes/x.yaml >/dev/null 2>&1; then
+    fail "--out into another project's episodes/ was accepted"
+else rc=$?; [ "$rc" -eq 64 ] && [ ! -e "$mem/projects/cistern/episodes/x.yaml" ] && pass "--out into another project's episodes/ refused with exit 64" || fail "--out elsewhere exited $rc"; fi
+if run --project valuedocs --slug x --root >/dev/null 2>&1; then fail "--root without a value accepted"
+else rc=$?; [ "$rc" -eq 64 ] && pass "--root without a value exits 64" || fail "--root without a value exited $rc"; fi
+# two levels down from the root's parent: ../../<root> resolves only from the caller's directory
+mkdir -p "$mem/../caller-wd/deeper" && (cd "$mem/../caller-wd/deeper" && PATH=/usr/bin:/bin sh "$repo/scripts/write-episode.sh" --project valuedocs --slug relative --date 2026-02-06 --root "../../$(basename "$mem")" >/dev/null 2>&1) \
+    && [ -f "$mem/projects/valuedocs/episodes/2026-02-06-relative.yaml" ] && pass "a relative --root is resolved from where the command runs" || fail "a relative --root was not resolved from the caller's directory"
+run --project penstock --slug flat-default --date 2026-02-06 >/dev/null 2>&1 && [ -f "$repo/episodes/2026-02-06-flat-default.yaml" ] \
+    && pass "without --root the draft still goes to this repository's episodes/" || fail "the flat default moved"
+
 exit $status

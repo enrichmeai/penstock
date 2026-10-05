@@ -46,10 +46,20 @@ from the root.
 | `scripts/memory-grant.sh`, `memory-revoke.sh` | `reviewer … --project <name>` grants read on `/memory/projects/<name>/patterns/` and nothing above it (another project, the estate, facts and episodes stay closed), plus read and write on `/memory/verdicts/<slug>/`. Revoke takes the same `--project`. The `agent` form still grants `/memory/`, which after a sectioned publish is **every project's facts and episodes**: grant it only to an agent that acts as you. |
 | `PatternCatalog` (recall in the turn, #88) | Loads `estate/` plus `projects/<project>/` for the workspace's project (`agent.memory.project`, or the workspace directory's name), never another project's section. With no project resolved, the estate only. Point `agent.memory.root` at the clone. |
 
+## Writing into a root
+
+| Tool | Sectioned root |
+|---|---|
+| `scripts/write-episode.sh --root` | The draft goes to `projects/<project>/episodes/` (or `estate/episodes/` for `--project estate`) and takes the root's `memory.yaml` visibility. `--out` is confined to that folder. Git and `gh` still read this repository, so an episode about another repository's work is drafted from its PR and issue, or filled in by hand. |
+| `scripts/consolidate.sh --root` | One section at a time: a section's episodes propose facts into that section's `facts/`, scoped `project:<name>`, or `estate` under `estate/` (whatever project the episode names), with the root's `memory.yaml` setting visibility. With `--write`, every section is checked first: a credential-shaped learned line in any section stops the run (exit 2, naming `projects/<name>/episodes/<file>`) before any section is written. Otherwise the first failing section's exit code is kept. |
+
+A relative `--root` or `MEMORY_ROOT` is resolved from the directory the command runs in.
+
 ## Not built yet (the rest of #91)
 
-- `write-episode.sh`, `consolidate.sh` and `promote-pattern.sh` still write into this repository;
-  `--root` for writers comes next.
+- `promote-pattern.sh` still writes into this repository: its draft is built from this
+  repository's git history and request cards, and splitting those from the destination is its own
+  change.
 - The second-machine publish: a fresh clone has no `.cistern-sync.json`, and `cistern sync` on
   Cistern `main` has no `--adopt` yet (enrichmeai/cistern#219), so it cannot publish over a pod that
   already holds the cards.
