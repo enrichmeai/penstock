@@ -33,6 +33,16 @@ COPY gradlew bootstrap.sh ./
 RUN chmod +x gradlew bootstrap.sh && ./bootstrap.sh > /dev/null
 
 COPY src ./src
+# The suite reads this repository's own memory cards: MemoryRetrievalIT and AcpStdioIT prove
+# the real seed pattern (patterns/stdio-json-rpc-agent) loads, not a fixture standing in for
+# it, from agent.memory.root's default (the working directory). Build stage only: the runtime
+# image below ships the jar, not these folders.
+COPY patterns ./patterns
+COPY references ./references
+COPY requests ./requests
+COPY facts ./facts
+COPY episodes ./episodes
+COPY memory.yaml ./
 RUN ./gradlew --no-daemon clean bootJar -x test
 # Actually run the suite, rather than just compiling it. testClasses resolves the
 # test *compile* classpath only, which leaves junit-platform-launcher and h2
