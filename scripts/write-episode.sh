@@ -71,15 +71,20 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "$project" ] || { echo "write-episode.sh: --project is required" >&2; exit 64; }
-case "$project" in
-    penstock|cistern|valuedocs|site|estate) ;;
-    *) echo "write-episode.sh: --project must be one of penstock, cistern, valuedocs, site, estate" >&2; exit 64 ;;
-esac
 # --- where the draft goes: the root's episodes/ folder for this project (#91) ---------------
 [ -n "$root" ] || root="${MEMORY_ROOT:-$repo_root}"
 case "$root" in /*) ;; *) root="$caller_dir/$root" ;; esac
 [ -d "$root" ] || { echo "write-episode.sh: root '$root' is not a directory" >&2; exit 64; }
 root=$(cd "$root" && pwd)
+# the projects the root's memory.yaml declares (#112), or the closed list when it declares none
+known=$(python3 "$repo_root/scripts/lib/memory_projects.py" names "$root/memory.yaml") \
+    || { echo "write-episode.sh: could not read the projects of $root/memory.yaml" >&2; exit 64; }
+case "$project" in
+    *[!a-z0-9-]*|-*) echo "write-episode.sh: --project must be a project name ([a-z0-9-]), got '$project'" >&2; exit 64 ;;
+esac
+if [ "$project" != estate ] && ! printf '%s\n' "$known" | grep -qxF -- "$project"; then
+    echo "write-episode.sh: --project must be estate or one of: $(printf '%s\n' "$known" | tr '\n' ' ')" >&2; exit 64
+fi
 if [ -d "$root/projects" ]; then
     if [ "$project" = estate ]; then episodes_rel=estate/episodes; else episodes_rel="projects/$project/episodes"; fi
 else

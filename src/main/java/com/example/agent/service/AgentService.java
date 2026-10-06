@@ -5,6 +5,7 @@ import com.example.agent.llm.CompletionResult;
 import com.example.agent.llm.LlmCallContext;
 import com.example.agent.llm.LlmProvider;
 import com.example.agent.memory.ContextAssembler;
+import com.example.agent.memory.PatternCatalog;
 import com.example.agent.model.*;
 import com.example.agent.tools.ToolContext;
 import com.example.agent.tools.ToolRegistry;
@@ -144,6 +145,12 @@ public class AgentService {
         // (flag off, or no match) leaves the system prompt byte-identical.
         String systemPromptForTurn = props.getLlm().getSystemPrompt();
         if (contextAssembler != null) {
+            if (auditLogger != null) {
+                // Which sections this turn could draw from, and which were kept out (#112).
+                for (PatternCatalog.SectionDecision d : contextAssembler.sectionDecisions()) {
+                    auditLogger.sectionDecided(session.getUserId(), session.getId(), d.section(), d.loaded(), d.reason());
+                }
+            }
             Optional<ContextAssembler.Assembled> assembled = contextAssembler.assemble(userInput);
             if (assembled.isPresent()) {
                 systemPromptForTurn = assembled.get().block() + "\n\n" + systemPromptForTurn;

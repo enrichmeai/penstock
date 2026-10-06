@@ -492,6 +492,10 @@ document.getElementById('audit-session').addEventListener('click', async () => {
       ? `memory · episode <b>${esc(d.episodeId)}</b> · ${esc(d.date)}`
       : ev.eventType === 'pattern.loaded'
       ? `memory · pattern <b>${esc(d.patternId)}</b> · ${esc(d.version)}`
+      : ev.eventType === 'section.loaded'
+      ? `memory · section <b>${esc(d.section)}</b> · loaded · ${esc(d.reason)}`
+      : ev.eventType === 'section.refused'
+      ? `memory · section <b>${esc(d.section)}</b> · kept out · ${esc(d.reason)}`
       : ev.eventType === 'llm_call'
       ? `llm <b>${esc(d.provider)}</b> · ${d.ok ? 'ok' : 'failed'} · ${esc(d.inputTokens ?? 0)} in / ${esc(d.outputTokens ?? 0)} out`
       : `${esc(ev.eventType)}`;

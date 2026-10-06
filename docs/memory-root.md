@@ -40,11 +40,47 @@ from the root.
 
 | Tool | Sectioned root |
 |---|---|
-| `scripts/check-cards.sh` | First the rules across sections, each a FAIL: `memory.yaml` and `estate/` exist; no card folder sits at the root; every `projects/<name>` is one of penstock, cistern, valuedocs, site; a fact's scope matches its folder (`estate`, or `project:<name>`); an episode under `projects/<name>/` has `project: <name>`; ids (per kind) and active subjects are unique across sections. Then `estate/` and each `projects/<name>/` in turn, against the root's `memory.yaml`, under a `### section <path>` header; every PASS/FAIL/WARN/STALE line about a card gives the card's path from the root (`FAIL: projects/cistern/facts/x.yaml …`). Cross-references (provenance, supersede, rejected lines) resolve within one section. Staleness compares patterns with penstock's latest tag. |
+| `scripts/check-cards.sh` | First the rules across sections, each a FAIL: `memory.yaml` and `estate/` exist; no card folder sits at the root; every `projects/<name>` is a project the root declares (§ Projects and who sees them), or one of penstock, cistern, valuedocs, site when it declares none; the `projects:` block is valid; a fact's scope matches its folder (`estate`, or `project:<name>`); an episode under `projects/<name>/` has `project: <name>`; ids (per kind) and active subjects are unique across sections. Then `estate/` and each `projects/<name>/` in turn, against the root's `memory.yaml`, under a `### section <path>` header; every PASS/FAIL/WARN/STALE line about a card gives the card's path from the root (`FAIL: projects/cistern/facts/x.yaml …`). Cross-references (provenance, supersede, rejected lines) resolve within one section. Staleness compares patterns with penstock's latest tag. |
 | `scripts/fact.sh` | Searches `estate/facts/` and every `projects/*/facts/`; each match names its section. |
 | `scripts/memory-publish.sh` | Mirrors the whole root to the pod after `check-cards.sh --root` passes: one `cistern sync` per card folder in `estate/` and each known `projects/<name>/`, to the same path under `/memory/` (`estate/facts` → `/memory/estate/facts/`). The pod is the owner's, so episodes and facts go too, sub-folders included (`facts/rejected/lines.yaml`). A re-run with nothing changed sends nothing. A folder in a section that is not a card folder is reported and skipped. `--delete` prunes inside the published containers only: a folder deleted locally stays on the pod until removed by hand. |
-| `scripts/memory-grant.sh`, `memory-revoke.sh` | `reviewer … --project <name>` grants read on `/memory/projects/<name>/patterns/` and nothing above it (another project, the estate, facts and episodes stay closed), plus read and write on `/memory/verdicts/<slug>/`. Revoke takes the same `--project`. The `agent` form still grants `/memory/`, which after a sectioned publish is **every project's facts and episodes**: grant it only to an agent that acts as you. |
-| `PatternCatalog` (recall in the turn, #88) | Loads `estate/` plus `projects/<project>/` for the workspace's project (`agent.memory.project`, or the workspace directory's name), never another project's section. With no project resolved, the estate only. Point `agent.memory.root` at the clone. |
+| `scripts/memory-grant.sh`, `memory-revoke.sh` | `reviewer … --project <name>` (any plain project name, `[a-z0-9-]`, not `estate`: these act on pod paths and do not read a root's `memory.yaml`) grants read on `/memory/projects/<name>/patterns/` and nothing above it (another project, the estate, facts and episodes stay closed), plus read and write on `/memory/verdicts/<slug>/`. Revoke takes the same `--project`. The `agent` form still grants `/memory/`, which after a sectioned publish is **every project's facts and episodes**: grant it only to an agent that acts as you. |
+| `PatternCatalog` (recall in the turn, #88) | Loads `estate/` plus `projects/<project>/` for the workspace's project (`agent.memory.project`, or the workspace directory's name), never another project's section. With no project resolved, the estate only. When the root declares its projects, what loads follows § Projects and who sees them, and each turn audits `section.loaded` / `section.refused`. Point `agent.memory.root` at the clone. |
+
+## Projects and who sees them
+
+[#112](https://github.com/enrichmeai/penstock/issues/112). A root may declare its projects in
+`memory.yaml`, each with the **audience** that sees its output:
+
+```yaml
+projects:
+  oss-lib:    { audience: public }                               # open source: everyone sees it
+  product:    { audience: private }                              # the owner's own work
+  platform:   { audience: private, uses: [oss-lib] }             # builds on oss-lib
+  standalone: { audience: private, personal: none, uses: [oss-lib] }
+```
+
+A card loads into a project only if everyone who sees that project's output may see it:
+
+| Loads into → | public | private | private, `personal: none` |
+|---|---|---|---|
+| its own `projects/<name>/` | ✓ | ✓ | ✓ |
+| a `public` project it `uses` | ✓ | ✓ | ✓ |
+| a `private` project it `uses` | ✗ refused | ✓ | ✓ |
+| `estate/` cards with `visibility: shareable` or `public` | ✓ | ✓ | ✗ |
+| `estate/` cards with `visibility: private` (or none) | ✗ | ✓ | ✗ |
+
+- `personal` overrides the estate default: `all`, `shareable` or `none`.
+- A project the block does not declare gets the estate only, all of it: declare every public project, so it gets the shareable estate cards and never the private ones. A root without a `projects:` block
+  behaves as before: the estate plus the workspace's own section.
+- `check-cards.sh` fails a malformed block, a `uses` naming an undeclared project, and a public
+  project that uses a private one. Penstock refuses the same at load time, so a mistake that
+  reaches it still keeps the card out.
+- Every turn records each section as `section.loaded` or `section.refused` with the reason; the web
+  UI's Audit view shows both.
+- A project is a name, not a repository: it need not live in any particular GitHub organisation.
+  `write-episode.sh --root` accepts the declared names.
+- `uses` brings in another project's cards, and its facts are selected by their triggers. Its
+  episodes stay with it: the latest-episodes rule reads only the project's own.
 
 ## Writing into a root
 

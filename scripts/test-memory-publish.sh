@@ -87,6 +87,12 @@ else fail "grant without --project (exit $rc)"; cat "$T/grantflat/calls"; fi
 run grantbad sh scripts/memory-grant.sh reviewer https://r.example/#me --as alice --project ../estate; rc=$?
 [ $rc -eq 64 ] && [ "$(calls grantbad '^grant')" -eq 0 ] && pass "an unknown --project is refused before any grant" || fail "grant --project ../estate exited $rc"
 
+run grantdecl sh scripts/memory-grant.sh reviewer https://r.example/#me --as alice --project oss-lib; rc=$?
+[ $rc -eq 0 ] && grep -q "^grant https://r.example/#me --read /memory/projects/oss-lib/patterns/ " "$T/grantdecl/calls" \
+    && pass "any project name a root can declare is granted (#112)" || fail "grant --project oss-lib exited $rc"
+run grantestate sh scripts/memory-grant.sh reviewer https://r.example/#me --as alice --project estate; rc=$?
+[ $rc -eq 64 ] && [ "$(calls grantestate '^grant')" -eq 0 ] && pass "--project estate is refused (the estate is not a project)" || fail "grant --project estate exited $rc"
+
 run grantagent sh scripts/memory-grant.sh agent https://a.example/#me --project valuedocs; rc=$?
 [ $rc -eq 64 ] && pass "--project on the agent form is refused" || fail "agent --project exited $rc"
 

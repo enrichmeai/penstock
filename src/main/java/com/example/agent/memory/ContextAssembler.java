@@ -107,6 +107,11 @@ public class ContextAssembler {
         return project;
     }
 
+    /** What the catalogue loaded and refused for this project (#112); empty with no declared projects. */
+    public List<PatternCatalog.SectionDecision> sectionDecisions() {
+        return props.getMemory().isEnabled() ? catalog.sectionDecisions() : List.of();
+    }
+
     /** One pattern the block drew from, for {@code AuditLogger.patternLoaded}. */
     public record LoadedPattern(String id, String version) {
     }

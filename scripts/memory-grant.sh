@@ -123,9 +123,10 @@ case "$slug" in
 esac
 patterns_path="/memory/patterns/"
 if [ -n "$project" ]; then
+    # any project the root declares (#112): a plain folder name, never a path
     case "$project" in
-        penstock|cistern|valuedocs|site) patterns_path="/memory/projects/$project/patterns/" ;;
-        *) echo "memory-grant.sh: --project must be one of penstock, cistern, valuedocs, site; got '$project'" >&2; exit 64 ;;
+        estate|*[!a-z0-9-]*|-*) echo "memory-grant.sh: --project must be a project name ([a-z0-9-]), got '$project'" >&2; exit 64 ;;
+        *) patterns_path="/memory/projects/$project/patterns/" ;;
     esac
 fi
 

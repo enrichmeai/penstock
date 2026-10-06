@@ -16,7 +16,7 @@ make_fixture_repo() {
     mkdir -p "$repo/scripts/lib" "$repo/references" "$repo/requests"
     cp scripts/check-cards.sh "$repo/scripts/check-cards.sh"
     # the episode rules call this helper by its repo-relative path (#86)
-    cp scripts/lib/credential-grep.sh "$repo/scripts/lib/credential-grep.sh"
+    cp scripts/lib/credential-grep.sh scripts/lib/memory_projects.py "$repo/scripts/lib/"
     git -C "$repo" init -q -b main
     git -C "$repo" config user.email test@example.com
     git -C "$repo" config user.name test
@@ -383,6 +383,20 @@ sect_fail wrong-folder "FAIL: projects/cistern/facts/vd-in-cistern.yaml has scop
 sect_fail shared-subject "subject 'console/shared' is active in both estate/facts/estate-acct.yaml and projects/valuedocs/facts/vd-acct.yaml" "an active subject shared by the estate and a project fails"
 sect_fail shared-id "fact id 'dup-id' is used in both estate/facts/dup-id.yaml and projects/valuedocs/facts/dup-id.yaml" "an id used in two sections fails"
 sect_fail unknown-project "FAIL: projects/weird-x is not a known project" "a project folder outside the closed list fails"
+# #112: the root's memory.yaml declares its projects; names come from there, not the closed list
+if bash scripts/check-cards.sh --root scripts/test/cards/sectioned/declared >"$out" 2>&1 \
+   && grep -q "PASS: projects/oss-lib/facts/oss-lib-fixture.yaml (fact, format 1, private)" "$out"; then
+    echo "PASS: a project declared in memory.yaml is a known project, checked like any other"
+else
+    echo "FAIL: a declared project was not accepted"; cat "$out"; status=1
+fi
+sect_fail declared-undeclared-folder "FAIL: projects/valuedocs is not a known project (oss-lib)" "with projects declared, a folder the block does not name fails"
+sect_fail public-uses-private "FAIL: memory.yaml project 'oss-lib' is public but uses 'product', which is private" "a public project using a private one fails"
+sect_fail bad-audience "FAIL: memory.yaml project 'oss-lib' audience must be one of ['public', 'private'], got 'everyone'" "an unknown audience fails"
+sect_fail uses-undeclared "FAIL: memory.yaml project 'oss-lib' uses 'ghost', which is not declared" "a uses entry naming no declared project fails"
+if MEMORY_PROJECTS_YAML=scripts/test/cards/sectioned/declared/memory.yaml bash scripts/check-cards.sh --root scripts/test/cards/sectioned/unknown-project >"$out" 2>&1; then
+    echo "FAIL: MEMORY_PROJECTS_YAML in the caller's environment widened the known projects"; cat "$out"; status=1
+else echo "PASS: the caller's environment cannot add a project"; fi
 sect_fail no-estate "FAIL: a sectioned memory root needs an estate/ folder" "a sectioned root without estate/ fails"
 sect_fail root-cards "FAIL: facts/ sits at the root of a sectioned memory root" "card folders at the root of a sectioned root fail"
 sect_fail empty-projects "FAIL: a sectioned memory root needs an estate/ folder" "a sectioned root with nothing in it fails"

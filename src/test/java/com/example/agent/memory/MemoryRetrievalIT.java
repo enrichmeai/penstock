@@ -104,6 +104,9 @@ class MemoryRetrievalIT {
         AuditEventEntity event = events.get(0);
         assertThat(event.getDetailJson()).contains("\"patternId\":\"stdio-json-rpc-agent\"");
         assertThat(event.getDetailJson()).contains("\"version\":\"1\"");
+        // a root that declares no projects records no section decisions (#112)
+        assertThat(auditRepo.findBySessionIdOrderByTimestampAsc(sessionId))
+                .noneMatch(e -> e.getEventType().startsWith("section."));
     }
 
     private static String extractSessionId(String body) {
