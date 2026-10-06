@@ -1,0 +1,7 @@
+# Test fixture for #112: projects declared in the root memory.yaml.
+format: 1
+visibility: private
+layout: sectioned
+projects:
+  oss-lib: { audience: public, uses: [product] }
+  product: { audience: private }

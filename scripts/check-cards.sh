@@ -24,7 +24,8 @@ set -eu
 # The tools (scripts/lib, schema/) always come from this repository; the cards come from the root.
 # A root with a projects/ folder is sectioned (estate/ plus projects/<name>/, docs/memory-root.md):
 # the cross-section rules are checked first (estate/ exists, no card folder at the root, project
-# names from the closed list, fact scope matches its folder, ids and active subjects unique across
+# names declared in the root's memory.yaml projects: block or else the closed list (#112), a valid
+# block (audiences, a public project never using a private one), fact scope matches its folder, ids and active subjects unique across
 # sections), then every section in turn against the root's memory.yaml, and every PASS/FAIL/WARN/
 # STALE line about a card names the card's path from the root. --section and --memory-yaml are
 # internal: the sectioned run passes them to itself.
@@ -58,7 +59,10 @@ if [ -d "$root/projects" ] && [ -z "$section" ]; then
 import glob, os, sys, yaml
 root = os.environ["ROOT"]
 os.chdir(root)
-PROJECTS = {"penstock", "cistern", "valuedocs", "site"}
+sys.path.insert(0, os.environ["CARDS_LIB"])
+import memory_projects
+# the root's memory.yaml declares its projects (#112); without a projects: block, the closed list
+PROJECTS = set(memory_projects.names("memory.yaml"))
 KINDS = ("requests", "references", "patterns", "episodes", "facts")
 status = 0
 def fail(msg):
@@ -66,6 +70,9 @@ def fail(msg):
     print(f"FAIL: {msg}"); status = 1
 if not os.path.isfile("memory.yaml"):
     fail("memory.yaml is missing at the root of a sectioned memory root")
+else:
+    for problem in memory_projects.problems("memory.yaml"):
+        fail(problem)
 if not os.path.isdir("estate"):
     fail("a sectioned memory root needs an estate/ folder")
 for kind in KINDS:
@@ -113,10 +120,11 @@ for sec in sections:
                     fail(f"{path} has project {proj or '(none)'} but lives in {sec}/")
 sys.exit(status)
 PYEOF
+    known_projects=$(python3 "$CARDS_LIB/memory_projects.py" names "$root/memory.yaml")
     for sec in "$root/estate" "$root"/projects/*; do
         [ -d "$sec" ] || continue
         rel=${sec#"$root"/}
-        case "$rel" in estate|projects/penstock|projects/cistern|projects/valuedocs|projects/site) ;; *) continue ;; esac
+        if [ "$rel" != estate ] && ! printf '%s\n' "$known_projects" | grep -qxF "${rel#projects/}"; then continue; fi
         echo "### section $rel"
         if out=$(sh "$0" --root "$sec" --section "$rel" --memory-yaml "$root/memory.yaml" 2>&1); then :; else sectioned_status=1; fi
         printf '%s\n' "$out" | awk -v rel="$rel" '
@@ -189,7 +197,7 @@ if [ -d episodes ]; then
     # The credential check reuses scripts/lib/credential-grep.sh on a scratch copy of the
     # episode's learned/decided/refused text, so the rule set is the one every other card uses
     # and the matched value is never printed, only the episode's path.
-    python3 - <<'PYEOF' || episode_status=$?
+    MEMORY_PROJECTS_YAML="${section_yaml:-memory.yaml}" python3 - <<'PYEOF' || episode_status=$?
 import glob
 import os
 import re
@@ -199,8 +207,15 @@ import tempfile
 
 import yaml
 
-# Kept in step with episodes/README.md § Projects.
-PROJECTS = {"penstock", "cistern", "valuedocs", "site", "estate"}
+# Kept in step with episodes/README.md § Projects; a root's memory.yaml may declare its own (#112).
+# The path is set on this command alone (a section gets the root's memory.yaml), never inherited.
+sys.path.insert(0, os.environ.get("CARDS_LIB", "scripts/lib"))
+try:
+    import memory_projects
+except ImportError:
+    print("FAIL: scripts/lib/memory_projects.py is missing; episode projects cannot be checked")
+    sys.exit(1)
+PROJECTS = set(memory_projects.names(os.environ["MEMORY_PROJECTS_YAML"])) | {"estate"}
 PR_SHAPE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+$")
 NAME_SHAPE = re.compile(r"^(\d{4}-\d{2}-\d{2})-([a-z0-9][a-z0-9-]*)\.yaml$")
 

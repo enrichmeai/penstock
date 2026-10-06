@@ -1,0 +1,17 @@
+# Test fixture for #91 (a sectioned memory root: estate/ plus projects/<name>/).
+id: estate-shell-fixture
+format: 1
+visibility: private
+statement: The estate fixture shell idiom holds.
+kind: convention
+subject: fixture/estate-shell-fixture
+scope: estate
+status: asserted
+confidence: 1.0
+provenance:
+  - owner: 2026-01-31
+first_seen: 2026-01-31
+last_confirmed: 2026-01-31
+supersedes: ~
+superseded_by: ~
+triggers: [fixture, estate-shell-fixture]

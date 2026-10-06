@@ -121,6 +121,19 @@ public class AuditLoggerTest {
     }
 
     @Test
+    public void testSectionDecided_LoadedAndRefused() {
+        auditLogger.sectionDecided("alice", "session-1", "estate", true, "personal: shareable (shareable and public cards only)");
+        auditLogger.sectionDecided("alice", "session-1", "projects/product", false, "audience private is narrower than this project's public audience");
+
+        assertEquals(2, mockRepo.saved.size());
+        assertEquals("section.loaded", mockRepo.saved.get(0).getEventType());
+        assertTrue(mockRepo.saved.get(0).getDetailJson().contains("\"section\":\"estate\""));
+        assertEquals("section.refused", mockRepo.saved.get(1).getEventType());
+        assertTrue(mockRepo.saved.get(1).getDetailJson().contains("\"section\":\"projects/product\""));
+        assertTrue(mockRepo.saved.get(1).getDetailJson().contains("narrower"));
+    }
+
+    @Test
     public void testFactAndEpisodeLoaded_NoRepository_DoNotThrow() {
         AuditLogger auditLoggerNoRepo = new AuditLogger(null, mapper);
 

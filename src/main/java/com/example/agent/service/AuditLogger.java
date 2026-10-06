@@ -146,6 +146,22 @@ public class AuditLogger {
         saveMemoryEvent(user, sessionId, "episode.loaded", detail);
     }
 
+    /**
+     * Records which memory section a turn drew from or was refused (#112), as
+     * {@code section.loaded} or {@code section.refused} with {@code section} and {@code reason};
+     * also an INFO line.
+     */
+    @Async
+    public void sectionDecided(String userId, String sessionId, String section, boolean loaded, String reason) {
+        String user = normalise(userId);
+        String type = loaded ? "section.loaded" : "section.refused";
+        log.info("{} user={} session={} section={} reason={}", type, user, sessionId, section, reason);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("section", section);
+        detail.put("reason", reason);
+        saveMemoryEvent(user, sessionId, type, detail);
+    }
+
     private void saveMemoryEvent(String user, String sessionId, String eventType, Map<String, Object> detail) {
         if (repo == null) {
             log.debug("Audit repository not available; skipping {} event", eventType);

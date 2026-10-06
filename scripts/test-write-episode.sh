@@ -17,7 +17,7 @@ repo=$(mktemp -d)
 trap 'rm -rf "$repo"' EXIT
 mkdir -p "$repo/scripts/lib" "$repo/episodes"
 cp scripts/write-episode.sh "$repo/scripts/"
-cp scripts/lib/write_episode_generate.py scripts/lib/credential-grep.sh "$repo/scripts/lib/"
+cp scripts/lib/write_episode_generate.py scripts/lib/credential-grep.sh scripts/lib/memory_projects.py "$repo/scripts/lib/"
 git -C "$repo" init -q -b main
 git -C "$repo" config user.email test@example.com
 git -C "$repo" config user.name test
@@ -138,5 +138,21 @@ mkdir -p "$mem/../caller-wd/deeper" && (cd "$mem/../caller-wd/deeper" && PATH=/u
     && [ -f "$mem/projects/valuedocs/episodes/2026-02-06-relative.yaml" ] && pass "a relative --root is resolved from where the command runs" || fail "a relative --root was not resolved from the caller's directory"
 run --project penstock --slug flat-default --date 2026-02-06 >/dev/null 2>&1 && [ -f "$repo/episodes/2026-02-06-flat-default.yaml" ] \
     && pass "without --root the draft still goes to this repository's episodes/" || fail "the flat default moved"
+
+echo "=== test-write-episode: the root's declared projects (#112) ==="
+decl=$(mktemp -d); trap 'rm -rf "$repo" "$mem" "$mem/../caller-wd" "$decl"' EXIT
+mkdir -p "$decl/estate/facts" "$decl/projects/oss-lib"
+printf 'format: 1\nvisibility: private\nprojects:\n  oss-lib: { audience: public }\n' >"$decl/memory.yaml"
+run --project oss-lib --slug declared --date 2026-02-06 --root "$decl" >/dev/null 2>&1 \
+    && [ -f "$decl/projects/oss-lib/episodes/2026-02-06-declared.yaml" ] \
+    && pass "a project the root declares takes a draft" || fail "a declared project was refused"
+if run --project valuedocs --slug undeclared --date 2026-02-06 --root "$decl" >/dev/null 2>&1; then
+    fail "a project the root does not declare was accepted"
+else rc=$?; [ "$rc" -eq 64 ] && [ ! -e "$decl/projects/valuedocs" ] && pass "a project the root does not declare is refused with exit 64" || fail "an undeclared project exited $rc"; fi
+printf 'format: 1\nvisibility: private\nprojects:\n  oss-lib: { audience: public }\n  ab: { audience: private }\n' >"$decl/memory.yaml"
+for bad in '.*' '..' 'o.s-lib'; do
+    if run --project "$bad" --slug pattern --date 2026-02-06 --root "$decl" >/dev/null 2>&1; then fail "--project '$bad' was accepted"
+    else rc=$?; [ "$rc" -eq 64 ] && [ ! -e "$decl/episodes" ] && pass "--project '$bad' is refused, not matched as a pattern" || fail "--project '$bad' exited $rc"; fi
+done
 
 exit $status

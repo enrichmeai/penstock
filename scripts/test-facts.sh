@@ -20,7 +20,7 @@ fail() { echo "FAIL: $1"; status=1; }
 repo=$(mktemp -d); trap 'rm -rf "$repo"' EXIT
 mkdir -p "$repo/scripts/lib" "$repo/episodes" "$repo/facts" "$repo/references" "$repo/requests"
 cp scripts/consolidate.sh scripts/fact.sh scripts/check-cards.sh "$repo/scripts/"
-cp scripts/lib/consolidate_generate.py scripts/lib/credential-grep.sh "$repo/scripts/lib/"
+cp scripts/lib/consolidate_generate.py scripts/lib/credential-grep.sh scripts/lib/memory_projects.py "$repo/scripts/lib/"
 git -C "$repo" init -q -b main; git -C "$repo" config user.email t@e; git -C "$repo" config user.name t
 ep() { # $1 id-suffix $2 date $3 learned line
     cat >"$repo/episodes/$2-$1.yaml" <<YAML
