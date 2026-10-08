@@ -186,6 +186,10 @@ Two things had to change to make a build survive the tool layer:
   block-list, and the whole point is to work offline. Putting Gradle in the image
   solves that without reversing the project's decision — the image build still
   bootstraps the wrapper the normal way for its own compile step.
+  **The image's Gradle is 9.8.0** (8.14.5 before #120: Gradle 8's distribution
+  ships a BouncyCastle with a critical CVE, fixed only in Gradle 9). A workspace
+  whose build script relies on something Gradle 9 removed fails under `gradle test`
+  in the container; it needs its own wrapper, and the network to fetch it.
 - **The shell timeout default is now 600s** (`AGENT_TOOLS_SHELL_TIMEOUT_SECONDS`).
   At 60s no real build could finish. The timeout is now enforced by a watchdog:
   previously output was drained to EOF *before* the clock was checked, so a
