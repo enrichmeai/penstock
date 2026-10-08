@@ -1,6 +1,7 @@
 package com.example.agent;
 
 import com.example.agent.acp.AcpStdioRunner;
+import com.example.agent.mcp.McpStdioRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -17,6 +18,7 @@ import java.util.Map;
  * Run: ./gradlew bootRun
  *      (or) java -jar build/libs/penstock-0.1.0.jar
  *      (or) java -jar build/libs/penstock-0.1.0.jar --acp   (ACP stdio mode, for an IDE)
+ *      (or) java -jar build/libs/penstock-0.1.0.jar --mcp   (MCP stdio mode: recall for Claude Code / Desktop, #116)
  *
  * The storage backend is selected before Spring auto-config runs:
  *   - memory  (default / unknown): exclude JPA + DataSource auto-config so
@@ -54,6 +56,9 @@ public class AgentApplication {
         }
 
         boolean acp = isAcpMode(args);
+        if (acp && isMcpMode(args)) {
+            throw new IllegalStateException("--acp and --mcp are two different stdio protocols; pass one of them.");
+        }
         if (acp) {
             // AcpSessionBridge creates Session objects directly, bypassing SessionStore.create()
             // (there is no HTTP principal in stdio mode to stamp them with — see its javadoc).
@@ -72,14 +77,34 @@ public class AgentApplication {
             defaults.put("spring.main.banner-mode", "off");
         }
 
+        boolean mcp = isMcpMode(args);
+        if (mcp) {
+            // MCP stdio mode (#116): no HTTP server and no banner, because stdout carries only MCP
+            // messages. It creates no sessions, so unlike ACP it works with any storage type; with
+            // sqlite or postgres its audit events are persisted, with memory they go to stderr.
+            profiles.add("mcp");
+            defaults.put("spring.main.banner-mode", "off");
+        }
+
         if (!profiles.isEmpty()) app.setAdditionalProfiles(profiles.toArray(new String[0]));
         if (!defaults.isEmpty()) app.setDefaultProperties(defaults);
-        if (acp) app.setWebApplicationType(WebApplicationType.NONE);
+        if (acp || mcp) app.setWebApplicationType(WebApplicationType.NONE);
 
         ConfigurableApplicationContext ctx = app.run(args);
         if (acp) {
             ctx.getBean(AcpStdioRunner.class).run();
         }
+        if (mcp) {
+            ctx.getBean(McpStdioRunner.class).run();
+            ctx.close();
+        }
+    }
+
+    private static boolean isMcpMode(String[] args) {
+        for (String a : args) {
+            if ("--mcp".equals(a)) return true;
+        }
+        return "mcp".equalsIgnoreCase(resolve("AGENT_MODE", "agent.mode", "", args));
     }
 
     private static boolean isAcpMode(String[] args) {

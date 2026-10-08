@@ -162,6 +162,23 @@ public class AuditLogger {
         saveMemoryEvent(user, sessionId, type, detail);
     }
 
+    /**
+     * Records a call to one of the MCP server's tools (#116), as {@code mcp.<tool>} with the project
+     * and its outcome ({@code ok}, {@code empty}, {@code refused} or {@code error}); also an INFO line.
+     */
+    @Async
+    public void mcpCalled(String userId, String sessionId, String tool, String project, String outcome) {
+        String user = normalise(userId);
+        String type = "mcp." + tool;
+        log.info("{} user={} session={} project={} outcome={}", type, user, sessionId, project, outcome);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("tool", tool);
+        detail.put("project", project);
+        detail.put("outcome", outcome);
+        detail.put("ok", !"refused".equals(outcome) && !"error".equals(outcome));
+        saveMemoryEvent(user, sessionId, type, detail);
+    }
+
     private void saveMemoryEvent(String user, String sessionId, String eventType, Map<String, Object> detail) {
         if (repo == null) {
             log.debug("Audit repository not available; skipping {} event", eventType);

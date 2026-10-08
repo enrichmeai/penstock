@@ -80,6 +80,17 @@ public class PatternCatalog {
         reload();
     }
 
+    /**
+     * A catalogue read once, now, for the given properties: the MCP {@code recall} tool (#116)
+     * builds one per call so an edited card or memory.yaml is picked up, and so a call for another
+     * project applies that project's rules, not the configured one's.
+     */
+    public static PatternCatalog loadedNow(AgentProperties props) {
+        PatternCatalog catalog = new PatternCatalog(props);
+        catalog.reload();
+        return catalog;
+    }
+
     @Scheduled(fixedDelay = RELOAD_INTERVAL_MS)
     void scheduledReload() {
         reload();

@@ -267,6 +267,39 @@ workspace; anything else is refused. See
 steps in each editor, what the permission prompt looks like, and
 troubleshooting.
 
+## Your memory in Claude Code and Claude Desktop (MCP)
+
+`--mcp` runs Penstock as a local [MCP](https://modelcontextprotocol.io) server over stdio (#116). The client launches it as a subprocess on your machine, so there is no network listener, no hosting and no credential.
+
+| | What it does |
+|---|---|
+| `recall` (tool) | Returns the "Owner's memory" block a Penstock turn would give its model for the question. It is built by the same code, so the project's rules in `memory.yaml` apply: a public project never gets private cards, and `personal: none` gets no personal memory. Read-only. |
+| `draft_episode` (tool) | Writes **one new draft** episode in the memory root for you to review and commit. It never overwrites and never touches facts, patterns or `memory.yaml`. Any line that looks like a credential refuses the whole draft. |
+| `start-with-memory` (prompt) | Tells the client to call `recall` before it plans. With MCP the client decides when to call a tool; this prompt narrows that gap. |
+
+Every call is audited (`mcp.recall`, `mcp.draft_episode`, plus the sections and cards a recall returned). With `AGENT_STORAGE_TYPE=memory` the audit goes to stderr; with sqlite it is stored.
+
+Add it to Claude Code from inside a project's folder (local scope: only you, only this project). Put another option between the last `-e` and the server name, as Claude Code's MCP docs require:
+
+```bash
+claude mcp add -e AGENT_MEMORY_ROOT=/path/to/your/memory -e AGENT_MEMORY_PROJECT=valuedocs \
+  --transport stdio penstock-memory -- java -jar /path/to/penstock.jar --mcp
+```
+
+For Claude Desktop, add the same command to `claude_desktop_config.json`:
+
+```json
+{ "mcpServers": { "penstock-memory": {
+    "command": "java", "args": ["-jar", "/path/to/penstock.jar", "--mcp"],
+    "env": { "AGENT_MEMORY_ROOT": "/path/to/your/memory", "AGENT_MEMORY_PROJECT": "valuedocs" } } } }
+```
+
+A draft for a project that only `memory.yaml` declares passes `check-cards.sh` (#117).
+
+A client must keep stdin open until it has read its answers: the server stops when stdin closes, so a one-shot `printf ... | java -jar penstock.jar --mcp` may exit before it replies. Claude Code and Claude Desktop keep the connection open.
+
+`recall` also takes a `project` argument, so one server can answer for any project the root declares, each under its own rules. Run the jar directly rather than the Docker image: the image's entrypoint writes a line to stdout on first start, and stdout belongs to MCP messages.
+
 ## Running multiple replicas
 
 Single-instance is the default and works fine for small teams. To run two or
