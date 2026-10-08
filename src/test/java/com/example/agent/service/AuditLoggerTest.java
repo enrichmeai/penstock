@@ -134,6 +134,19 @@ public class AuditLoggerTest {
     }
 
     @Test
+    public void testMcpCalled_RecordsTheToolAndItsOutcome() {
+        auditLogger.mcpCalled("mcp", "mcp-1", "recall", "oss-lib", "empty");
+        auditLogger.mcpCalled("mcp", "mcp-1", "draft_episode", "oss-lib", "refused");
+
+        assertEquals(2, mockRepo.saved.size());
+        assertEquals("mcp.recall", mockRepo.saved.get(0).getEventType());
+        assertTrue(mockRepo.saved.get(0).getDetailJson().contains("\"outcome\":\"empty\""));
+        assertTrue(mockRepo.saved.get(0).getDetailJson().contains("\"ok\":true"));
+        assertEquals("mcp.draft_episode", mockRepo.saved.get(1).getEventType());
+        assertTrue(mockRepo.saved.get(1).getDetailJson().contains("\"ok\":false"));
+    }
+
+    @Test
     public void testFactAndEpisodeLoaded_NoRepository_DoNotThrow() {
         AuditLogger auditLoggerNoRepo = new AuditLogger(null, mapper);
 

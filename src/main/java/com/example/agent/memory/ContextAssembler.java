@@ -90,7 +90,7 @@ public class ContextAssembler {
      * through {@code agent.memory.project-aliases}, or that name itself when it is not an
      * alias key. Empty (no project-scoped recall) when neither yields anything.
      */
-    static String resolveProject(Path workspace, AgentProperties props) {
+    public static String resolveProject(Path workspace, AgentProperties props) {
         String explicit = props.getMemory().getProject();
         if (explicit != null && !explicit.isBlank()) {
             return explicit.trim();

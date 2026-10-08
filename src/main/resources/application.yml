@@ -359,3 +359,15 @@ management:
       group:
         readiness:
           include: readinessState,db,llmProvider
+
+---
+spring:
+  config:
+    activate:
+      on-profile: mcp
+
+# MCP stdio mode (#116): recall and draft episodes for a local MCP client. Memory is what this
+# mode serves, so it is on unless AGENT_MEMORY_ENABLED says otherwise.
+agent:
+  memory:
+    enabled: ${AGENT_MEMORY_ENABLED:true}

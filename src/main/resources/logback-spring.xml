@@ -4,7 +4,7 @@
          "default" profile: activating any profile (e.g. storage-sqlite via
          AGENT_STORAGE_TYPE) drops "default", which would leave the root logger
          pointing at an undefined appender and silence all logging. -->
-    <springProfile name="!prod &amp; !acp">
+    <springProfile name="!prod &amp; !acp &amp; !mcp">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
             <encoder>
                 <pattern>%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] [%X{userId:-}] [%X{sessionId:-}] %logger{30} - %msg%n</pattern>
@@ -12,11 +12,11 @@
         </appender>
     </springProfile>
 
-    <!-- ACP stdio mode: stdout IS the JSON-RPC wire (CLAUDE.md issue #61 — "Agents must
+    <!-- ACP and MCP stdio modes (#59, #116): stdout IS the JSON-RPC wire (CLAUDE.md issue #61 — "Agents must
          not write non-ACP data to stdout"). Both appenders above write to stdout by
          default, which would corrupt every message, so this profile redirects to stderr
          regardless of whether prod's JSON encoding is also active. -->
-    <springProfile name="acp &amp; !prod">
+    <springProfile name="(acp | mcp) &amp; !prod">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
             <target>System.err</target>
             <encoder>
@@ -26,7 +26,7 @@
     </springProfile>
 
     <!-- Production profile: JSON structured logs -->
-    <springProfile name="prod &amp; !acp">
+    <springProfile name="prod &amp; !acp &amp; !mcp">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
             <encoder class="net.logstash.logback.encoder.LogstashEncoder">
                 <customFields>{"service":"ai-coding-agent"}</customFields>
@@ -43,7 +43,7 @@
         </appender>
     </springProfile>
 
-    <springProfile name="prod &amp; acp">
+    <springProfile name="prod &amp; (acp | mcp)">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
             <target>System.err</target>
             <encoder class="net.logstash.logback.encoder.LogstashEncoder">
