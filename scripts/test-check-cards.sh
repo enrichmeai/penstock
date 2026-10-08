@@ -385,8 +385,9 @@ sect_fail shared-id "fact id 'dup-id' is used in both estate/facts/dup-id.yaml a
 sect_fail unknown-project "FAIL: projects/weird-x is not a known project" "a project folder outside the closed list fails"
 # #112: the root's memory.yaml declares its projects; names come from there, not the closed list
 if bash scripts/check-cards.sh --root scripts/test/cards/sectioned/declared >"$out" 2>&1 \
-   && grep -q "PASS: projects/oss-lib/facts/oss-lib-fixture.yaml (fact, format 1, private)" "$out"; then
-    echo "PASS: a project declared in memory.yaml is a known project, checked like any other"
+   && grep -q "PASS: projects/oss-lib/facts/oss-lib-fixture.yaml (fact, format 1, private)" "$out" \
+   && grep -q "PASS: projects/oss-lib/episodes/2026-01-31-oss-lib-fixture.yaml (episode, format 1, private)" "$out"; then
+    echo "PASS: a project declared in memory.yaml is a known project, its facts and episodes checked like any other"
 else
     echo "FAIL: a declared project was not accepted"; cat "$out"; status=1
 fi

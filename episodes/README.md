@@ -40,11 +40,13 @@ commits:                                     # optional, what the draft was buil
 
 ## Projects
 
-`penstock`, `cistern`, `valuedocs`, `site`, `estate` (owner-wide, no single project). The list
-is closed and carried in three places besides this README: `PROJECTS` in `scripts/check-cards.sh`
-(the rule), the `--project` guard in `scripts/write-episode.sh`, and the directory-name fallback in
-`.claude/hooks/episode-draft.sh` (which maps a checkout to a project and so never yields `estate`).
-Adding a project is one PR that changes all four.
+`estate` (owner-wide, no single project) or a project. A memory root whose `memory.yaml` has a
+`projects:` block declares its own projects (#112, `docs/memory-root.md` § Projects and who sees
+them), and `scripts/check-cards.sh` and `scripts/write-episode.sh --root` read that list. Without a
+block the list is `penstock`, `cistern`, `valuedocs`, `site`. The schema checks only the name's
+shape (`[a-z0-9-]`); the checker and `write-episode.sh --project` check the list.
+`.claude/hooks/episode-draft.sh` still guesses the project from the checkout's folder name among the
+default four only.
 
 ## Learned lines become facts
 

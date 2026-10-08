@@ -1,0 +1,14 @@
+# Test fixture for #112: an episode of a project only memory.yaml declares.
+id: 2026-01-31-oss-lib-fixture
+format: 1
+visibility: private
+date: 2026-01-31
+project: oss-lib
+asked: a fixture episode for a declared project
+built: []
+decided:
+  - what: keep the fixture small
+    why: the project name, not the content, is under test
+refused: []
+learned: []
+open: []
