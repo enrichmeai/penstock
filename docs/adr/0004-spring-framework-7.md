@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Proposed: the owner decides |
+| **Status** | Accepted: option B (owner, 2026-10-08) |
 | **Date** | 2026-10-08 |
 | **Driver** | [#120](https://github.com/enrichmeai/penstock/issues/120) slice 3: the last critical finding the v0.5.0 image scan lists in `app/agent.jar` |
 | **Owners** | Joseph (decision) |
@@ -101,4 +101,11 @@ reachable.
 
 ## Decision
 
-Pending: the owner chooses A, B or C.
+**Option B**, chosen by the owner on 2026-10-08.
+
+- Penstock stays on Spring Boot 3.5.
+- A test fails the build if any `XsltView` or `XsltViewResolver` bean appears in the application
+  context. That is the next change under #120.
+- Release notes say CVE-2026-47884 stays in the image scan, why it is not reachable, and which
+  test holds that.
+- The move to Spring Boot 4 (option A) becomes its own planned project, sliced like #120.
