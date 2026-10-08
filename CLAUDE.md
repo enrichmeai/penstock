@@ -97,7 +97,7 @@ that needs new pod behaviour is one PR per repo, and **Cistern lands first**.
 
 ### Pinned docs
 
-Versions `build.gradle` resolves: Java 21, Gradle 8.14.5, Spring Boot 3.5.16 (its BOM manages
+Versions `build.gradle` resolves: Java 21, Gradle 9.8.0 (past Boot 3.5's documented 7.6.4+/8.4+; Boot's own plugin suite at v3.5.16 tests 9.0.0 and 9.5.0, #120), Spring Boot 3.5.16 (its BOM manages
 Spring Security, Flyway and Hibernate; the community dialects are pinned separately),
 springdoc-openapi 2.9.0, Bucket4j 8.10.1.
 

@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-VERSION="8.14.5"
+VERSION="9.8.0"
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 TARGET_JAR="$ROOT/gradle/wrapper/gradle-wrapper.jar"
 
