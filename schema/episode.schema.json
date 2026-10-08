@@ -43,13 +43,8 @@
     },
     "project": {
       "type": "string",
-      "enum": [
-        "penstock",
-        "cistern",
-        "valuedocs",
-        "site",
-        "estate"
-      ]
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "estate, or a project: the root's memory.yaml projects: block when it has one (#112), else the default list in scripts/lib/memory_projects.py. scripts/check-cards.sh and write-episode.sh enforce the list; the schema checks the name's shape."
     },
     "asked": {
       "type": "string",
