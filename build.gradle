@@ -6,7 +6,7 @@ plugins {
 
 group = 'com.example'
 // The release workflow overrides this from the git tag: -PreleaseVersion=1.2.3
-version = findProperty('releaseVersion') ?: '0.5.0'
+version = findProperty('releaseVersion') ?: '0.5.1'
 
 // Targeted overrides on top of the Boot 3.5.16 BOM, for what the v0.5.0 image scan lists
 // with a fix (#120). Remove each one when a Boot BOM managing that version or later is adopted.
