@@ -138,7 +138,7 @@ user](#acting-as-the-signed-in-user).
 ```bash
 ./bootstrap.sh
 # or, if you have gradle installed:
-gradle wrapper --gradle-version 9.8.0
+gradle wrapper --gradle-version 8.14.6
 ```
 
 ### 3. Configure and run
