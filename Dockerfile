@@ -1,4 +1,4 @@
-# Multi-stage build: Gradle 9.8.0 + JDK 21 to compile, then a JDK 21 runtime.
+# Multi-stage build: Gradle 8.14.6 + JDK 21 to compile, then a JDK 21 runtime.
 #
 # The runtime image carries a JDK and a seeded Gradle home, not just a JRE,
 # because the agent is expected to build and test the code it edits. Without a
@@ -15,11 +15,11 @@
 #
 # Requires BuildKit ($BUILDPLATFORM is BuildKit-defined) — the default builder
 # since Docker 23. On older engines: DOCKER_BUILDKIT=1 docker build ...
-# Gradle 9.8.0 ships bcprov-jdk18on 1.85 in lib/plugins; 8.14.5, the last 8.x, ships 1.84
-# (CVE-2026-8763, critical, #120). The image carries this distribution twice, as
-# /opt/gradle and as the wrapper's in the seed, so the tag and gradle-wrapper.properties
-# move together.
-FROM --platform=$BUILDPLATFORM gradle:9.8.0-jdk21 AS build
+# Gradle 8.14.6 ships bcprov-jdk18on 1.85, plexus-utils 3.6.1, Jackson 2.18.11 and jsoup 1.23.2,
+# the fixes the v0.5.0 scan listed for 8.14.5's distribution (#120). The image carries this
+# distribution twice, as /opt/gradle and as the wrapper's in the seed, so the tag and
+# gradle-wrapper.properties move together.
+FROM --platform=$BUILDPLATFORM gradle:8.14.6-jdk21 AS build
 WORKDIR /workspace
 
 # Populate a Gradle home we can ship: the wrapper distribution plus every
