@@ -110,7 +110,7 @@ render(cards, budget, profile) -> context
 
 | Profile | For | Renderer |
 |---|---|---|
-| `large-hosted` | a hosted model with a large context | `ContextAssembler` (Java, #73/#88): header, then facts, recent episodes, patterns and references; one cap over the block, whole entries dropped from the end so patterns go first |
+| `large-hosted` | a hosted model with a large context | `ContextAssembler` (Java, #73/#88): header, then facts, recent episodes, patterns and references; one cap over the block, whole entries dropped from the end so patterns go first. The header (#132) also tells the model to cite cards with the planning markers (`[card: <id>]` or `[assumption] — ask: …`, #92) and to propose an episode, never write a fact |
 | `small-local` | a local model with a small context | not built: facts only, shortest statements first |
 | `mcp-client` | an MCP client reading the pod | not built: the cards themselves, as files, under the reader's grant |
 | `human-journal` | the person, reading what happened | not built: `journal.sh` ([#90](https://github.com/enrichmeai/penstock/issues/90)) |

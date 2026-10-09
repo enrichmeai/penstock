@@ -58,10 +58,24 @@ public class ContextAssembler {
     /** Total block size cap, documented here and in the issue: beyond this, later entries are dropped whole, never truncated mid-entry. */
     static final int MAX_BLOCK_CHARS = 12_000;
 
+    /**
+     * Opens every block. Besides "apply them", it carries the two rules a model needs whenever it
+     * has cards (#132): cite them with #92's planning markers, and propose an episode rather than
+     * write a fact (a fact's provenance must quote an existing episode, so only consolidation and
+     * the owner make one). Neutral on purpose: no owner or project wording, and short, because it
+     * counts against {@link #MAX_BLOCK_CHARS} on every turn that has memory.
+     */
     static final String HEADER =
             "## Owner's memory\n\n" +
             "Established facts, recent episodes and patterns for this owner and project; " +
-            "apply them, do not redesign, and say when you depart from one.\n\n";
+            "apply them, do not redesign, and say when you depart from one.\n\n" +
+            "When you state a plan, end each decision with [card: <id>], using only an id after fact:, " +
+            "episode:, pattern: or reference: below, or with [assumption] — ask: <a question the owner " +
+            "could answer>. Prefer a card.\n\n" +
+            "Never write or edit a fact card. When work ends or something is learned or corrected, " +
+            "propose one episode for the owner to review: with draft_episode where you have it, " +
+            "otherwise as YAML in the episode shape: id <date>-<slug>, decided and refused as what and why, and each " +
+            "new belief as its own line under learned.\n\n";
 
     /** The fact kinds a turn in the project will need whether or not the input names them (#88). */
     static final Set<String> ALWAYS_NEEDED_KINDS = Set.of("account", "identifier", "location-of-secret");
