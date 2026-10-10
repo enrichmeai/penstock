@@ -191,15 +191,33 @@ class ContextAssemblerTest {
 
     @Test
     void whenTheBlockIsFullAPatternIsDroppedBeforeAFact() throws IOException {
-        String hugeMd = "x".repeat(ContextAssembler.MAX_BLOCK_CHARS - 400);
+        // Sized from the header, so the pattern fits on its own and only the fact can push it out
+        // (#132: a fixed size went vacuous when the header grew).
+        String hugeMd = "x".repeat(ContextAssembler.MAX_BLOCK_CHARS - ContextAssembler.HEADER.length() - 400);
         writePattern("huge", "1", List.of("alpha"), List.of(), "2026-06-01", hugeMd);
-        writeFact("f1", "decision", "estate", "asserted", 1.0, "2026-10-03", List.of("alpha"), "y".repeat(600));
         AgentProperties props = props(true);
+        Optional<ContextAssembler.Assembled> alone = assembler(props).assemble("alpha");
+        assertThat(alone).isPresent();
+        assertThat(alone.get().loadedPatterns()).extracting(ContextAssembler.LoadedPattern::id).containsExactly("huge");
 
+        writeFact("f1", "decision", "estate", "asserted", 1.0, "2026-10-03", List.of("alpha"), "y".repeat(600));
         Optional<ContextAssembler.Assembled> hit = assembler(props).assemble("alpha");
         assertThat(hit).isPresent();
         assertThat(hit.get().loadedFacts()).extracting(ContextAssembler.LoadedFact::id).containsExactly("f1");
         assertThat(hit.get().loadedPatterns()).isEmpty();
+    }
+
+    // --- #132: the header tells the model how to cite cards and what it may write ------------
+
+    @Test
+    void theHeaderCarriesThePlanningMarkersAndTheDraftingRule() {
+        // #92's markers, verbatim, so check-plan.sh can read what the model writes
+        assertThat(ContextAssembler.HEADER).contains("[card: <id>]").contains("[assumption] — ask:");
+        // facts come from consolidation and the owner's review, never from the model
+        assertThat(ContextAssembler.HEADER).contains("Never write or edit a fact card")
+                .contains("draft_episode").contains("<date>-<slug>");
+        // it rides every turn that has memory, inside MAX_BLOCK_CHARS
+        assertThat(ContextAssembler.HEADER.length()).isLessThan(700);
     }
 
     @Test
