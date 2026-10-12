@@ -9,7 +9,7 @@
 #   4. generates a CycloneDX SBOM and a Trivy vulnerability report for the
 #      published image,
 #   5. creates a GitHub Release with generated notes, the jar, the SBOM,
-#      and the scan report attached.
+#      the scan report and scripts/start.sh (the one-command start, #147) attached.
 #
 # Note: Trivy reports but does not gate (exit-code 0) — revisit once a
 # vulnerability baseline exists for the temurin base image.
@@ -158,4 +158,5 @@ jobs:
             --generate-notes "${notes[@]}" \
             "build/libs/penstock-${VERSION}.jar" \
             "sbom-${VERSION}.cdx.json" \
-            "trivy-report-${VERSION}.txt"
+            "trivy-report-${VERSION}.txt" \
+            "scripts/start.sh"

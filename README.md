@@ -267,6 +267,31 @@ workspace; anything else is refused. See
 steps in each editor, what the permission prompt looks like, and
 troubleshooting.
 
+## Start in one command
+
+From inside the project you work on, with Java 21 and [Claude Code](https://code.claude.com) installed:
+
+```bash
+curl -fsSL https://github.com/enrichmeai/penstock/releases/latest/download/start.sh | sh
+```
+
+It downloads the latest release jar to `~/.penstock/` and checks it against the SHA-256 digest GitHub
+publishes for the release asset, creates a private memory root at `~/penstock-memory` (a git repository
+declaring this project; in an existing one it only adds this project's line to `memory.yaml`, and
+leaves the file as it is when the file does not list its projects in a `projects:` block), and registers the
+`penstock-memory` MCP server below with Claude Code for this project. Then start Claude Code there and
+type `/mcp__penstock-memory__start-with-memory`. Nothing leaves your machine: no account, no network
+listener, no credential. Running it again changes nothing. `PENSTOCK_MEMORY_ROOT`, `PENSTOCK_PROJECT`,
+`PENSTOCK_HOME` and `PENSTOCK_VERSION` change the defaults; the script's header lists them.
+
+The release workflow attaches `start.sh` to every release from the first one after #147; before that
+release, clone this repository and, from your project's folder, run `sh /path/to/penstock/scripts/start.sh`
+(the script names the project after the folder it runs in).
+
+To remove it from a project, run `claude mcp remove penstock-memory` in that project's folder (the
+registration is local to it). The jar in `~/.penstock/` is shared by every project you set up, so
+delete it only once none uses it. Your memory root stays.
+
 ## Your memory in Claude Code and Claude Desktop (MCP)
 
 `--mcp` runs Penstock as a local [MCP](https://modelcontextprotocol.io) server over stdio (#116). The client launches it as a subprocess on your machine, so there is no network listener, no hosting and no credential.
