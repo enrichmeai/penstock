@@ -8,8 +8,11 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
+  # A PR's runs cancel each other; every push to main runs to the end in a group of its own, so
+  # each merged commit gets its sha-<commit> image and artifacts (#150). Two main runs may finish
+  # out of order and leave :main on the older commit: consumers resolve by sha-<commit>, never :main.
+  group: build-${{ github.event_name == 'push' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -111,5 +114,114 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: penstock-jar
-          path: build/libs/*.jar
-          retention-days: 7
+          # The boot jar only: the plain jar is not a release asset.
+          path: |
+            build/libs/*.jar
+            !build/libs/*-plain.jar
+          # 90 days on main: products' release workflow takes the jar from the commit it releases (#150).
+          retention-days: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 90 || 7 }}
+
+  # #150: on every merge to main, publish the image this commit builds, tagged by commit, so
+  # enrichmeai/products can test it with Cistern and release it later by retagging the same digest
+  # (products#11). Nothing here tags or releases: release.yml still does that until products
+  # has made one release, then it is retired. A PR never pushes.
+  image:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version from source
+        # build.gradle's default version, as the source states it: the last release's until a PR moves
+        # it to the next one. The image carries it as a label, so products can refuse to release a
+        # commit whose source does not say the version it is released as (products#11).
+        run: |
+          VERSION=$(sed -n "s/^version = findProperty('releaseVersion') ?: '\(.*\)'$/\1/p" build.gradle)
+          [ -n "$VERSION" ] || { echo "::error::no default version in build.gradle"; exit 1; }
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "SHA_TAG=sha-${GITHUB_SHA}" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build amd64 image for smoke test
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: ${{ env.IMAGE }}:smoke
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test — image must boot exactly as shipped
+        # The same check release.yml runs: no env overrides, so the as-shipped default (memory mode).
+        run: |
+          docker run -d --name smoke -p 18080:8080 "${IMAGE}:smoke"
+          ok=""
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:18080/api/health > /dev/null; then ok=1; break; fi
+            sleep 2
+          done
+          echo "--- container log tail ---"
+          docker logs smoke 2>&1 | tail -25
+          docker rm -f smoke
+          [ "$ok" = "1" ] || { echo "image failed to become healthy"; exit 1; }
+
+      - name: Push multi-arch image (sha-<commit>, main)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ env.SHA_TAG }}
+            ${{ env.IMAGE }}:main
+          labels: |
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: SBOM (CycloneDX) for the pushed image
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE }}:${{ env.SHA_TAG }}
+          format: cyclonedx-json
+          output-file: sbom-${{ env.VERSION }}.cdx.json
+
+      - name: Trivy vulnerability report
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}:${{ env.SHA_TAG }}
+          format: table
+          output: trivy-report-${{ env.VERSION }}.txt
+          severity: HIGH,CRITICAL
+          exit-code: '0'
+
+      - name: Upload the release assets for this commit
+        # The files release.yml attaches to a release, minus the jar (the build job uploads it as
+        # penstock-jar). products' release workflow downloads both from this run.
+        uses: actions/upload-artifact@v7
+        with:
+          name: penstock-release-assets
+          path: |
+            sbom-${{ env.VERSION }}.cdx.json
+            trivy-report-${{ env.VERSION }}.txt
+            scripts/start.sh
+          retention-days: 90
