@@ -105,7 +105,7 @@ public class AuditLoggerTest {
     @Test
     public void testFactAndEpisodeLoaded_Success() {
         auditLogger.factLoaded("alice", "session-1", "gcp-console-account", "asserted", 1.0);
-        auditLogger.episodeLoaded("alice", "session-1", "2026-10-02-memory-1", "2026-10-02");
+        auditLogger.episodeLoaded("alice", "session-1", "2026-10-02-memory-1", "2026-10-02", "provenance");
 
         assertEquals(2, mockRepo.saved.size());
         AuditEventEntity fact = mockRepo.saved.get(0);
@@ -118,6 +118,7 @@ public class AuditLoggerTest {
         assertEquals("episode.loaded", episode.getEventType());
         assertTrue(episode.getDetailJson().contains("\"episodeId\":\"2026-10-02-memory-1\""));
         assertTrue(episode.getDetailJson().contains("\"date\":\"2026-10-02\""));
+        assertTrue(episode.getDetailJson().contains("\"reason\":\"provenance\""));
     }
 
     @Test
@@ -151,7 +152,7 @@ public class AuditLoggerTest {
         AuditLogger auditLoggerNoRepo = new AuditLogger(null, mapper);
 
         auditLoggerNoRepo.factLoaded("alice", "session-1", "f", "asserted", 1.0);
-        auditLoggerNoRepo.episodeLoaded("alice", "session-1", "e", "2026-10-02");
+        auditLoggerNoRepo.episodeLoaded("alice", "session-1", "e", "2026-10-02", "latest");
 
         assertEquals(0, mockRepo.saved.size());
     }

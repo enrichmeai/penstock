@@ -489,7 +489,7 @@ document.getElementById('audit-session').addEventListener('click', async () => {
       : ev.eventType === 'fact.loaded'
       ? `memory · fact <b>${esc(d.factId)}</b> · ${esc(d.status)} ${esc(d.confidence)}`
       : ev.eventType === 'episode.loaded'
-      ? `memory · episode <b>${esc(d.episodeId)}</b> · ${esc(d.date)}`
+      ? `memory · episode <b>${esc(d.episodeId)}</b> · ${esc(d.date)}${d.reason ? ' · ' + esc(d.reason) : ''}`
       : ev.eventType === 'pattern.loaded'
       ? `memory · pattern <b>${esc(d.patternId)}</b> · ${esc(d.version)}`
       : ev.eventType === 'section.loaded'

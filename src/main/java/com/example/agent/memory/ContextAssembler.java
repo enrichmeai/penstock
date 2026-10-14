@@ -14,9 +14,11 @@ import java.nio.file.PathMatcher;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -35,15 +37,18 @@ import java.util.stream.Stream;
  *       need anyway ({@code account}, {@code identifier}, {@code location-of-secret}). At most
  *       {@code agent.memory.max-facts}, by confidence then {@code last_confirmed}, newest first.
  *       A superseded fact is never selected.</li>
+ *   <li><b>Source episodes</b> (#152): for each fact in the block, the episodes its
+ *       {@code provenance} quotes, when the record holds them, so the reasoning a belief was
+ *       learned from travels with it however old it is. Each is loaded once.</li>
  *   <li><b>Episodes</b> (#86): the latest {@code agent.memory.max-episodes} whose
- *       {@code project} is the workspace's project; only asked, decided, refused and open are
- *       rendered.</li>
+ *       {@code project} is the workspace's project, less any already loaded as a source; only
+ *       asked, decided, refused and open are rendered.</li>
  *   <li><b>Patterns</b>: unchanged from #73 — trigger overlap plus {@code signatures} globs
  *       against {@code agent.workspace}, ranked by hit count then {@code verified-against.date},
  *       at most three, each bringing the references of the requests that list it.</li>
  * </ul>
  *
- * <p>Order in the block is facts, episodes, patterns, references. One cap applies to the whole
+ * <p>Order in the block is facts, source episodes, episodes, patterns, references. One cap applies to the whole
  * block; an entry that would cross it is dropped whole, never truncated, so the patterns at
  * the end are the first to go when the block is full — facts are the cheapest and most often
  * decisive. The workspace's project is {@code agent.memory.project}, or derived once at
@@ -134,8 +139,11 @@ public class ContextAssembler {
     public record LoadedFact(String id, String status, double confidence) {
     }
 
-    /** One episode the block drew from, for {@code AuditLogger.episodeLoaded}. */
-    public record LoadedEpisode(String id, String date) {
+    /**
+     * One episode the block drew from, for {@code AuditLogger.episodeLoaded}: {@code reason} is
+     * {@code provenance} for a loaded fact's source (#152), {@code latest} for a recent episode.
+     */
+    public record LoadedEpisode(String id, String date, String reason) {
     }
 
     public record Assembled(String block, List<LoadedFact> loadedFacts, List<LoadedEpisode> loadedEpisodes,
@@ -175,13 +183,45 @@ public class ContextAssembler {
         if (!loadedFacts.isEmpty()) {
             block.append('\n');
         }
+        // The episodes the loaded facts were learned from come next, so a belief arrives with its
+        // reasoning however old it is (#152); then the project's latest, never the same one twice.
+        // Source episodes can push the latest episodes and patterns out of a full block: same cap,
+        // same drop order, and a belief's reasoning ranks above unrelated recent work.
+        Set<String> loadedEpisodeIds = new LinkedHashSet<>();
+        Map<String, EpisodeCard> episodesById = new HashMap<>();
+        catalog.episodes().forEach(e -> episodesById.putIfAbsent(e.id(), e));
+        for (FactCard f : facts) {
+            if (loadedFacts.stream().noneMatch(lf -> lf.id().equals(f.id()))) {
+                continue; // a fact the cap dropped brings nothing
+            }
+            for (String sourceId : f.sourceEpisodes()) {
+                if (loadedEpisodeIds.contains(sourceId)) {
+                    continue;
+                }
+                Optional<EpisodeCard> source = Optional.ofNullable(episodesById.get(sourceId));
+                if (source.isEmpty()) {
+                    continue; // provenance names an episode this root does not hold or admit
+                }
+                String entry = renderEpisode(source.get(), "source of fact:" + f.id());
+                if (block.length() + entry.length() > MAX_BLOCK_CHARS) {
+                    continue;
+                }
+                block.append(entry);
+                loadedEpisodeIds.add(sourceId);
+                loadedEpisodes.add(new LoadedEpisode(sourceId, source.get().date().toString(), "provenance"));
+            }
+        }
         for (EpisodeCard e : episodes) {
-            String entry = renderEpisode(e);
+            if (loadedEpisodeIds.contains(e.id())) {
+                continue;
+            }
+            String entry = renderEpisode(e, null);
             if (block.length() + entry.length() > MAX_BLOCK_CHARS) {
                 continue;
             }
             block.append(entry);
-            loadedEpisodes.add(new LoadedEpisode(e.id(), e.date().toString()));
+            loadedEpisodeIds.add(e.id());
+            loadedEpisodes.add(new LoadedEpisode(e.id(), e.date().toString(), "latest"));
         }
         for (PatternManifest p : top) {
             String entry = renderPattern(p);
@@ -296,9 +336,13 @@ public class ContextAssembler {
         return sb.toString();
     }
 
-    private String renderEpisode(EpisodeCard e) {
+    private String renderEpisode(EpisodeCard e, String sourceOf) {
         StringBuilder sb = new StringBuilder();
-        sb.append("### episode:").append(e.id()).append(" (").append(e.date()).append(")\n\n");
+        sb.append("### episode:").append(e.id()).append(" (").append(e.date());
+        if (sourceOf != null) {
+            sb.append(" · ").append(sourceOf);
+        }
+        sb.append(")\n\n");
         if (!e.asked().isBlank()) {
             sb.append("Asked: ").append(e.asked().strip()).append('\n');
         }

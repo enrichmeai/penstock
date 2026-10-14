@@ -100,7 +100,7 @@ class MemoryAccountRecallIT {
                         && d.contains("\"status\":\"asserted\"") && d.contains("\"confidence\":1.0"));
         List<AuditEventEntity> episodes = awaitEvents(sessionId, "episode.loaded");
         assertThat(episodes).isNotEmpty();
-        assertThat(episodes.get(0).getDetailJson()).contains("\"episodeId\":\"2026-01-30-fixture-console-session\"").contains("\"date\":\"2026-01-30\"");
+        assertThat(episodes.get(0).getDetailJson()).contains("\"episodeId\":\"2026-01-30-fixture-console-session\"").contains("\"date\":\"2026-01-30\"").contains("\"reason\":");
     }
 
     private static String extractSessionId(String body) {

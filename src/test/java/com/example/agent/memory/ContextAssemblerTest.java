@@ -367,4 +367,96 @@ class ContextAssemblerTest {
 
         assertThat(assembler.assemble("nothing in common with triggers")).isEmpty();
     }
+
+    // #152: a fact brings the episode it was learned from, so the reasoning travels with it.
+
+    private void writeFactFrom(String id, List<String> triggers, String statement, String... sourceEpisodes) throws IOException {
+        Path facts = root.resolve("facts");
+        Files.createDirectories(facts);
+        StringBuilder prov = new StringBuilder("\nprovenance:\n  - owner: 2026-10-03");
+        for (String e : sourceEpisodes) {
+            prov.append("\n  - episode: ").append(e).append("\n    learned: a learned line");
+        }
+        String trig = "\n" + triggers.stream().map(t -> "  - " + t).reduce((a, b) -> a + "\n" + b).orElse("");
+        Files.writeString(facts.resolve(id + ".yaml"),
+                "id: " + id + "\nstatement: " + statement + "\nkind: decision\nsubject: s/" + id +
+                "\nscope: project:penstock\nstatus: active\nconfidence: 0.9" + prov +
+                "\nfirst_seen: 2026-10-01\nlast_confirmed: 2026-10-03\nsupersedes: ~\nsuperseded_by: ~\ntriggers:" + trig + "\n");
+    }
+
+    @Test
+    void aFactBringsItsOldSourceEpisodeAheadOfTheLatest() throws IOException {
+        writeEpisode("2026-01-05-why", "2026-01-05", "penstock", "why we pin the base image", "open old");
+        writeEpisode("2026-10-02-two", "2026-10-02", "penstock", "second ask", "open two");
+        writeEpisode("2026-10-03-three", "2026-10-03", "penstock", "third ask", "open three");
+        writeFactFrom("pin-base", List.of("dockerfile"), "Pin the base image by digest.", "2026-01-05-why");
+        AgentProperties props = props(true);
+        props.getMemory().setProject("penstock");
+
+        Optional<ContextAssembler.Assembled> hit = assembler(props).assemble("change the dockerfile");
+        assertThat(hit).isPresent();
+        assertThat(hit.get().loadedEpisodes())
+                .extracting(ContextAssembler.LoadedEpisode::id, ContextAssembler.LoadedEpisode::reason)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("2026-01-05-why", "provenance"),
+                        org.assertj.core.groups.Tuple.tuple("2026-10-03-three", "latest"),
+                        org.assertj.core.groups.Tuple.tuple("2026-10-02-two", "latest"));
+        String block = hit.get().block();
+        assertThat(block).contains("why we pin the base image").contains("source of fact:pin-base");
+        assertThat(block.indexOf("episode:2026-01-05-why")).isGreaterThan(block.indexOf("fact:pin-base"))
+                .isLessThan(block.indexOf("episode:2026-10-03-three"));
+    }
+
+    @Test
+    void anEpisodeThatIsBothSourceAndLatestLoadsOnce() throws IOException {
+        writeEpisode("2026-10-03-three", "2026-10-03", "penstock", "third ask", "open three");
+        writeFactFrom("recent", List.of("dockerfile"), "A recent belief.", "2026-10-03-three");
+        AgentProperties props = props(true);
+        props.getMemory().setProject("penstock");
+
+        Optional<ContextAssembler.Assembled> hit = assembler(props).assemble("dockerfile");
+        assertThat(hit).isPresent();
+        assertThat(hit.get().loadedEpisodes()).extracting(ContextAssembler.LoadedEpisode::id).containsExactly("2026-10-03-three");
+        String block = hit.get().block();
+        assertThat(block.indexOf("episode:2026-10-03-three")).isEqualTo(block.lastIndexOf("episode:2026-10-03-three"));
+    }
+
+    @Test
+    void whenTheBlockIsFullTheSourceEpisodeIsDroppedBeforeItsFact() throws IOException {
+        writeEpisode("2026-01-05-why", "2026-01-05", "penstock", "why we pin the base image", "open old");
+        String big = "y".repeat(ContextAssembler.MAX_BLOCK_CHARS - ContextAssembler.HEADER.length() - 200);
+        writeFactFrom("pin-base", List.of("dockerfile"), big, "2026-01-05-why");
+        AgentProperties props = props(true);
+        props.getMemory().setProject("other"); // no latest episodes: only the source could come
+
+        Optional<ContextAssembler.Assembled> hit = assembler(props).assemble("dockerfile");
+        assertThat(hit).isPresent();
+        assertThat(hit.get().loadedFacts()).extracting(ContextAssembler.LoadedFact::id).containsExactly("pin-base");
+        assertThat(hit.get().loadedEpisodes()).isEmpty();
+        assertThat(hit.get().block().length()).isLessThanOrEqualTo(ContextAssembler.MAX_BLOCK_CHARS);
+    }
+
+    @Test
+    void aSourceEpisodeThatIsNotInTheRecordIsSkipped() throws IOException {
+        writeFactFrom("orphan", List.of("dockerfile"), "Its episode is gone.", "2025-01-01-missing");
+        AgentProperties props = props(true);
+        props.getMemory().setProject("penstock");
+
+        Optional<ContextAssembler.Assembled> hit = assembler(props).assemble("dockerfile");
+        assertThat(hit).isPresent();
+        assertThat(hit.get().loadedFacts()).extracting(ContextAssembler.LoadedFact::id).containsExactly("orphan");
+        assertThat(hit.get().loadedEpisodes()).isEmpty();
+    }
+
+    @Test
+    void aSupersededFactBringsNeitherItselfNorItsSourceEpisode() throws IOException {
+        writeEpisode("2026-01-05-why", "2026-01-05", "penstock", "why we pin the base image", "open old");
+        writeFactFrom("pin-base", List.of("dockerfile"), "Pin the base image by digest.", "2026-01-05-why");
+        Path f = root.resolve("facts").resolve("pin-base.yaml");
+        Files.writeString(f, Files.readString(f).replace("status: active", "status: superseded"));
+        AgentProperties props = props(true);
+        props.getMemory().setProject("other");
+
+        assertThat(assembler(props).assemble("dockerfile")).isEmpty();
+    }
 }
