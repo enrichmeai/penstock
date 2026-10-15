@@ -12,7 +12,7 @@ before the owner does. You never edit files. You report.
 ## Inputs you need (ask the caller if missing, do not guess)
 1. **The task spec** — the issue number/text or the instruction the change was made for.
 2. **The diff** — default: `git diff $(git merge-base HEAD origin/main)` plus untracked files
-   (`git status --porcelain`). Read the full changed files where the hunk alone is not enough.
+   (`git status --porcelain`). Read the full changed files where the hunk alone is not enough (read files over 350 lines in slices with `offset`/`limit`, or `grep -n` first: the read gate refuses a whole read).
 
 ## What to check, in this order
 1. **Spec fit.** Does the diff do what was asked — all of it, and nothing unrelated? List each
