@@ -58,7 +58,7 @@ public class MemoryRecall {
         }
         ContextAssembler.Assembled a = assembled.get();
         a.loadedFacts().forEach(f -> audit.factLoaded(user, session, f.id(), f.status(), f.confidence()));
-        a.loadedEpisodes().forEach(e -> audit.episodeLoaded(user, session, e.id(), e.date()));
+        a.loadedEpisodes().forEach(e -> audit.episodeLoaded(user, session, e.id(), e.date(), e.reason()));
         a.loadedPatterns().forEach(p -> audit.patternLoaded(user, session, p.id(), p.version()));
         return new Result(false, assembler.project(), a.block(), "ok");
     }

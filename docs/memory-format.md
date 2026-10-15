@@ -110,7 +110,7 @@ render(cards, budget, profile) -> context
 
 | Profile | For | Renderer |
 |---|---|---|
-| `large-hosted` | a hosted model with a large context | `ContextAssembler` (Java, #73/#88): header, then facts, recent episodes, patterns and references; one cap over the block, whole entries dropped from the end so patterns go first. The header (#132) also tells the model to cite cards with the planning markers (`[card: <id>]` or `[assumption] — ask: …`, #92) and to propose an episode, never write a fact |
+| `large-hosted` | a hosted model with a large context | `ContextAssembler` (Java, #73/#88): header, then facts, the episodes those facts were learned from (their provenance, #152), recent episodes, patterns and references; one cap over the block, whole entries dropped from the end so patterns go first. The header (#132) also tells the model to cite cards with the planning markers (`[card: <id>]` or `[assumption] — ask: …`, #92) and to propose an episode, never write a fact |
 | `small-local` | a local model with a small context | not built: facts only, shortest statements first |
 | `mcp-client` | an MCP client reading the pod | not built: the cards themselves, as files, under the reader's grant |
 | `human-journal` | the person, reading what happened | not built: `journal.sh` ([#90](https://github.com/enrichmeai/penstock/issues/90)) |
@@ -123,7 +123,7 @@ Every renderer must obey four rules. Where the one built renderer does not yet, 
    for which visibilities each target may receive is planned with #91 and #93.)*
 3. It drops whole entries to meet the budget, never truncating one mid-way. *(`ContextAssembler`: true.)*
 4. It reports what it included, so an episode can later say what a session already knew.
-   *(`ContextAssembler`: `fact.loaded`, `episode.loaded` and `pattern.loaded` audit events; the
+   *(`ContextAssembler`: `fact.loaded`, `episode.loaded` (with `reason`: `provenance` or `latest`) and `pattern.loaded` audit events; the
    references a pattern brings in are not yet reported.)*
 
 A new model needs a new profile, never new memory.

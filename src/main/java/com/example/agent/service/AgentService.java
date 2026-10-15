@@ -159,7 +159,7 @@ public class AgentService {
                         auditLogger.factLoaded(session.getUserId(), session.getId(), f.id(), f.status(), f.confidence());
                     }
                     for (ContextAssembler.LoadedEpisode e : assembled.get().loadedEpisodes()) {
-                        auditLogger.episodeLoaded(session.getUserId(), session.getId(), e.id(), e.date());
+                        auditLogger.episodeLoaded(session.getUserId(), session.getId(), e.id(), e.date(), e.reason());
                     }
                     for (ContextAssembler.LoadedPattern p : assembled.get().loadedPatterns()) {
                         auditLogger.patternLoaded(session.getUserId(), session.getId(), p.id(), p.version());

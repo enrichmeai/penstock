@@ -80,7 +80,9 @@ A card loads into a project only if everyone who sees that project's output may 
 - A project is a name, not a repository: it need not live in any particular GitHub organisation.
   `write-episode.sh --root` accepts the declared names.
 - `uses` brings in another project's cards, and its facts are selected by their triggers. Its
-  episodes stay with it: the latest-episodes rule reads only the project's own.
+  episodes are never this project's latest: that rule reads only the project's own. One of them
+  reaches this project only as the source of one of its facts that a turn loaded (#152), and only
+  from a section the table above already admits.
 
 ## Writing into a root
 

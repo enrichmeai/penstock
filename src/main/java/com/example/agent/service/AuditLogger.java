@@ -134,15 +134,17 @@ public class AuditLogger {
 
     /**
      * Records that an episode card joined a turn's context block (#88), as
-     * {@code episode.loaded} with {@code episodeId} and {@code date}; also an INFO line.
+     * {@code episode.loaded} with {@code episodeId}, {@code date} and {@code reason}
+     * ({@code latest}, or {@code provenance} when a loaded fact brought it, #152); also an INFO line.
      */
     @Async
-    public void episodeLoaded(String userId, String sessionId, String episodeId, String date) {
+    public void episodeLoaded(String userId, String sessionId, String episodeId, String date, String reason) {
         String user = normalise(userId);
-        log.info("episode.loaded user={} session={} episodeId={} date={}", user, sessionId, episodeId, date);
+        log.info("episode.loaded user={} session={} episodeId={} date={} reason={}", user, sessionId, episodeId, date, reason);
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("episodeId", episodeId);
         detail.put("date", date);
+        detail.put("reason", reason);
         saveMemoryEvent(user, sessionId, "episode.loaded", detail);
     }
 

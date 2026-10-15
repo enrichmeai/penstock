@@ -295,7 +295,8 @@ public class PatternCatalog {
                     double confidence = data.get("confidence") instanceof Number n ? n.doubleValue() : 0.0;
                     result.add(new FactCard(id, statement, stringify(data.get("kind")), stringify(data.get("subject")),
                             stringify(data.get("scope")), stringify(data.get("status")), confidence,
-                            toLocalDate(data.get("last_confirmed")), stringList(data.get("triggers"))));
+                            toLocalDate(data.get("last_confirmed")), stringList(data.get("triggers")),
+                            provenanceEpisodes(data.get("provenance"))));
                 } catch (Exception e) {
                     log.warn("Skipping invalid fact card {}: {}", file, e.getMessage());
                 }
@@ -336,6 +337,20 @@ public class PatternCatalog {
         // newest first; the id (date-slug) breaks ties within a day deterministically
         result.sort(Comparator.comparing(EpisodeCard::date).thenComparing(EpisodeCard::id).reversed());
         return List.copyOf(result);
+    }
+
+    /** The {@code episode:} ids in a fact's provenance, in order; {@code owner:} confirmations carry none (#152). */
+    private static List<String> provenanceEpisodes(Object v) {
+        if (!(v instanceof List<?> entries)) {
+            return List.of();
+        }
+        List<String> ids = new ArrayList<>();
+        for (Object entry : entries) {
+            if (entry instanceof Map<?, ?> m && m.get("episode") != null && !String.valueOf(m.get("episode")).isBlank()) {
+                ids.add(String.valueOf(m.get("episode")).trim());
+            }
+        }
+        return List.copyOf(ids);
     }
 
     /** A {@code what:}/{@code why:} entry renders as "what — why"; a plain string stays as is. */
