@@ -15,10 +15,10 @@ that happens where no editor is open. Four things define it:
    an agent reads and writes a person's own data in a
    [Cistern](https://github.com/enrichmeai/cistern) pod, under rules that
    person wrote — and every access is receipted on their side, not ours.
-4. **And it can sit inside Air, too.** Planned: Penstock speaking the Agent
+4. **And it can sit inside Air, too.** `--acp` has Penstock speak the Agent
    Client Protocol so it shows up as a selectable agent inside JetBrains Air
-   (and Zed) — tracked in [#59](https://github.com/enrichmeai/penstock/issues/59),
-   not yet merged.
+   (and Zed) — see [In your IDE (ACP)](#in-your-ide-acp). Not yet verified
+   against a real editor ([#63](https://github.com/enrichmeai/penstock/issues/63)).
 
 Built in **Spring Boot 3 + Gradle + Java 21** with auth, rate limiting, audit
 logging, and Prometheus metrics on by default. See
@@ -28,10 +28,11 @@ differs from governing agent spend and model choice.
 **Three surfaces, one backend**: a web UI for developers, a REST API for automation
 (CI, Slack, bots, cron), and SSE streaming for real-time interactive work. Built-in
 tools cover file I/O, code search, shell, and git. Adding a tool for your internal
-systems (Jira, PagerDuty, your runbook repo) is 30–50 lines of Java.
+systems (Jira, PagerDuty, your runbook repo) is one Java class implementing `Tool`.
 
-See [`examples/`](./examples/) for ready-to-deploy GitHub Actions, Slack webhook,
-and Jira integration samples.
+See [`examples/`](./examples/) for ready-to-deploy GitHub Actions and Slack webhook
+samples, and [`JiraTool`](./src/main/java/com/example/agent/tools/JiraTool.java) for a
+Jira integration.
 
 ## Default path: GitHub Copilot API
 
@@ -64,7 +65,7 @@ is open:
 - **[JiraTool](./src/main/java/com/example/agent/tools/JiraTool.java)** — a
   reference `Tool` implementation showing how to give the agent access to your
   internal systems. Copy this pattern for your runbook repo, PagerDuty,
-  observability stack, anything. 30–50 lines per tool.
+  observability stack, anything. One class per tool.
 
 None of this needs an editor open: agent workflows that run without a
 developer at a keyboard, against your own infrastructure, with tools that
@@ -83,7 +84,7 @@ that it stayed inside the rules.
 | Where it runs | Headless — CI, Slack, cron, webhooks; no editor needed | Inside JetBrains IDEs, the browser (`air.jetbrains.cloud`), or the local Air App desktop client ([docs](https://www.jetbrains.com/help/air/ways-to-reach-air-teams.html)) |
 | Whose hardware | Self-hosted, Apache 2.0 — nothing leaves your deployment | "A cloud environment is a Docker container that runs on a virtual machine in the cloud" ([docs](https://www.jetbrains.com/help/air/configure-environments.html)); no self-hosted mode is documented |
 | What's governed | Whose data an agent touches, under rules that person wrote, receipted on their side via the `pod` tool and a [Cistern](https://github.com/enrichmeai/cistern) pod | Agent/model permissions, spend, and auditability for the organization: "organizational policy, visibility, auditability, cost management, and accountability for AI-assisted and agent-driven development" ([announcement](https://blog.jetbrains.com/blog/2026/09/22/introducing-jetbrains-air/)); "Set permissions for the whole organization or tailor them to specific teams or individuals" ([product page](https://www.jetbrains.com/air/)) |
-| How they fit together | Planned: Penstock as a selectable agent inside Air via the Agent Client Protocol — [#59](https://github.com/enrichmeai/penstock/issues/59), not yet merged | — |
+| How they fit together | Penstock as a selectable agent inside Air via the Agent Client Protocol (`--acp`, [docs/ide-agents.md](./docs/ide-agents.md)) — not yet verified against a real editor ([#63](https://github.com/enrichmeai/penstock/issues/63)) | — |
 
 These aren't competing claims about the same thing: Air governs *which agent
 and model* a developer may spend against, from inside the IDE. Penstock
@@ -95,11 +96,11 @@ user](#acting-as-the-signed-in-user).
 
 - **Pluggable LLM layer**: `copilot` (default), `anthropic`, `openai`, `ollama` — switch via config. Automatic retry with exponential backoff on 429 / 5xx, respecting `Retry-After`.
 - **Tool use loop**: the agent calls tools, receives results, and iterates until done.
-- **Eight built-in tools**: `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`, `shell`, `git`.
+- **Ten built-in tools**: `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`, `shell`, `git`, `pod` and `jira_search` (both are registered by default, and every call returns an error until they are configured; `--acp` leaves out `jira_search`).
 - **Streaming responses** over Server-Sent Events — assistant turns, tool calls, and tool results stream to the UI as they happen.
 - **Token usage tracking** — per-call usage is accumulated per session and exposed via the API and UI.
-- **Pluggable persistence**: in-memory (default) or SQLite via JPA/Hibernate. Switch with one env var.
-- **Optional HTTP Basic auth** in front of the API and UI.
+- **Pluggable persistence**: in-memory (default), SQLite, or Postgres via JPA/Hibernate. Switch with one env var.
+- **Auth on by default** in front of the API and UI: HTTP Basic (the default mode) or OIDC JWT bearer tokens. Opt out with `AGENT_AUTH_ENABLED=false`.
 - **OpenAPI / Swagger UI** at `/swagger-ui.html` for easy API exploration — behind auth when auth is enabled, since the document describes every endpoint and schema.
 - **Explicit CORS** configuration, customisable for production.
 - **Docker** + `docker-compose.yml` with a persistent SQLite volume and a bind-mounted workspace.
@@ -113,7 +114,7 @@ user](#acting-as-the-signed-in-user).
 - **Request IDs** — the `RequestIdFilter` reads `X-Request-Id` or generates one, stamps MDC, and echoes the ID as a response header so clients can correlate.
 - **Metrics** — `/actuator/prometheus` exposes `llm_calls_total{provider,outcome}`, `llm_tokens_total{provider,kind}`, `tool_calls_total{tool,outcome}`, `tool_call_duration_ms{tool}`, and `sse_streams_active` gauge. **Requires authentication when auth is enabled** — the labels carry tool names, providers and token counts. If your scraper cannot authenticate, set `AGENT_METRICS_PUBLIC_SCRAPE=true` and restrict the port at the network; `/actuator/health/**` stays open either way for load balancers.
 - **Readiness vs liveness** — `/actuator/health/liveness` stays up while an LLM provider is misconfigured; `/actuator/health/readiness` goes DOWN so load balancers pull the instance out of rotation. Custom `LlmProviderHealthIndicator` does a config-only check (no external calls).
-- **Audit log** — every LLM call and tool invocation is persisted to `audit_events` (SQLite mode only). Owner-scoped read at `GET /api/sessions/{id}/audit`.
+- **Audit log** — every LLM call and tool invocation is persisted to `audit_events` in SQLite and Postgres modes; memory mode stores nothing, and tool calls appear only in the application log. Owner-scoped read at `GET /api/sessions/{id}/audit`.
 - **Graceful SSE shutdown** — on `ContextClosedEvent` the `SseEmitterRegistry` sends a terminating `shutdown` event and completes every in-flight emitter so clients don't see socket resets.
 - **CI** — `.github/workflows/build.yml` caches Gradle, auto-bootstraps the wrapper, runs `./gradlew build`, uploads test reports and the built jar.
 
@@ -124,7 +125,7 @@ user](#acting-as-the-signed-in-user).
 - **Rate limiting**: Bucket4j filter with separate limits for `/api/chat*` vs `/api/**`; keyed by principal-else-IP; `429 Retry-After` responses.
 - **Per-user session ownership**: every session is stamped with the authenticated user (or `anonymous` when auth is off). Cross-user access returns 404, never leaking existence.
 - **Error hygiene**: global `@RestControllerAdvice` returns stable `ApiError` JSON with request IDs; messages are sanitised unless the exception is marked `@SafeMessage`.
-- **Flyway migrations** replace `ddl-auto=update` when `agent.storage.type=sqlite`.
+- **Flyway migrations** replace `ddl-auto=update` when `agent.storage.type` is `sqlite` or `postgres`.
 
 ## Quick start
 
@@ -155,7 +156,7 @@ export AGENT_WORKSPACE=/absolute/path/to/project   # the folder the agent can to
 ./gradlew bootRun
 ```
 
-Open **http://localhost:8080** and start chatting.
+Open **http://localhost:8080** and start chatting. Auth is on: sign in as `admin` with the password logged once at startup, or set `AGENT_AUTH_PASSWORD` first (see [Authentication](#authentication)).
 
 ## Running with Docker
 
@@ -201,7 +202,7 @@ To use a hosted provider instead, set `AGENT_LLM_PROVIDER` and the matching key
 (e.g. `AGENT_LLM_PROVIDER=anthropic ANTHROPIC_API_KEY=sk-ant-...`).
 
 The compose file:
-- Builds the jar in a Gradle/JDK 21 stage, runs it on a slim Temurin JRE image.
+- Builds the jar in a Gradle/JDK 21 stage, runs it on `eclipse-temurin:21-jdk-jammy` with Gradle and a pre-seeded dependency cache, so the agent can build and test the code it edits.
 - Runs `ollama` + a one-shot `ollama-pull`, reachable at `http://ollama:11434`.
 - Keeps the SQLite DB on the `agent-data` volume (not a bind mount — see the doc).
 - Bind-mounts your chosen workspace into `/workspace`.
@@ -210,12 +211,13 @@ The compose file:
 
 ## Storage
 
-Two backends, selected at startup:
+Three backends, selected at startup:
 
 | `AGENT_STORAGE_TYPE` | What it does |
 | --- | --- |
 | `memory` (default) | In-process `ConcurrentHashMap`. JPA auto-config is excluded so no DB file is created. |
-| `sqlite` | SQLite via Spring Data JPA + Hibernate, schema auto-created. File path set by `AGENT_SQLITE_PATH` (default `./data/agent.db`). |
+| `sqlite` | SQLite via Spring Data JPA + Hibernate, schema created by Flyway (`ddl-auto: none`). File path set by `AGENT_SQLITE_PATH` (default `./data/agent.db`). |
+| `postgres` | Postgres via Spring Data JPA + Hibernate, schema created by Flyway. `AGENT_DB_URL` (default `jdbc:postgresql://localhost:5432/agent`), `AGENT_DB_USER` (default `agent`), `AGENT_DB_PASSWORD`, `AGENT_DB_POOL_MAX` (default `10`), `AGENT_DB_POOL_MIN` (default `2`). |
 
 Messages are stored as JSON blobs in an `agent_messages` table so tool calls / results round-trip without schema changes.
 
@@ -225,11 +227,19 @@ Messages are stored as JSON blobs in an `agent_messages` table so tool calls / r
 
 ```
 event: session    data: { "sessionId": "...", "title": "..." }
+event: token      data: { "text": "…" }
 event: message    data: { "role":"ASSISTANT","text":"…","toolCalls":[…], … }
 event: message    data: { "role":"TOOL","toolResults":[…] }
 …
+event: session    data: { "sessionId": "...", "title": "..." }
 event: done       data: { "ok": true }
 ```
+
+`token` events carry per-token deltas of the assistant's text (streaming is on by
+default, `AGENT_LLM_STREAMING_ENABLED`); each finished message still arrives as a
+`message`. The closing `session` event carries the updated title. A failure sends
+`error` (`{ "error": "..." }`), and a server shutting down sends `shutdown` to every
+open stream.
 
 The web UI consumes this with `fetch()` + `ReadableStream` (EventSource can't POST).
 The non-streaming `POST /api/chat` remains available for simple clients.
@@ -254,7 +264,7 @@ without surfacing an event. Heartbeat activity is exported as
 
 ## In your IDE (ACP)
 
-`java -jar penstock.jar --acp` speaks the [Agent Client Protocol](https://github.com/agentclientprotocol/java-sdk)
+`java -jar penstock-<version>.jar --acp` speaks the [Agent Client Protocol](https://github.com/agentclientprotocol/java-sdk)
 over stdin/stdout instead of serving HTTP — launch it from an ACP-aware editor
 in place of the editor's own agent. It answers `initialize`, opens sessions,
 streams replies, and honours `session/cancel`; the read-only tools
@@ -268,6 +278,11 @@ steps in each editor, what the permission prompt looks like, and
 troubleshooting.
 
 ## Start in one command
+
+The release workflow attaches `start.sh` to every release from the first one after v0.5.2 (#147); v0.5.2
+does not carry it, so until that release the command below fails. Before then, clone this repository and,
+from your project's folder, run `sh /path/to/penstock/scripts/start.sh` (the script names the project
+after the folder it runs in).
 
 From inside the project you work on, with Java 21 and [Claude Code](https://code.claude.com) installed:
 
@@ -284,10 +299,6 @@ type `/mcp__penstock-memory__start-with-memory`. Nothing leaves your machine: no
 listener, no credential. Running it again changes nothing. `PENSTOCK_MEMORY_ROOT`, `PENSTOCK_PROJECT`,
 `PENSTOCK_HOME` and `PENSTOCK_VERSION` change the defaults; the script's header lists them.
 
-The release workflow attaches `start.sh` to every release from the first one after #147; before that
-release, clone this repository and, from your project's folder, run `sh /path/to/penstock/scripts/start.sh`
-(the script names the project after the folder it runs in).
-
 To remove it from a project, run `claude mcp remove penstock-memory` in that project's folder (the
 registration is local to it). The jar in `~/.penstock/` is shared by every project you set up, so
 delete it only once none uses it. Your memory root stays.
@@ -302,26 +313,26 @@ delete it only once none uses it. Your memory root stays.
 | `draft_episode` (tool) | Writes **one new draft** episode in the memory root for you to review and commit. It never overwrites and never touches facts, patterns or `memory.yaml`. Any line that looks like a credential refuses the whole draft. |
 | `start-with-memory` (prompt) | Tells the client to call `recall` before it plans. With MCP the client decides when to call a tool; this prompt narrows that gap. |
 
-Every call is audited (`mcp.recall`, `mcp.draft_episode`, plus the sections and cards a recall returned). With `AGENT_STORAGE_TYPE=memory` the audit goes to stderr; with sqlite it is stored.
+Every call is audited (`mcp.recall`, `mcp.draft_episode`, plus the sections and cards a recall returned). With `AGENT_STORAGE_TYPE=memory` the audit goes to stderr; with sqlite or postgres it is stored in `audit_events`.
 
 Add it to Claude Code from inside a project's folder (local scope: only you, only this project). Put another option between the last `-e` and the server name, as Claude Code's MCP docs require:
 
 ```bash
 claude mcp add -e AGENT_MEMORY_ROOT=/path/to/your/memory -e AGENT_MEMORY_PROJECT=valuedocs \
-  --transport stdio penstock-memory -- java -jar /path/to/penstock.jar --mcp
+  --transport stdio penstock-memory -- java -jar /path/to/penstock-<version>.jar --mcp
 ```
 
 For Claude Desktop, add the same command to `claude_desktop_config.json`:
 
 ```json
 { "mcpServers": { "penstock-memory": {
-    "command": "java", "args": ["-jar", "/path/to/penstock.jar", "--mcp"],
+    "command": "java", "args": ["-jar", "/path/to/penstock-<version>.jar", "--mcp"],
     "env": { "AGENT_MEMORY_ROOT": "/path/to/your/memory", "AGENT_MEMORY_PROJECT": "valuedocs" } } } }
 ```
 
 A draft for a project that only `memory.yaml` declares passes `check-cards.sh` (#117).
 
-A client must keep stdin open until it has read its answers: the server stops when stdin closes, so a one-shot `printf ... | java -jar penstock.jar --mcp` may exit before it replies. Claude Code and Claude Desktop keep the connection open.
+A client must keep stdin open until it has read its answers: the server stops when stdin closes, so a one-shot `printf ... | java -jar penstock-<version>.jar --mcp` may exit before it replies. Claude Code and Claude Desktop keep the connection open.
 
 `recall` also takes a `project` argument, so one server can answer for any project the root declares, each under its own rules. Run the jar directly rather than the Docker image: the image's entrypoint writes a line to stdout on first start, and stdout belongs to MCP messages.
 
@@ -349,17 +360,22 @@ for the design rationale.
 
 ## Authentication
 
-Off by default — enable with:
+On by default. In the default `basic` mode, set a stable password with:
 
 ```bash
-export AGENT_AUTH_ENABLED=true
 export AGENT_AUTH_USERNAME=admin
 export AGENT_AUTH_PASSWORD=a-real-secret
 ```
 
-When enabled, all endpoints except `/api/health` require HTTP Basic. The browser
-will prompt the user on first load; once authenticated, credentials are sent
-automatically on every request (including SSE).
+With `AGENT_AUTH_PASSWORD` unset, a random password is generated at startup and
+logged once. Opt out explicitly with `AGENT_AUTH_ENABLED=false`.
+
+Every endpoint requires authentication except `/api/health`, `/actuator/health/**`
+and the login plumbing (`/login/**`, `/oauth2/**`, `/error`). In `basic` mode that is
+HTTP Basic: the browser will prompt the user on first load; once authenticated,
+credentials are sent automatically on every request (including SSE). With
+`AGENT_AUTH_MODE=oidc` the API takes a JWT bearer token instead (see
+[Authentication and the audit log](#authentication-and-the-audit-log)).
 
 ```bash
 curl -u admin:a-real-secret http://localhost:8080/api/tools
@@ -373,14 +389,16 @@ overridden with env vars or `--agent.*=value` command-line flags.
 | Property | Default | Env var | Notes |
 | --- | --- | --- | --- |
 | `agent.workspace` | `${user.dir}/agent-workspace` | `AGENT_WORKSPACE` | Folder the agent is restricted to. |
-| `agent.storage.type` | `memory` | `AGENT_STORAGE_TYPE` | `memory` or `sqlite`. |
+| `agent.storage.type` | `memory` | `AGENT_STORAGE_TYPE` | `memory`, `sqlite` or `postgres`. |
 | `agent.storage.sqlite-path` | `./data/agent.db` | `AGENT_SQLITE_PATH` | SQLite DB file. |
 | `agent.auth.enabled` | `true` | `AGENT_AUTH_ENABLED` | Auth is on by default — a shell-executing agent never ships open. Set `false` explicitly for local experiments; the compose dev/demo stack does. |
 | `agent.auth.username` | `admin` | `AGENT_AUTH_USERNAME` | |
 | `agent.auth.password` | *(generated at startup if unset)* | `AGENT_AUTH_PASSWORD` | Unset (or the old `change-me`) → a random password is generated and logged once. |
 | `agent.cors.allowed-origins` | *(none — cross-origin locked)* | `AGENT_CORS_ALLOWED_ORIGINS` | Comma-separated origins granted CORS with credentials; `*` allows any origin without credentials. The bundled UI is same-origin and needs none. |
 | `agent.llm.provider` | `copilot` | `AGENT_LLM_PROVIDER` | `copilot` \| `anthropic` \| `openai` \| `ollama`. |
-| `agent.llm.max-iterations` | `25` | — | Safety cap on the tool-use loop per turn. |
+| `agent.llm.max-turns-per-request` | `25` | `AGENT_LLM_MAX_TURNS_PER_REQUEST` | Safety cap on the tool-use loop per request. See [Turn and token budgets](#turn-and-token-budgets). |
+| `agent.llm.max-tokens-per-request` | `150000` | `AGENT_LLM_MAX_TOKENS_PER_REQUEST` | Token budget for one request. |
+| `agent.llm.max-tokens-per-session` | `600000` | `AGENT_LLM_MAX_TOKENS_PER_SESSION` | Token budget for a whole session. |
 | `agent.llm.copilot.api-key` | — | `GITHUB_COPILOT_TOKEN` / `GITHUB_TOKEN` | GitHub Copilot / GitHub Models token. |
 | `agent.llm.copilot.base-url` | `https://api.githubcopilot.com` | `COPILOT_BASE_URL` | Override for enterprise gateways. |
 | `agent.llm.copilot.model` | `gpt-4o` | `COPILOT_MODEL` | Any Copilot-exposed model (gpt-4o, claude-3-5-sonnet, o1-mini, …). |
@@ -388,13 +406,13 @@ overridden with env vars or `--agent.*=value` command-line flags.
 | `agent.llm.openai.api-key` | — | `OPENAI_API_KEY` | Service key. A per-user key (below) takes precedence for that user. |
 | `agent.llm.openai.base-url` | `https://api.openai.com` | — | Origin only; `/v1/chat/completions` is appended. A LiteLLM gateway is `http://litellm:4000`. |
 | `agent.credentials.per-user.openai.<userId>` | — | `AGENT_CREDENTIALS_PERUSER_OPENAI_<USERID>` | Gateway key for one user. The env form lower-cases the user id; see [Acting as the signed-in user](#acting-as-the-signed-in-user). |
-| `agent.tools.cistern.base-url` | — | `CISTERN_BASE_URL` | The pod. Blank disables the `pod` tool. |
+| `agent.tools.cistern.base-url` | — | `CISTERN_BASE_URL` | The pod. Blank: the `pod` tool stays listed and every call returns an error. |
 | `agent.tools.cistern.token` | — | `CISTERN_AGENT_TOKEN` | The agent's own pod credential. |
 | `agent.tools.cistern.credential-mode` | `service` | `AGENT_TOOLS_CISTERN_CREDENTIALMODE` | `service` \| `per-user` \| `forward` — whose credential the pod sees. |
 | `agent.credentials.per-user.cistern.<userId>` | — | `AGENT_CREDENTIALS_PERUSER_CISTERN_<USERID>` | Pod credential for one user, used in `per-user` mode. |
 | `agent.llm.ollama.base-url` | `http://localhost:11434` | `OLLAMA_BASE_URL` | |
-| `agent.tools.shell.enabled` | `true` | — | |
-| `agent.tools.shell.timeout-seconds` | `60` | — | Per-command timeout. |
+| `agent.tools.shell.enabled` | `true` | `AGENT_TOOLS_SHELL_ENABLED` | |
+| `agent.tools.shell.timeout-seconds` | `600` | `AGENT_TOOLS_SHELL_TIMEOUT_SECONDS` | Per-command timeout. |
 | `agent.tools.file.max-bytes` | `1048576` | — | Max size for a single `read_file`. |
 | `agent.memory.enabled` | `false` | `AGENT_MEMORY_ENABLED` | "Retrieve before reason" (#73) and "recall in the turn" (#88): load matching `facts/`, the episodes those facts were learned from (their `provenance`, however old, #152), the project's latest `episodes/`, and matching `patterns/` + `references/` into the turn's system prompt before the first model call, in that order under one 12 000-character cap (entries dropped whole from the end, so patterns go first; no episode twice). Each load is audited (`fact.loaded`, `episode.loaded` with `reason: provenance` or `latest`, `pattern.loaded`). Off by default — these folders are this project's own build memory. |
 | `agent.memory.root` | `${user.dir}` | `AGENT_MEMORY_ROOT` | Directory containing `patterns/`, `requests/`, `references/`, `facts/` and `episodes/`. |
@@ -412,10 +430,13 @@ overridden with env vars or `--agent.*=value` command-line flags.
 | `POST` | `/api/chat` | `{ "sessionId"?, "message" }` | Non-streaming chat. |
 | `POST` | `/api/chat/stream` | `{ "sessionId"?, "message" }` | SSE stream of messages as they're produced. |
 | `GET` | `/api/sessions` | — | List sessions |
+| `GET` | `/api/sessions/search` | `q`, `limit` (default 20, max 100) | Search the caller's own sessions by title or message text |
 | `POST` | `/api/sessions` | — | Create a blank session |
 | `GET` | `/api/sessions/{id}` | — | Full message history |
 | `GET` | `/api/sessions/{id}/usage` | — | Token usage summary for a session |
 | `DELETE` | `/api/sessions/{id}` | — | Delete a session |
+| `GET` | `/api/sessions/{id}/export.md` | — | The session's transcript as Markdown |
+| `POST` | `/api/sessions/import` | Markdown transcript (`text/markdown`) | Create a new session owned by the caller from an exported transcript |
 | `GET` | `/api/sessions/{id}/audit` | — | Audit events for a session (tool/LLM calls), owner-scoped |
 | `GET` | `/api/audit/patterns` | — | Per-pattern `pattern.loaded` usage: `[{patternId, loads, lastLoadedAt, versions}]`, never-loaded patterns last. `[]` with `agent.memory.enabled=false`; `503` in memory storage mode (no audit table). |
 
@@ -429,15 +450,15 @@ Interactive API docs at **`/swagger-ui.html`** when the app is running.
  └───────────────┬──────────────────────────────────────┘
                  │
            ┌─────▼──────┐       ┌─────────────────┐
-           │ AgentService│──────▶│  LlmProvider    │◀── Anthropic / OpenAI / Ollama
+           │ AgentService│──────▶│  LlmProvider    │◀── Copilot / Anthropic / OpenAI / Ollama
            └─────┬──────┘       └─────────────────┘
                  │
            ┌─────▼──────┐       ┌─────────────────┐
            │ToolRegistry│──────▶│  Tool (N impls) │◀── read/write/edit/list_dir/
-           └─────┬──────┘       └─────────────────┘    glob/grep/shell/git
+           └─────┬──────┘       └─────────────────┘    glob/grep/shell/git/pod/jira_search
                  │
            ┌─────▼──────┐       ┌──────────────────────────┐
-           │SessionStore│──────▶│ InMemory / JpaSessionStore│◀── SQLite (JPA)
+           │SessionStore│──────▶│ InMemory / JpaSessionStore│◀── SQLite / Postgres (JPA)
            └────────────┘       └──────────────────────────┘
 ```
 
@@ -447,7 +468,7 @@ The **agent loop** in `AgentService`:
 2. Call `LlmProvider.complete(systemPrompt, history, toolSpecs)`.
 3. If the assistant returned tool calls → execute each via `ToolRegistry`, append a TOOL message, goto 2.
 4. Otherwise, the assistant's text is the final reply.
-5. Bail with a friendly message after `max-iterations` iterations.
+5. Stop with a message saying which bound was hit after `max-turns-per-request` turns, or when a token budget is spent.
 
 The **streaming variant** (`chatStreaming`) invokes a callback on every message
 as it's produced, which the SSE controller relays to the client.
@@ -463,7 +484,7 @@ as it's produced, which the SSE controller relays to the client.
 - `AgentControllerIT` — REST integration test of `/api/chat` and `/api/tools` using a stub LLM.
 - `ChatStreamIT` — SSE streaming endpoint: scripted stub provider emits a tool call + final reply; asserts `session`, `message`, `done` events and usage totals.
 - `JpaSessionStoreTest` — JPA slice test against H2 covering create/get/append/list/delete/update.
-- `SecurityConfigTest` — two nested Spring Boot tests for auth on (401/200) and auth off (open).
+- `SecurityConfigTest` — eight nested Spring Boot tests: auth on by default with no settings (401, health open); auth off (open); Basic auth (401/200, wrong password rejected, metrics and API docs gated, health open); metrics reopened with `public-scrape` (API and docs stay gated); Basic plus an OAuth registration (redirect to the provider); `oidc` mode (JWT accepted, 401 without); no password configured (`change-me` refused, health open, API gated); and the `acp` profile active in a servlet app (auth still enforced).
 
 ## Extending
 
@@ -471,7 +492,7 @@ as it's produced, which the SSE controller relays to the client.
 
 **Add a new LLM provider** — implement `com.example.agent.llm.LlmProvider`, annotate with `@Component` and `@ConditionalOnProperty(name="agent.llm.provider", havingValue="your-name")`, then set `agent.llm.provider=your-name`.
 
-**Harden for production** — swap `InMemoryUserDetailsManager` for a real user store; enforce HTTPS (put behind nginx / a load balancer); add rate limits; persist audit logs of tool calls.
+**Harden for production** — rate limiting and the tool-call audit log are already there. Use `AGENT_AUTH_MODE=oidc` instead of the single Basic user; enforce HTTPS (put behind nginx / a load balancer); and use `postgres` storage so the audit log and sessions are persisted.
 
 **Project memory** — `requests/`, `references/`, `patterns/`, `episodes/` and `facts/` at the repo root record what was wanted, what was trusted, how it was built, what happened (asked, built, decided, refused, learned, open), and what the owner now believes (one fact per file, with provenance, superseded rather than overwritten), as plain YAML/Markdown; start at `requests/README.md`. `scripts/write-episode.sh` drafts an episode from a task's own PR and commits, and with `--session <id>` (or `--audit <file>`) lists under `recalled:` what the session's turns loaded; `scripts/consolidate.sh` proposes facts from episodes' learned lines; `scripts/fact.sh <words>` asks the record before you ask the owner. The owner's private cards live in a separate, sectioned memory root (`enrichmeai/memory`: `estate/` plus `projects/<name>/`); `check-cards.sh`, `fact.sh` and recall read it with `--root` / `MEMORY_ROOT` / `agent.memory.root` ([docs/memory-root.md](docs/memory-root.md)). Every card follows [memory format v1](docs/memory-format.md) (designed by Joseph Antony Aruja): a versioned, model-neutral schema per kind under `schema/`, a `visibility` boundary on every card, and a renderer contract that builds context for any model. With `agent.memory.enabled=true` a turn recalls on its own: matching facts, the episodes they were learned from (#152), the project's last episodes and matching patterns join the system prompt before the first model call (#88).
 
@@ -483,11 +504,11 @@ as it's produced, which the SSE controller relays to the client.
 
 ## Authentication and the audit log
 
-Auth ships **off** (`AGENT_AUTH_ENABLED=false`) so the agent starts with no setup. With it
-off there is no security context, so every row in `audit_events` records the user as
+Auth ships **on**. Turning it off (`AGENT_AUTH_ENABLED=false`, as the compose dev/demo stack
+does) leaves no security context, so every row in `audit_events` records the user as
 `anonymous` — the log tells you *what* happened, not *who* asked for it.
 
-If the audit trail is a reason you are running this, turn auth on before anything else:
+If the audit trail is a reason you are running this, keep auth on and use OIDC:
 
 ```bash
 export AGENT_AUTH_ENABLED=true
@@ -503,8 +524,9 @@ is what every LLM call and tool invocation is attributed to.
 
 Two outbound calls can carry the signed-in user's own credential instead of the agent's:
 the `pod` tool's calls to a Cistern pod, and the model calls behind the `openai` provider.
-Every outbound call on a turn also carries the inbound `X-Request-Id`, so the pod's receipt,
-a gateway's log and this service's `audit_events` all name the same request.
+Those two — the `pod` tool's calls and `OpenAiProvider`'s model calls — also carry the inbound
+`X-Request-Id`, so the pod's receipt, a gateway's log and this service's `audit_events` all name
+the same request. No other outbound call does: not the other providers, and not `jira_search`.
 
 **Whose credential the pod sees** is `agent.tools.cistern.credential-mode`
 (env `AGENT_TOOLS_CISTERN_CREDENTIALMODE`):
