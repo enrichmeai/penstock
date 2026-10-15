@@ -60,6 +60,9 @@ here and in `enrichmeai/cistern` (each shaped to its own build), and is carried 
 | full build | CI `build` on the PR (`./gradlew --no-daemon build` on Java 21) |
 
 **Hooks (`.claude/settings.json`, scripts in `.claude/hooks/`):**
+- **Before a Read or a bare `cat`:** `read-gate.sh` refuses a whole read of a text file over 350 lines
+  and says to read a slice (`offset`/`limit`) or `grep -n` first: a whole read stays in the context for the
+  rest of the session. `CLAUDE_SKIP_READ_GATE=1` turns it off; `CLAUDE_READ_GATE_LINES` moves the limit.
 - **Before a Bash command:** `guard-destructive.sh` forces an approval prompt for force pushes,
   pushes to `main`, pushing a `v*` tag (it starts `release.yml`), ref deletion, `reset --hard`,
   `clean -f`, recursive `rm`, `docker push`, Gradle `bootRun|publish|flyway*`, and

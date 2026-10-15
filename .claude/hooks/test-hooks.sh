@@ -184,5 +184,48 @@ expect "hint" "$( [ -n "$out" ] && jq -e '.systemMessage | test("write-episode.s
 expect "" "$(ed true "$er")" "episode-draft: silent on the retry pass"
 rm -rf "$er"
 
+
+# read-gate (ported from enrichmeai.github.io #52).
+# A whole read of a text file over the limit is denied with a pointer to a slice or a
+# search; a slice, a small file, a binary, a missing file and a piped cat all pass.
+rg() { # $1 = tool, $2 = JSON tool_input -> "deny" or "pass"
+  local out
+  out=$(jq -n --arg t "$1" --argjson i "$2" --arg d "$tmp" '{tool_name:$t, tool_input:$i, cwd:$d}' \
+    | (cd "$tmp" && CLAUDE_READ_GATE_LINES=350 "$here/read-gate.sh"))
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision // empty' <<<"$out" 2>/dev/null)" = "deny" ] && echo deny || echo pass
+}
+seq 1 400 > "$tmp/big.txt"; seq 1 350 > "$tmp/edge.txt"; seq 1 20 > "$tmp/small.txt"
+head -c 20000 /dev/urandom > "$tmp/blob.bin"; mkdir -p "$tmp/d s"; seq 1 400 > "$tmp/d s/big.md"
+expect deny "$(rg Read "{\"file_path\":\"$tmp/big.txt\"}")" 'read-gate: whole read of 400 lines'
+expect deny "$(rg Read '{"file_path":"big.txt"}')" 'read-gate: relative path, resolved from cwd'
+expect deny "$(rg Read "{\"file_path\":\"$tmp/d s/big.md\"}")" 'read-gate: path with a space'
+expect pass "$(rg Read "{\"file_path\":\"$tmp/edge.txt\"}")" 'read-gate: exactly the limit'
+expect pass "$(rg Read "{\"file_path\":\"$tmp/small.txt\"}")" 'read-gate: small file'
+expect pass "$(rg Read "{\"file_path\":\"$tmp/big.txt\",\"offset\":100,\"limit\":50}")" 'read-gate: a slice'
+expect pass "$(rg Read "{\"file_path\":\"$tmp/big.txt\",\"limit\":200}")" 'read-gate: limit alone'
+expect pass "$(rg Read "{\"file_path\":\"$tmp/blob.bin\"}")" 'read-gate: binary file'
+expect pass "$(rg Read "{\"file_path\":\"$tmp/missing.txt\"}")" 'read-gate: missing file'
+expect deny "$(rg Bash "{\"command\":\"cat $tmp/big.txt\"}")" 'read-gate: cat of a big file'
+expect deny "$(rg Bash '{"command":"cat big.txt"}')" 'read-gate: cat, relative path'
+expect pass "$(rg Bash "{\"command\":\"cat $tmp/big.txt | grep 7\"}")" 'read-gate: cat piped into a filter'
+expect pass "$(rg Bash "{\"command\":\"cat $tmp/small.txt\"}")" 'read-gate: cat of a small file'
+expect pass "$(rg Bash "{\"command\":\"head -n 50 $tmp/big.txt\"}")" 'read-gate: head is bounded'
+expect pass "$(rg Bash '{"command":"git status"}')" 'read-gate: unrelated command'
+# the payload's cwd decides a relative path, not the directory the hook runs in
+out=$(jq -n --arg d "$tmp" '{tool_name:"Read", tool_input:{file_path:"big.txt"}, cwd:$d}' | (cd / && "$here/read-gate.sh"))
+expect deny "$(jq -r '.hookSpecificOutput.permissionDecision // empty' <<<"$out")" 'read-gate: relative path from the payload cwd'
+# the whole deny object, as the hooks docs specify it
+expect "PreToolUse|deny|yes" "$(jq -r '[.hookSpecificOutput.hookEventName, .hookSpecificOutput.permissionDecision, (.hookSpecificOutput.permissionDecisionReason | test("400 lines.*offset and limit") | if . then "yes" else "no" end)] | join("|")' <<<"$out")" 'read-gate: deny object and reason'
+expect deny "$(rg Read "{\"file_path\":\"$tmp/d s/big.md\",\"x\":1}")" 'read-gate: extra input fields ignored'
+expect deny "$(rg Bash "{\"command\":\"cat -n \\\"$tmp/d s/big.md\\\"\"}")" 'read-gate: cat -n of a quoted path'
+expect deny "$(rg Bash "{\"command\":\"cat -- $tmp/big.txt\"}")" 'read-gate: cat -- file'
+printf '%s' "$(seq 1 351)" > "$tmp/nonl.txt"
+expect deny "$(rg Read "{\"file_path\":\"$tmp/nonl.txt\"}")" 'read-gate: 351 lines, no final newline'
+out=$(jq -n --arg f "$tmp/small.txt" '{tool_name:"Read", tool_input:{file_path:$f}}' | CLAUDE_READ_GATE_LINES=10 "$here/read-gate.sh")
+expect deny "$(jq -r '.hookSpecificOutput.permissionDecision // empty' <<<"$out")" 'read-gate: CLAUDE_READ_GATE_LINES moves the limit'
+expect "0:" "$(printf 'not json' | "$here/read-gate.sh"; echo "$?:")" 'read-gate: garbage input passes silently'
+out=$(jq -n --arg f "$tmp/big.txt" '{tool_name:"Read", tool_input:{file_path:$f}}' | CLAUDE_SKIP_READ_GATE=1 "$here/read-gate.sh")
+expect "" "$out" 'read-gate: CLAUDE_SKIP_READ_GATE=1 turns it off'
+
 echo "hook tests: $n run, $([ $fail = 0 ] && echo 'all passed' || echo 'FAILURES above')"
 exit $fail
