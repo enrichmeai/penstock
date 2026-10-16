@@ -363,5 +363,10 @@ public class AuditLoggerTest {
         public List<AuditEventEntity> findByEventTypeOrderByTimestampDesc(String eventType) {
             return java.util.Collections.emptyList();
         }
+
+        @Override
+        public List<AuditEventEntity> findByEventTypeInOrderByTimestampDesc(java.util.Collection<String> eventTypes) {
+            return java.util.Collections.emptyList();
+        }
     }
 }
