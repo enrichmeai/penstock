@@ -189,7 +189,7 @@ class McpStdioIT {
         JsonNode written = call(2, "tools/call", Map.of("name", "draft_episode", "arguments", args));
         assertThat(written.path("isError").asBoolean(false)).as(written.toString()).isFalse();
         String date = LocalDate.now(ZoneOffset.UTC).toString();
-        Path file = root.resolve("projects/oss-lib/episodes/" + date + "-first-draft.yaml");
+        Path file = root.resolve("projects/oss-lib/drafts/" + date + "-first-draft.yaml");
         assertThat(file).exists();
         String body = Files.readString(file);
         assertThat(body).contains("id: " + date + "-first-draft").contains("project: oss-lib")
@@ -205,7 +205,7 @@ class McpStdioIT {
         JsonNode refused = call(4, "tools/call", Map.of("name", "draft_episode", "arguments", leaky));
         assertThat(refused.path("isError").asBoolean(false)).isTrue();
         assertThat(refused.toString()).doesNotContain("hunter2abcdef1234");
-        assertThat(root.resolve("projects/oss-lib/episodes/" + date + "-leaky.yaml")).doesNotExist();
+        assertThat(root.resolve("projects/oss-lib/drafts/" + date + "-leaky.yaml")).doesNotExist();
         awaitStderrContains(Duration.ofSeconds(10), "mcp.draft_episode");
         assertEveryLineSoFarIsJson();
     }

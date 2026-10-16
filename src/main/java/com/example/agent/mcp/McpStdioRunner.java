@@ -40,7 +40,8 @@ public class McpStdioRunner {
             before you plan or answer: it returns the facts, recent episodes and patterns this \
             project may see, already filtered by the owner's rules. Apply them and say when you \
             depart from one. Use `draft_episode` at the end of a piece of work to propose a record \
-            of it: it writes a draft file the owner reviews; nothing else in memory changes.""";
+            of it: it writes a draft file the owner reviews, which recall does not read until the \
+            owner keeps it; nothing else in memory changes.""";
 
     private final MemoryRecall recall;
     private final EpisodeDrafts drafts;
@@ -131,9 +132,10 @@ public class McpStdioRunner {
         McpSchema.Tool tool = McpSchema.Tool.builder()
                 .name("draft_episode")
                 .title("Draft an episode for review")
-                .description("Writes ONE new draft episode file in the memory root for the owner to review and "
-                        + "commit. Never overwrites, never edits facts or patterns, and refuses any line that "
-                        + "looks like a credential: name where a secret lives, never its value.")
+                .description("Writes ONE new draft episode file in the project's drafts/ folder for the owner to review. "
+                        + "Recall does not read drafts: the owner keeps one by moving it into episodes/ and "
+                        + "committing it. Never overwrites, never edits facts or patterns, and refuses any line "
+                        + "that looks like a credential: name where a secret lives, never its value.")
                 .inputSchema(objectSchema(props, List.of("project", "slug", "asked")))
                 .build();
         return McpServerFeatures.SyncToolSpecification.builder()

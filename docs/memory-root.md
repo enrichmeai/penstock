@@ -89,6 +89,7 @@ A card loads into a project only if everyone who sees that project's output may 
 | Tool | Sectioned root |
 |---|---|
 | `scripts/write-episode.sh --root` | The draft goes to `projects/<project>/episodes/` (or `estate/episodes/` for `--project estate`) and takes the root's `memory.yaml` visibility. `--out` is confined to that folder. Git and `gh` still read this repository, so an episode about another repository's work is drafted from its PR and issue, or filled in by hand. |
+| MCP `draft_episode` (#116, #162) | The draft goes to `projects/<project>/drafts/` (or `estate/drafts/`; `drafts/` on a flat root), never `episodes/`: recall, `check-cards.sh` and `memory-publish.sh` all leave `drafts/` alone, so an agent's draft reaches no prompt and no pod until the owner keeps it by moving it into `episodes/` and committing it. Unlike `write-episode.sh`, which the owner runs and reviews at commit, this draft comes from an agent's turn. |
 | `scripts/consolidate.sh --root` | One section at a time: a section's episodes propose facts into that section's `facts/`, scoped `project:<name>`, or `estate` under `estate/` (whatever project the episode names), with the root's `memory.yaml` setting visibility. With `--write`, every section is checked first: a credential-shaped learned line in any section stops the run (exit 2, naming `projects/<name>/episodes/<file>`) before any section is written. Otherwise the first failing section's exit code is kept. |
 
 A relative `--root` or `MEMORY_ROOT` is resolved from the directory the command runs in.
