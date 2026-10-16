@@ -1,6 +1,8 @@
 package com.example.agent.mcp;
 
 import com.example.agent.config.AgentProperties;
+import com.example.agent.memory.EpisodeCard;
+import com.example.agent.memory.PatternCatalog;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -39,9 +41,9 @@ class EpisodeDraftsTest {
     void aFlatRootTakesItsVisibilityOnlyForItsOwnProject() throws IOException {
         Files.writeString(root.resolve("memory.yaml"), "format: 1\nproject: penstock\nvisibility: public\n");
         assertThat(drafts().draft(args("penstock", "own")).written()).isTrue();
-        assertThat(Files.readString(root.resolve("episodes/" + today() + "-own.yaml"))).contains("visibility: public");
+        assertThat(Files.readString(root.resolve("drafts/" + today() + "-own.yaml"))).contains("visibility: public");
         assertThat(drafts().draft(args("cistern", "other")).written()).isTrue();
-        assertThat(Files.readString(root.resolve("episodes/" + today() + "-other.yaml"))).contains("visibility: private");
+        assertThat(Files.readString(root.resolve("drafts/" + today() + "-other.yaml"))).contains("visibility: private");
     }
 
     @Test
@@ -49,9 +51,47 @@ class EpisodeDraftsTest {
         Files.createDirectories(root.resolve("projects"));
         Files.writeString(root.resolve("memory.yaml"), "format: 1\nvisibility: private\nprojects:\n  oss-lib: { audience: public }\n");
         assertThat(drafts().draft(args("estate", "owner-wide")).written()).isTrue();
-        assertThat(root.resolve("estate/episodes/" + today() + "-owner-wide.yaml")).exists();
+        assertThat(root.resolve("estate/drafts/" + today() + "-owner-wide.yaml")).exists();
         assertThat(drafts().draft(args("oss-lib", "lib")).written()).isTrue();
-        assertThat(root.resolve("projects/oss-lib/episodes/" + today() + "-lib.yaml")).exists();
+        assertThat(root.resolve("projects/oss-lib/drafts/" + today() + "-lib.yaml")).exists();
+    }
+
+    /**
+     * #162: the tool says nothing reads a draft until the owner keeps it, so recall must not load
+     * one. A draft sits beside the section's episodes, not among them; moving it in is the review.
+     */
+    @Test
+    void aDraftIsNotRecalledUntilTheOwnerMovesItIntoEpisodes() throws IOException {
+        Files.createDirectories(root.resolve("projects"));
+        Files.writeString(root.resolve("memory.yaml"), "format: 1\nvisibility: private\nprojects:\n  oss-lib: { audience: public }\n");
+        EpisodeDrafts.Result r = drafts().draft(args("oss-lib", "pending"));
+        assertThat(r.written()).isTrue();
+        String id = today() + "-pending";
+
+        AgentProperties recall = new AgentProperties();
+        recall.getMemory().setEnabled(true);
+        recall.getMemory().setRoot(root.toString());
+        recall.getMemory().setProject("oss-lib");
+        assertThat(PatternCatalog.loadedNow(recall).episodes()).extracting(EpisodeCard::id).doesNotContain(id);
+
+        Path draft = root.resolve("projects/oss-lib/drafts/" + id + ".yaml");
+        assertThat(draft).exists();
+        assertThat(r.message()).contains("projects/oss-lib/drafts/" + id + ".yaml").contains("projects/oss-lib/episodes/");
+        Files.createDirectories(root.resolve("projects/oss-lib/episodes"));
+        Files.move(draft, root.resolve("projects/oss-lib/episodes/" + id + ".yaml"));
+        assertThat(PatternCatalog.loadedNow(recall).episodes()).extracting(EpisodeCard::id).contains(id);
+    }
+
+    @Test
+    void aDraftWhoseIdIsAlreadyAnEpisodeIsRefused() throws IOException {
+        Files.writeString(root.resolve("memory.yaml"), "format: 1\nproject: penstock\nvisibility: public\n");
+        Files.createDirectories(root.resolve("episodes"));
+        Path kept = root.resolve("episodes/" + today() + "-taken.yaml");
+        Files.writeString(kept, "id: " + today() + "-taken\n");
+        EpisodeDrafts.Result r = drafts().draft(args("penstock", "taken"));
+        assertThat(r.written()).isFalse();
+        assertThat(r.message()).contains("already exists");
+        assertThat(root.resolve("drafts")).doesNotExist();
     }
 
     @Test
@@ -71,7 +111,7 @@ class EpisodeDraftsTest {
         assertThat(drafts().draft(Map.of("project", "penstock", "slug", "a", "asked", " ")).written()).isFalse();
         assertThat(drafts().draft(Map.of("project", "penstock", "slug", "a", "asked", "x",
                 "decided", List.of(Map.of("what", "no reason")))).written()).isFalse();
-        assertThat(root.resolve("episodes")).doesNotExist();
+        assertThat(root.resolve("drafts")).doesNotExist();
     }
 
     @Test
@@ -82,11 +122,11 @@ class EpisodeDraftsTest {
         EpisodeDrafts.Result r = drafts().draft(a);
         assertThat(r.written()).isFalse();
         assertThat(r.message()).doesNotContain("hunter2");
-        assertThat(root.resolve("episodes")).doesNotExist();
+        assertThat(root.resolve("drafts")).doesNotExist();
         // and a long clean entry is written on one line, so the file holds what was scanned
         assertThat(drafts().draft(Map.of("project", "penstock", "slug", "long", "asked", "x",
                 "learned", List.of("w ".repeat(120).trim()))).written()).isTrue();
-        assertThat(Files.readAllLines(root.resolve("episodes/" + today() + "-long.yaml")))
+        assertThat(Files.readAllLines(root.resolve("drafts/" + today() + "-long.yaml")))
                 .anySatisfy(l -> assertThat(l).contains("w ".repeat(120).trim()));
     }
 
@@ -95,7 +135,7 @@ class EpisodeDraftsTest {
         Files.createDirectories(root.resolve("projects"));
         Files.writeString(root.resolve("memory.yaml"), "format: 1\nvisibility: shareable\nprojects:\n  oss-lib: { audience: public }\n");
         assertThat(drafts().draft(args("oss-lib", "vis")).written()).isTrue();
-        assertThat(Files.readString(root.resolve("projects/oss-lib/episodes/" + today() + "-vis.yaml"))).contains("visibility: private");
+        assertThat(Files.readString(root.resolve("projects/oss-lib/drafts/" + today() + "-vis.yaml"))).contains("visibility: private");
     }
 
     @Test

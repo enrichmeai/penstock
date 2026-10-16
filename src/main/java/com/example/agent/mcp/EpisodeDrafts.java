@@ -23,9 +23,11 @@ import java.util.regex.Pattern;
 
 /**
  * The MCP {@code draft_episode} tool (#116): one new episode file, in memory format v1, in the
- * memory root's episodes folder for the project, for the owner to review and commit. It never
- * overwrites, never writes anything but episodes, and refuses the whole draft when a line looks
- * like a credential. The layout and visibility follow {@code scripts/write-episode.sh --root}.
+ * project section's {@code drafts/} folder, for the owner to review. Recall reads {@code episodes/}
+ * only, so a draft reaches no prompt until the owner moves it into {@code episodes/} and commits it
+ * (#162): that move is the review. It never overwrites, refuses an id already drafted or kept,
+ * never writes anything but drafts, and refuses the whole draft when a line looks like a
+ * credential. The visibility follows {@code scripts/write-episode.sh --root}.
  */
 public class EpisodeDrafts {
 
@@ -34,6 +36,9 @@ public class EpisodeDrafts {
     /** The projects of a root that declares none (#91's closed list). */
     static final List<String> DEFAULT_PROJECTS = List.of("penstock", "cistern", "valuedocs", "site");
     private static final Set<String> VISIBILITIES = Set.of("private", "shareable", "public");
+    /** Where a draft waits for review: beside {@code episodes/}, never inside it (#162). */
+    static final String DRAFTS = "drafts";
+    static final String EPISODES = "episodes";
 
     private final AgentProperties props;
 
@@ -105,18 +110,23 @@ public class EpisodeDrafts {
                         + "Name where a secret lives, never its value.");
             }
         }
-        String yaml = "# Drafted through Penstock's MCP draft_episode tool (#116). Review it, edit it, and\n"
-                + "# commit it, or delete it: nothing reads a draft until you commit it.\n" + dump(card);
+        String yaml = "# Drafted through Penstock's MCP draft_episode tool (#116) and kept by the owner's review:\n"
+                + "# recall reads it only once it is moved into episodes/ and committed. Edit or delete it freely.\n" + dump(card);
 
         int line = CredentialShape.firstMatchingLine(yaml);
         if (line > 0) {
             return refused("line " + line + " of the draft matches a credential shape; nothing was written. "
                     + "Name where a secret lives, never its value.");
         }
-        Path dir = sectioned
-                ? ("estate".equals(project) ? root.resolve("estate/episodes") : root.resolve("projects").resolve(project).resolve("episodes"))
-                : root.resolve("episodes");
+        Path section = sectioned
+                ? ("estate".equals(project) ? root.resolve("estate") : root.resolve("projects").resolve(project))
+                : root;
+        Path dir = section.resolve(DRAFTS);
         Path file = dir.resolve(id + ".yaml");
+        Path kept = section.resolve(EPISODES).resolve(id + ".yaml");
+        if (Files.exists(kept)) {
+            return refused(root.relativize(kept) + " already exists; a draft never overwrites. Choose another slug.");
+        }
         try {
             Files.createDirectories(dir);
             Files.writeString(file, yaml, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
@@ -125,8 +135,8 @@ public class EpisodeDrafts {
         } catch (IOException e) {
             return refused("could not write the draft: " + e.getMessage());
         }
-        return new Result(true, "Drafted " + root.relativize(file) + ". Review and commit it in the memory root; "
-                + "until then nothing reads it.");
+        return new Result(true, "Drafted " + root.relativize(file) + ". Recall does not read drafts; to keep it, "
+                + "move it into " + root.relativize(kept.getParent()) + "/ and commit it in the memory root.");
     }
 
     private static Result refused(String why) {

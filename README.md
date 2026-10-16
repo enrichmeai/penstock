@@ -310,7 +310,7 @@ delete it only once none uses it. Your memory root stays.
 | | What it does |
 |---|---|
 | `recall` (tool) | Returns the "Owner's memory" block a Penstock turn would give its model for the question. It is built by the same code, so the project's rules in `memory.yaml` apply: a public project never gets private cards, and `personal: none` gets no personal memory. Read-only. |
-| `draft_episode` (tool) | Writes **one new draft** episode in the memory root for you to review and commit. It never overwrites and never touches facts, patterns or `memory.yaml`. Any line that looks like a credential refuses the whole draft. |
+| `draft_episode` (tool) | Writes **one new draft** episode in the project's `drafts/` folder for you to review. Recall does not read drafts: keep one by moving it into `episodes/` and committing it. It never overwrites and never touches facts, patterns or `memory.yaml`. Any line that looks like a credential refuses the whole draft. |
 | `start-with-memory` (prompt) | Tells the client to call `recall` before it plans. With MCP the client decides when to call a tool; this prompt narrows that gap. |
 
 Every call is audited (`mcp.recall`, `mcp.draft_episode`, plus the sections and cards a recall returned). With `AGENT_STORAGE_TYPE=memory` the audit goes to stderr; with sqlite or postgres it is stored in `audit_events`.
