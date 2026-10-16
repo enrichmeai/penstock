@@ -33,6 +33,7 @@ learned:                                     # candidates for facts/ — referen
   - the verdict container must be created as text/turtle; curl's default type gets a 409
 open:
   - the two-different-days measure on a real task is still unrun
+closes: [2026-10-01-earlier-work#2]          # optional: <episode-id>#<n>, its nth open line, from 1
 patterns: [stdio-json-rpc-agent]             # ids loaded or produced, optional
 commits:                                     # optional, what the draft was built from
   - 71b2a27 memory 5: review by grant (#84)
@@ -47,6 +48,18 @@ block the list is `penstock`, `cistern`, `valuedocs`, `site`. The schema checks 
 shape (`[a-z0-9-]`); the checker and `write-episode.sh --project` check the list.
 `.claude/hooks/episode-draft.sh` still guesses the project from the checkout's folder name among the
 default four only.
+
+## Open loops and the journal
+
+An `open` line stays open until a later episode closes it, in one of two ways: an entry of its
+`decided` or `built` is the same text (a mapping's `what`; case and spacing ignored), or it lists
+`closes: [<episode-id>#<n>]`, where `n` counts that episode's `open` lines from 1. A later episode
+that repeats the text under `open` carries the loop forward without closing it.
+`scripts/journal.sh [<project>] [--since YYYY-MM-DD] [--root <dir>] [--json]` (#90) reads the
+record alone and prints the timeline, what was decided and refused, and which beliefs changed (a
+supersede as `old → new`), all within the window (`--since` defaults to 30 days), then every loop
+still open across the whole record, oldest first, each with the episode that first opened it.
+With a project, beliefs are that project's facts and the estate's.
 
 ## Learned lines become facts
 

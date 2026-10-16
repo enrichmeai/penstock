@@ -79,6 +79,11 @@ jobs:
         # credential refusal, and fact.sh's matching and exit codes (#87).
         run: bash scripts/test-facts.sh
 
+      - name: Check the journal (scripts/test-journal.sh)
+        # Offline, on fixture roots: the window, the project filter, open loops closed by text or a
+        # closes: marker, supersede pairs, a root without facts/, a sectioned root, --json (#90).
+        run: bash scripts/test-journal.sh
+
       - name: Check memory publish and grants (scripts/test-memory-publish.sh)
         # Offline, with a fake cistern CLI on PATH: the sync plan for a flat and a sectioned root,
         # exit codes, one-time provisioning, and the --project grant and revoke paths (#91).
