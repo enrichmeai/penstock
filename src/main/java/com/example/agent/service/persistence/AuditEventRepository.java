@@ -3,6 +3,7 @@ package com.example.agent.service.persistence;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface AuditEventRepository extends JpaRepository<AuditEventEntity, Long> {
@@ -12,4 +13,7 @@ public interface AuditEventRepository extends JpaRepository<AuditEventEntity, Lo
     List<AuditEventEntity> findByUserIdOrderByTimestampDesc(String userId, Pageable pageable);
 
     List<AuditEventEntity> findByEventTypeOrderByTimestampDesc(String eventType);
+
+    /** Events of any of these types, newest first: the one query behind {@code /api/audit/recall} (#90). */
+    List<AuditEventEntity> findByEventTypeInOrderByTimestampDesc(Collection<String> eventTypes);
 }

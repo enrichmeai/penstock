@@ -62,7 +62,9 @@ mechanisms keep it honest:
   `pattern.loaded` event (`AuditLogger.patternLoaded`). `GET /api/audit/patterns`
   aggregates those into loads, last-loaded time and versions seen, per pattern
   id — including every id in this directory that has never been loaded, listed
-  last. Run `scripts/pattern-digest.sh [base-url]` against a running instance
+  last. `GET /api/audit/recall` is the same aggregate over facts and episodes
+  too (`fact.loaded`, `episode.loaded`), one row per card with its `kind`
+  (#90). Run `scripts/pattern-digest.sh [base-url]` against a running instance
   (it reads `AGENT_AUTH_USERNAME`/`AGENT_AUTH_PASSWORD` from the environment,
   the same credentials documented in the root `README.md` — never pass the
   password as an argument) to read it as a table instead of raw JSON.
