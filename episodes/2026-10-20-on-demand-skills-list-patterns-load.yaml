@@ -9,8 +9,15 @@ project: penstock
 asked: 'On-demand skills: list_patterns / load_pattern tools, under project audiences, every load audited'
 issue: enrichmeai/penstock#175
 built:
-- pr: '<fill in: owner/repo#n>'
-  files: []
+- pr: enrichmeai/penstock#191
+  files:
+  - README.md
+  - patterns/README.md
+  - src/main/java/com/example/agent/service/AuditLogger.java
+  - src/main/java/com/example/agent/tools/PatternTools.java
+  - src/main/resources/application.yml
+  - src/test/java/com/example/agent/service/AuditLoggerTest.java
+  - src/test/java/com/example/agent/tools/PatternToolsTest.java
 decided:
 - what: unknown and out-of-audience ids return the same refusal, so existence elsewhere is not revealed
   why: a public project must not learn that a private pattern exists
