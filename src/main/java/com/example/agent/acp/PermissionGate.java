@@ -41,6 +41,12 @@ public class PermissionGate {
 
     private final Map<String, Set<String>> alwaysAllowed = new ConcurrentHashMap<>();
     private final Map<String, Set<String>> alwaysRejected = new ConcurrentHashMap<>();
+    /**
+     * Calls the user just approved through {@link #ask}, so {@link #check} does not ask twice.
+     * Held only while that call runs: {@link #forget} clears it afterwards, whether or not the
+     * tool consulted the gate.
+     */
+    private final Set<String> approvedCalls = ConcurrentHashMap.newKeySet();
 
     public PermissionGate(AcpSessionBridge sessions, AgentProperties props) {
         this.sessions = sessions;
@@ -65,6 +71,9 @@ public class PermissionGate {
                                       String title,
                                       List<AcpSchema.ToolCallLocation> locations,
                                       Object rawInput) {
+        if (approvedCalls.remove(sessionId + "\u0000" + callId)) {
+            return Optional.empty();
+        }
         if (!requiredKinds.contains(kind)) {
             return Optional.empty();
         }
@@ -89,6 +98,46 @@ public class PermissionGate {
 
         AcpSchema.RequestPermissionResponse response = ctx.requestPermission(request);
         return resolve(response.outcome(), sessionId, toolName, callId);
+    }
+
+    /**
+     * Asks about one call whatever its kind, for a tool whose {@code agent.tools.policy} is
+     * {@code ask} (#179). The same four options and the same per-session memory as {@link #check};
+     * an approval here also covers that call's own {@link #check}, so a gated tool is not asked
+     * about twice.
+     */
+    public Optional<ToolResult> ask(String sessionId, String callId, String toolName, Object rawInput) {
+        Optional<ToolResult> refused;
+        if (alwaysAllowed.getOrDefault(sessionId, Set.of()).contains(toolName)) {
+            refused = Optional.empty();
+        } else if (alwaysRejected.getOrDefault(sessionId, Set.of()).contains(toolName)) {
+            refused = Optional.of(refused(callId, toolName));
+        } else {
+            SyncPromptContext ctx = sessions.promptContext(sessionId);
+            if (ctx == null) {
+                return Optional.of(ToolResult.error(callId,
+                        "No ACP permission context for session " + sessionId + "; cannot ask for permission."));
+            }
+            AcpSchema.ToolCallUpdate toolCall = new AcpSchema.ToolCallUpdate(
+                    callId, toolName, AcpSchema.ToolKind.OTHER, AcpSchema.ToolCallStatus.PENDING,
+                    List.of(), List.of(), rawInput, null);
+            refused = resolve(ctx.requestPermission(new AcpSchema.RequestPermissionRequest(sessionId, toolCall, OPTIONS)).outcome(),
+                    sessionId, toolName, callId);
+        }
+        if (refused.isEmpty()) {
+            approvedCalls.add(sessionId + "\u0000" + callId);
+        }
+        return refused;
+    }
+
+    /** Drops the {@link #ask} approval for one call once it has run. */
+    public void forget(String sessionId, String callId) {
+        approvedCalls.remove(sessionId + "\u0000" + callId);
+    }
+
+    /** For tests: how many {@link #ask} approvals are being held. */
+    int heldApprovals() {
+        return approvedCalls.size();
     }
 
     private Optional<ToolResult> resolve(AcpSchema.RequestPermissionOutcome outcome,

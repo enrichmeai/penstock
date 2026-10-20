@@ -208,6 +208,10 @@ agent:
 
   tools:
     max-output-bytes: 16384
+    # allow | ask | deny per tool name (#179); no entry = allow, so the empty default changes nothing.
+    # e.g. policy: { shell: ask, git: deny }  or  AGENT_TOOLS_POLICY_SHELL=ask
+    policy: {}
+    ask-timeout-seconds: ${AGENT_TOOLS_ASK_TIMEOUT_SECONDS:120}
     shell:
       enabled: ${AGENT_TOOLS_SHELL_ENABLED:true}
       # A first build in a fresh workspace (compile + tests) takes minutes, and a

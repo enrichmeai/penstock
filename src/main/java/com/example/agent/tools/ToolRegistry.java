@@ -45,6 +45,13 @@ public class ToolRegistry {
             }
         });
         log.info("Registered {} tools: {}", tools.size(), tools.keySet());
+        // A policy entry that names no registered tool is most likely a typo, and a mistyped
+        // `deny` would leave the tool it meant running unchecked: say so at startup.
+        java.util.Set<String> registered = new java.util.HashSet<>();
+        tools.keySet().forEach(n -> registered.add(ToolPolicy.normaliseKey(n)));
+        props.getTools().policyKeys().stream()
+                .filter(k -> !registered.contains(k))
+                .forEach(k -> log.warn("agent.tools.policy names '{}', which is not a registered tool; the entry has no effect", k));
     }
 
     @Autowired(required = false)
