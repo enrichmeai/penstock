@@ -129,13 +129,35 @@ public class AgentProperties {
     }
 
     public static class Context {
-        /** none | last-n */
+        /**
+         * none | last-n | compact. {@code compact} (#173) folds the older messages into one summary
+         * carried in the system prompt once the estimated request nears
+         * {@code compactThresholdRatio × max-tokens-per-request}; the stored history is unchanged.
+         */
         private String policy = "last-n";
         private int lastN = 50;
+        /** compact: fold when the estimated request exceeds this share of max-tokens-per-request. */
+        private double compactThresholdRatio = 0.6;
+        /** compact: how many of the newest messages always go to the model verbatim. */
+        private int compactKeepRecent = 8;
         public String getPolicy() { return policy; }
         public void setPolicy(String policy) { this.policy = policy; }
         public int getLastN() { return lastN; }
         public void setLastN(int lastN) { this.lastN = lastN; }
+        public double getCompactThresholdRatio() { return compactThresholdRatio; }
+        public void setCompactThresholdRatio(double compactThresholdRatio) {
+            if (!(compactThresholdRatio > 0 && compactThresholdRatio <= 1)) {
+                throw new IllegalArgumentException("agent.llm.context.compact-threshold-ratio must be in (0, 1], got " + compactThresholdRatio);
+            }
+            this.compactThresholdRatio = compactThresholdRatio;
+        }
+        public int getCompactKeepRecent() { return compactKeepRecent; }
+        public void setCompactKeepRecent(int compactKeepRecent) {
+            if (compactKeepRecent < 1) {
+                throw new IllegalArgumentException("agent.llm.context.compact-keep-recent must be at least 1, got " + compactKeepRecent);
+            }
+            this.compactKeepRecent = compactKeepRecent;
+        }
     }
 
     public static class Sse {

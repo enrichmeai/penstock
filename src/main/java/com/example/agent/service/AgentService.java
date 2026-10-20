@@ -194,6 +194,10 @@ public class AgentService {
             }
         }
 
+        boolean compact = "compact".equals(props.getLlm().getContext().getPolicy());
+        ContextCompactor.View view = ContextCompactor.View.NONE;
+        boolean compactionFailed = false;   // one failed summary call stops further attempts this request
+
         for (int i = 0; i < maxTurns; i++) {
             log.debug("Agent iteration {}/{}", i + 1, maxTurns);
 
@@ -209,18 +213,58 @@ public class AgentService {
             // Use windowed history for the LLM call. Audit here — not in the
             // providers — so the event carries the session owner resolved on
             // the request thread; the SecurityContext is absent on SSE threads.
-            List<ChatMessage> windowedHist = windowedHistory(session.getHistory());
+            List<ChatMessage> windowedHist;
+            String systemPromptForCall = systemPromptForTurn;
+            if (compact && !compactionFailed) {
+                // Fold older messages into a summary when the request nears the budget (#173).
+                // Only what the model is sent changes; session.getHistory() is never rewritten.
+                long threshold = (long) (props.getLlm().getMaxTokensPerRequest()
+                        * props.getLlm().getContext().getCompactThresholdRatio());
+                ContextCompactor.Folding folding = ContextCompactor.foldIfNeeded(llm, llmContext, systemPromptForTurn,
+                        session.getHistory(), view, threshold, props.getLlm().getContext().getCompactKeepRecent(),
+                        String.valueOf(tools.specs()).length());
+                if (folding != null) {
+                    view = folding.view();
+                    compactionFailed = folding.failed();
+                    TokenUsage used = folding.call() == null || folding.call().usage() == null
+                            ? null : folding.call().usage();
+                    if (used != null) {
+                        session.addUsage(used);
+                        perRequestTotal += used.total();
+                    }
+                    if (auditLogger != null) {
+                        auditLogger.llmCall(session.getUserId(), session.getId(), llm.name(),
+                                used == null ? 0 : used.inputTokens(), used == null ? 0 : used.outputTokens(),
+                                !folding.failed());
+                        if (!folding.failed()) {
+                            auditLogger.contextCompacted(session.getUserId(), session.getId(), folding.folded(),
+                                    folding.tokensBefore(), folding.tokensAfter(), llm.name());
+                        }
+                    }
+                }
+                List<ChatMessage> history = session.getHistory();
+                windowedHist = history.subList(view.foldedUpTo(), history.size());
+                systemPromptForCall = ContextCompactor.systemPromptWith(systemPromptForTurn, view);
+            } else if (compact) {
+                // A summary call failed earlier in this request: keep any summary already made and
+                // send the rest unfolded, without asking again.
+                List<ChatMessage> history = session.getHistory();
+                windowedHist = history.subList(view.foldedUpTo(), history.size());
+                systemPromptForCall = ContextCompactor.systemPromptWith(systemPromptForTurn, view);
+            } else {
+                windowedHist = windowedHistory(session.getHistory());
+            }
             CompletionResult result;
             try {
                 result = props.getLlm().isStreamingEnabled()
                         ? llm.completeStreaming(
-                                systemPromptForTurn,
+                                systemPromptForCall,
                                 windowedHist,
                                 tools.specs(),
                                 llmContext,
                                 onToken)
                         : llm.complete(
-                                systemPromptForTurn,
+                                systemPromptForCall,
                                 windowedHist,
                                 tools.specs(),
                                 llmContext);

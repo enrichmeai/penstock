@@ -9,7 +9,7 @@ import java.util.regex.Pattern;
  * three passes, the third applying because a draft is a YAML file. A match is reported by line
  * number only, never by value.
  */
-final class CredentialShape {
+public final class CredentialShape {
 
     private static final List<Pattern> PATTERNS = List.of(
             // 1. well-known prefixes, anywhere, case-sensitive
@@ -22,8 +22,22 @@ final class CredentialShape {
     private CredentialShape() {
     }
 
+    /**
+     * Whether this one line looks like a credential. Public for context compaction (#173), which
+     * removes such lines from a summary before it is sent; the patterns over-match on purpose
+     * ("token: 5000" is removed too), which is the safe direction.
+     */
+    public static boolean matches(String line) {
+        for (Pattern p : PATTERNS) {
+            if (p.matcher(line).find()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** The 1-based number of the first line that looks like a credential, or 0 when none does. */
-    static int firstMatchingLine(String text) {
+    public static int firstMatchingLine(String text) {
         String[] lines = text.split("\n", -1);
         for (int i = 0; i < lines.length; i++) {
             for (Pattern p : PATTERNS) {
