@@ -1,0 +1,23 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject and triggers set by the
+# owner's session. The owner promotes it by setting asserted.
+id: http-client-timeout-not-body
+format: 1
+visibility: public
+statement: Java.net.http's request timeout does not cover reading the body; bound the read separately.
+kind: convention
+subject: java/http-client-body-timeout
+scope: project:penstock
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-20-web-fetch-and-search-the-governed
+  learned: java.net.http's request timeout does not cover reading the body; bound the read separately
+first_seen: 2026-10-20
+last_confirmed: 2026-10-20
+supersedes: null
+superseded_by: null
+triggers:
+- 'HttpClient'
+- 'timeout'
+- 'web_fetch'
+- 'readNBytes'

@@ -1,0 +1,25 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject and triggers set by the
+# owner's session. The owner promotes it by setting asserted.
+id: per-call-state-cleared-at-call-end
+format: 1
+visibility: public
+statement: A wrapper's per-call memory must be cleared when the call ends, not when a downstream check
+  happens to run, or it outlives the call.
+kind: convention
+subject: agent/per-call-state
+scope: project:penstock
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-20-tool-permission-policy-for-web-and
+  learned: a wrapper's per-call memory must be cleared when the call ends, not when a downstream check
+    happens to run, or it outlives the call
+first_seen: 2026-10-20
+last_confirmed: 2026-10-20
+supersedes: null
+superseded_by: null
+triggers:
+- 'approvedCalls'
+- 'PermissionGate'
+- 'per-call'
+- 'ask policy'

@@ -1,0 +1,25 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject and triggers set by the
+# owner's session. The owner promotes it by setting asserted.
+id: decorator-forwards-every-method
+format: 1
+visibility: public
+statement: A decorator must forward every method of the interface it wraps, including new default methods,
+  or the wrapped behaviour silently disappears in that profile.
+kind: convention
+subject: java/decorator-forwarding
+scope: project:penstock
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-20-web-fetch-and-search-the-governed
+  learned: a decorator must forward every method of the interface it wraps, including new default methods,
+    or the wrapped behaviour silently disappears in that profile
+first_seen: 2026-10-20
+last_confirmed: 2026-10-20
+supersedes: null
+superseded_by: null
+triggers:
+- 'AcpGatedTool'
+- 'wrapper'
+- 'decorator'
+- 'default method'

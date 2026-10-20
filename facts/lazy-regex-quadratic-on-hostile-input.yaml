@@ -1,0 +1,25 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject and triggers set by the
+# owner's session. The owner promotes it by setting asserted.
+id: lazy-regex-quadratic-on-hostile-input
+format: 1
+visibility: public
+statement: A lazy regex such as <script.*?</script> or [^>]*> over hostile input can be quadratic; scan
+  linearly.
+kind: convention
+subject: java/regex-hostile-input
+scope: project:penstock
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-20-web-fetch-and-search-the-governed
+  learned: a lazy regex such as <script.*?</script> or [^>]*> over hostile input can be quadratic; scan
+    linearly
+first_seen: 2026-10-20
+last_confirmed: 2026-10-20
+supersedes: null
+superseded_by: null
+triggers:
+- 'regex'
+- 'htmlToText'
+- 'untrusted input'
+- 'quadratic'

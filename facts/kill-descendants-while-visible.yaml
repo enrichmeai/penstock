@@ -1,0 +1,25 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject and triggers set by the
+# owner's session. The owner promotes it by setting asserted.
+id: kill-descendants-while-visible
+format: 1
+visibility: public
+statement: A process's children must be seen while it runs and killed when it ends; after the parent exits,
+  descendants() no longer finds an orphan.
+kind: convention
+subject: java/process-descendants
+scope: project:penstock
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-20-hooks-owner-code-before-and-after
+  learned: a process's children must be seen while it runs and killed when it ends; after the parent exits,
+    descendants() no longer finds an orphan
+first_seen: 2026-10-20
+last_confirmed: 2026-10-20
+supersedes: null
+superseded_by: null
+triggers:
+- 'ProcessBuilder'
+- 'descendants'
+- 'hook'
+- 'orphan'

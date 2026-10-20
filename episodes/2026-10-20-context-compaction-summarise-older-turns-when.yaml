@@ -1,0 +1,38 @@
+# Drafted by scripts/write-episode.sh from the task's own evidence; edit before committing.
+# Empty lists and <fill in> placeholders are yours to complete; a learned line is a fact by
+# reference (an account, a secret's *name*, an id), never a value.
+id: 2026-10-20-context-compaction-summarise-older-turns-when
+format: 1
+visibility: public
+date: 2026-10-20
+project: penstock
+asked: 'Context compaction: summarise older turns when history nears the token budget, keep recent turns
+  verbatim, audit each compaction'
+issue: enrichmeai/penstock#173
+built:
+- pr: enrichmeai/penstock#181
+  merged: 3655af2
+  files:
+  - README.md
+  - src/main/java/com/example/agent/config/AgentProperties.java
+  - src/main/java/com/example/agent/mcp/CredentialShape.java
+  - src/main/java/com/example/agent/service/AgentService.java
+  - src/main/java/com/example/agent/service/AuditLogger.java
+  - src/main/java/com/example/agent/service/ContextCompactor.java
+  - src/main/resources/application.yml
+  - src/test/java/com/example/agent/service/ContextCompactionTest.java
+decided:
+- what: compaction folds older turns into one summary carried in the system prompt; the stored history is never changed
+  why: the transcript stays the user's words and the model's, as for memory recall
+- what: a failed or empty summary sends the request unfolded and is not retried for the rest of that request
+  why: a provider that is down would otherwise cost one failed call per loop iteration
+- what: the summary is re-made on every request rather than stored on the session
+  why: storing it needs a session-schema change; left for the owner to decide
+refused:
+- what: a real tokenizer for the estimate
+  why: characters divided by four, with the 0.6 threshold leaving room, is enough until measured otherwise
+learned:
+- a context window may start only after a complete assistant tool call and its result, never with an orphan tool message
+open:
+- re-run docs/real-repo-validation.md with policy compact and record whether the long task now completes
+patterns: []
