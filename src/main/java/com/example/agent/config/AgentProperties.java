@@ -25,6 +25,7 @@ public class AgentProperties {
     private Metrics metrics = new Metrics();
     private Acp acp = new Acp();
     private Memory memory = new Memory();
+    private Hooks hooks = new Hooks();
 
     public String getWorkspace() { return workspace; }
     public void setWorkspace(String workspace) { this.workspace = workspace; }
@@ -33,6 +34,8 @@ public class AgentProperties {
     public void setLlm(Llm llm) { this.llm = llm; }
 
     public Tools getTools() { return tools; }
+    public Hooks getHooks() { return hooks; }
+    public void setHooks(Hooks hooks) { this.hooks = hooks; }
     public void setTools(Tools tools) { this.tools = tools; }
 
     public Storage getStorage() { return storage; }
@@ -682,5 +685,46 @@ public class AgentProperties {
         public void setPrincipalClaim(String principalClaim) { this.principalClaim = principalClaim; }
         public long getClockSkewSeconds() { return clockSkewSeconds; }
         public void setClockSkewSeconds(long clockSkewSeconds) { this.clockSkewSeconds = clockSkewSeconds; }
+    }
+
+    /**
+     * Owner commands run at fixed points of the loop (#184). Off by default: no entries, no hooks.
+     * A {@code pre-tool} hook can only make a call stricter (deny one the tool policy allowed);
+     * one that errors or times out denies. The others observe, and their failures are logged.
+     * Configured here only, never read from the workspace.
+     */
+    public static class Hooks {
+        private List<Hook> preTool = List.of();
+        private List<Hook> postTool = List.of();
+        private List<Hook> turnStart = List.of();
+        private List<Hook> turnEnd = List.of();
+
+        public List<Hook> getPreTool() { return preTool; }
+        public void setPreTool(List<Hook> preTool) { this.preTool = preTool == null ? List.of() : preTool; }
+        public List<Hook> getPostTool() { return postTool; }
+        public void setPostTool(List<Hook> postTool) { this.postTool = postTool == null ? List.of() : postTool; }
+        public List<Hook> getTurnStart() { return turnStart; }
+        public void setTurnStart(List<Hook> turnStart) { this.turnStart = turnStart == null ? List.of() : turnStart; }
+        public List<Hook> getTurnEnd() { return turnEnd; }
+        public void setTurnEnd(List<Hook> turnEnd) { this.turnEnd = turnEnd == null ? List.of() : turnEnd; }
+    }
+
+    /** One hook: an argv list (never a shell string), the tools it applies to (empty: all), a timeout. */
+    public static class Hook {
+        private List<String> command = List.of();
+        private List<String> tools = List.of();
+        private int timeoutSeconds = 10;
+
+        public List<String> getCommand() { return command; }
+        public void setCommand(List<String> command) { this.command = command == null ? List.of() : command; }
+        public List<String> getTools() { return tools; }
+        public void setTools(List<String> tools) { this.tools = tools == null ? List.of() : tools; }
+        public int getTimeoutSeconds() { return timeoutSeconds; }
+        public void setTimeoutSeconds(int timeoutSeconds) {
+            if (timeoutSeconds < 1) {
+                throw new IllegalArgumentException("agent.hooks.*.timeout-seconds must be at least 1, got " + timeoutSeconds);
+            }
+            this.timeoutSeconds = timeoutSeconds;
+        }
     }
 }

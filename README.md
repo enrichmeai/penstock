@@ -424,6 +424,9 @@ overridden with env vars or `--agent.*=value` command-line flags.
 | `agent.tools.file.max-bytes` | `1048576` | — | Max size for a single `read_file`. |
 | `agent.tools.policy.<tool>` | none (every tool `allow`) | `AGENT_TOOLS_POLICY_<TOOL>` (e.g. `AGENT_TOOLS_POLICY_WRITE_FILE=ask`) | `allow`, `ask` or `deny` for one tool, by its name (#179). See [Safety notes](#safety-notes). An entry naming no registered tool logs a warning at startup. |
 | `agent.tools.ask-timeout-seconds` | `120` | `AGENT_TOOLS_ASK_TIMEOUT_SECONDS` | How long an `ask` waits for the user before it counts as denied. |
+| `agent.hooks.pre-tool[n]` | none | — | Owner hooks before a tool call (#184): `command` (argv list), `tools` (names; empty means all), `timeout-seconds` (10). Can deny an allowed call; a failing hook denies. See [Safety notes](#safety-notes). |
+| `agent.hooks.post-tool[n]` | none | — | Same shape, after a tool call; may add a note to the result. Fails open. |
+| `agent.hooks.turn-start[n]`, `agent.hooks.turn-end[n]` | none | — | Same shape, observe only. Fail open. |
 | `agent.tools.web.enabled` | `false` | `AGENT_TOOLS_WEB_ENABLED` | Registers `web_fetch` (#176). Off: the tool does not exist. |
 | `agent.tools.web.allowed-hosts` | empty | `AGENT_TOOLS_WEB_ALLOWED_HOSTS` (comma-separated) | The only hosts `web_fetch` may reach: `docs.example.com` exactly (on the default port), `*.example.com` for its subdomains, or `host:8443` for one other port. Empty refuses every URL. |
 | `agent.tools.web.max-bytes` | `200000` | — | Bytes read from one response; the rest is cut off and the result says `truncated`. |
@@ -521,6 +524,33 @@ as it's produced, which the SSE controller relays to the client.
 - The agent is restricted to `agent.workspace`; attempts to access paths outside are rejected with a `SecurityException`.
 - The `shell` tool runs inside the workspace and applies the `blocked-patterns` regex list. **Treat it like giving the LLM shell access on your machine** — start with a throwaway directory.
 - `git` is whitelisted to a small set of safe subcommands (no `push`, no `reset --hard`, no `rebase`).
+- **Hooks (#184).** Commands you configure in `agent.hooks.*` run at four points: `pre-tool`, `post-tool`, `turn-start` and `turn-end`. With none configured, nothing changes.
+  - **How a hook runs.** Its command is an argv list, never a shell string. It runs in the workspace, as the same user and in the same container (if any) as Penstock itself; there is no separate sandbox. Its environment is minimal: `PATH`, `HOME`, `LANG` and `PENSTOCK_HOOK_EVENT`, never the agent's own, so no Penstock credential or token reaches it. It does see the call verbatim: the tool's arguments (a whole `write_file` content, say) and, after the call, its result, which can hold workspace data. A hook is code you run as the agent's user, so treat its command like a shell command. A child process a hook leaves running is killed when the hook ends, so a hook should not background work. That cleanup is best effort: a hook that starts a background child and exits at once may end before the child is seen. If that child keeps the hook's output open, the hook counts as failed (a `pre-tool` call is denied after 2 s), and the child may outlive it. Output over 64 KB counts as a failure (`output-too-large`).
+  - **What it reads and answers.** It reads one JSON object on stdin: the event, the session, the user, and for tool events the call id, tool, arguments and (post-tool) result. It may answer with one JSON object on stdout. Empty output means "no opinion".
+  - **`pre-tool`** runs only after the tool policy (#179) has allowed the call, so it can deny a call (`{"decision":"deny","reason":"…"}`, and the model sees the reason) but never allow one the policy denied or the user refused. A non-zero exit, a timeout, or output that is not a JSON object also denies: fail closed.
+  - **`post-tool`** may answer `{"note":"…"}`, and the note is appended to the result the model sees (a lint or test summary, say). Its failures are logged and ignored.
+  - **Every run** is audited as `hook.ran` (event, index, tool, outcome: `allow`, `deny`, `pass`, `note`, `error`, `timeout` or `output-too-large`, and duration).
+  - **Hooks come only from Penstock's own configuration.** A repository cannot install one. The same hooks run in ACP mode.
+  - **Example:** a pre-tool hook on `write_file` that refuses paths outside `src/`:
+
+    ```yaml
+    agent:
+      hooks:
+        pre-tool:
+          - command: ["/opt/penstock-hooks/src-only.sh"]
+            tools: [write_file, edit_file]
+    ```
+
+    ```sh
+    #!/bin/sh
+    # src-only.sh: allow writes under src/ only (needs jq)
+    path=$(jq -r '.arguments.path // ""')
+    case "$path" in
+      *..*) ;;               # no climbing out of src/ with ..
+      src/*) echo '{}'; exit 0 ;;
+    esac
+    jq -n --arg p "$path" '{decision: "deny", reason: ("writes are allowed under src/ only, not " + $p)}'
+    ```
 - **Web fetch (#176).** `web_fetch(url)` is off by default. When it is on:
   - It reaches only hosts on `agent.tools.web.allowed-hosts`, on the default port unless an entry names another (`host:port`; an IPv6 literal can be listed only on its default port). An empty list refuses every URL; it never means "allow all".
   - It sends GET only, over https only: no body, no cookies, no credentials.

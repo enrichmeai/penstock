@@ -52,6 +52,7 @@ public class AgentService {
     private AuditLogger auditLogger;
     private ContextAssembler contextAssembler;
     private ToolApprover toolApprover;
+    private HookRunner hookRunner;
 
     public AgentService(LlmProvider llm,
                         ToolRegistry tools,
@@ -80,6 +81,12 @@ public class AgentService {
     @Autowired(required = false)
     public void setToolApprover(ToolApprover toolApprover) {
         this.toolApprover = toolApprover;
+    }
+
+    /** The owner's hooks (#184). Absent (some tests): no hooks run. */
+    @Autowired(required = false)
+    public void setHookRunner(HookRunner hookRunner) {
+        this.hookRunner = hookRunner;
     }
 
     /** Synchronous: runs the full loop, returns all new messages. */
@@ -141,12 +148,32 @@ public class AgentService {
     private static final Consumer<String> NO_TOKEN = s -> {};
     private static final Consumer<PendingApproval> NO_APPROVAL = p -> {};
 
+    /** The turn, between the owner's turn-start and turn-end hooks (#184); turn-end runs however it ends. */
     private void runTurn(Session session,
                          String userInput,
                          TurnContext turn,
                          Consumer<ChatMessage> emit,
                          Consumer<String> onToken,
                          Consumer<PendingApproval> onApproval) {
+        if (hookRunner == null) {
+            runTurnBody(session, userInput, turn, emit, onToken, onApproval);
+            return;
+        }
+        ToolContext hookContext = new ToolContext(session.getUserId(), session.getId(), turn.requestId(), java.util.Optional.empty());
+        hookRunner.turn(HookRunner.TURN_START, hookContext, java.util.Map.of("input", userInput == null ? "" : userInput));
+        try {
+            runTurnBody(session, userInput, turn, emit, onToken, onApproval);
+        } finally {
+            hookRunner.turn(HookRunner.TURN_END, hookContext, java.util.Map.of());
+        }
+    }
+
+    private void runTurnBody(Session session,
+                             String userInput,
+                             TurnContext turn,
+                             Consumer<ChatMessage> emit,
+                             Consumer<String> onToken,
+                             Consumer<PendingApproval> onApproval) {
         // Everything downstream needs about the caller, resolved here once: the
         // provider gets identity and request ID (never the inbound bearer); tools
         // get the same plus the bearer, for the one mode that forwards it.
@@ -319,13 +346,20 @@ public class AgentService {
                 Optional<ToolResult> stopped = permit(call, toolContext, onApproval);
                 if (stopped.isPresent()) {
                     results.add(stopped.get());
-                } else {
-                    try {
-                        results.add(tools.invoke(call, toolContext));
-                    } finally {
-                        if (toolApprover != null && props.getTools().policyFor(call.name()) == ToolPolicy.ASK) {
-                            toolApprover.finished(toolContext, call);
-                        }
+                    continue;
+                }
+                try {
+                    // The policy allowed it; the owner's pre-tool hooks may still refuse (#184).
+                    Optional<String> hookDenied = hookRunner == null ? Optional.empty() : hookRunner.preTool(toolContext, call);
+                    if (hookDenied.isPresent()) {
+                        results.add(ToolResult.error(call.id(), "Refused by the owner's pre-tool hook: " + hookDenied.get()));
+                    } else {
+                        ToolResult r = tools.invoke(call, toolContext);
+                        results.add(hookRunner == null ? r : hookRunner.postTool(toolContext, call, r));
+                    }
+                } finally {
+                    if (toolApprover != null && props.getTools().policyFor(call.name()) == ToolPolicy.ASK) {
+                        toolApprover.finished(toolContext, call);
                     }
                 }
             }
