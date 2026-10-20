@@ -230,6 +230,7 @@ event: session    data: { "sessionId": "...", "title": "..." }
 event: token      data: { "text": "…" }
 event: message    data: { "role":"ASSISTANT","text":"…","toolCalls":[…], … }
 event: message    data: { "role":"TOOL","toolResults":[…] }
+event: approval   data: { "sessionId":"…","callId":"…","tool":"shell","arguments":{…},"expiresAt":"…" }
 …
 event: session    data: { "sessionId": "...", "title": "..." }
 event: done       data: { "ok": true }
@@ -240,6 +241,10 @@ default, `AGENT_LLM_STREAMING_ENABLED`); each finished message still arrives as 
 `message`. The closing `session` event carries the updated title. A failure sends
 `error` (`{ "error": "..." }`), and a server shutting down sends `shutdown` to every
 open stream.
+
+An `approval` event means a tool call is waiting under `agent.tools.policy.<tool>=ask`: the
+stream pauses until `POST /api/sessions/{id}/approvals/{callId}` answers it or
+`agent.tools.ask-timeout-seconds` passes (see [Safety notes](#safety-notes)).
 
 The web UI consumes this with `fetch()` + `ReadableStream` (EventSource can't POST).
 The non-streaming `POST /api/chat` remains available for simple clients.
@@ -414,6 +419,8 @@ overridden with env vars or `--agent.*=value` command-line flags.
 | `agent.tools.shell.enabled` | `true` | `AGENT_TOOLS_SHELL_ENABLED` | |
 | `agent.tools.shell.timeout-seconds` | `600` | `AGENT_TOOLS_SHELL_TIMEOUT_SECONDS` | Per-command timeout. |
 | `agent.tools.file.max-bytes` | `1048576` | — | Max size for a single `read_file`. |
+| `agent.tools.policy.<tool>` | none (every tool `allow`) | `AGENT_TOOLS_POLICY_<TOOL>` (e.g. `AGENT_TOOLS_POLICY_WRITE_FILE=ask`) | `allow`, `ask` or `deny` for one tool, by its name (#179). See [Safety notes](#safety-notes). An entry naming no registered tool logs a warning at startup. |
+| `agent.tools.ask-timeout-seconds` | `120` | `AGENT_TOOLS_ASK_TIMEOUT_SECONDS` | How long an `ask` waits for the user before it counts as denied. |
 | `agent.memory.enabled` | `false` | `AGENT_MEMORY_ENABLED` | "Retrieve before reason" (#73) and "recall in the turn" (#88): load matching `facts/`, the episodes those facts were learned from (their `provenance`, however old, #152), the project's latest `episodes/`, and matching `patterns/` + `references/` into the turn's system prompt before the first model call, in that order under one 12 000-character cap (entries dropped whole from the end, so patterns go first; no episode twice). Each load is audited (`fact.loaded`, `episode.loaded` with `reason: provenance` or `latest`, `pattern.loaded`). Off by default — these folders are this project's own build memory. |
 | `agent.memory.root` | `${user.dir}` | `AGENT_MEMORY_ROOT` | Directory containing `patterns/`, `requests/`, `references/`, `facts/` and `episodes/`. |
 | `agent.memory.signature-depth` | `8` | `AGENT_MEMORY_SIGNATURE_DEPTH` | Max depth of the per-turn workspace walk used for signature matching; a file nested deeper is never considered. |
@@ -436,6 +443,8 @@ overridden with env vars or `--agent.*=value` command-line flags.
 | `GET` | `/api/sessions/{id}/usage` | — | Token usage summary for a session |
 | `DELETE` | `/api/sessions/{id}` | — | Delete a session |
 | `GET` | `/api/sessions/{id}/export.md` | — | The session's transcript as Markdown |
+| `GET` | `/api/sessions/{id}/approvals` | — | Tool calls waiting for an answer under policy `ask`: `[{sessionId, callId, tool, arguments, expiresAt}]` |
+| `POST` | `/api/sessions/{id}/approvals/{callId}` | `{ "decision": "approve" \| "deny" }` | Answer one waiting call. `204` when it reached the turn; `404` when nothing with that id is waiting (answered, timed out, never asked) or the session is not yours. |
 | `POST` | `/api/sessions/import` | Markdown transcript (`text/markdown`) | Create a new session owned by the caller from an exported transcript |
 | `GET` | `/api/sessions/{id}/audit` | — | Audit events for a session (tool/LLM calls), owner-scoped |
 | `GET` | `/api/audit/patterns` | — | Per-pattern `pattern.loaded` usage: `[{patternId, loads, lastLoadedAt, versions}]`, never-loaded patterns last. `[]` with `agent.memory.enabled=false`; `503` in memory storage mode (no audit table). |
@@ -502,6 +511,7 @@ as it's produced, which the SSE controller relays to the client.
 - The agent is restricted to `agent.workspace`; attempts to access paths outside are rejected with a `SecurityException`.
 - The `shell` tool runs inside the workspace and applies the `blocked-patterns` regex list. **Treat it like giving the LLM shell access on your machine** — start with a throwaway directory.
 - `git` is whitelisted to a small set of safe subcommands (no `push`, no `reset --hard`, no `rebase`).
+- **Tool policy (#179).** `agent.tools.policy.<tool>` sets each tool to `allow`, `ask` or `deny`. With no entry a tool is `allow`, so by default every registered tool runs unasked in web and REST mode, `write_file`, `edit_file`, `shell`, `git` and `pod` writes included, exactly as before the setting existed. `deny` never runs the call and tells the model why. `ask` pauses the turn: the chat stream sends an `approval` event, `GET /api/sessions/{id}/approvals` lists the waiting calls (for clients of the non-streaming `/api/chat`), and `POST /api/sessions/{id}/approvals/{callId}` with `approve` or `deny` resumes it. No answer within `agent.tools.ask-timeout-seconds` (120) counts as a denial. Every `ask` asks; nothing is remembered between calls. Only the session's owner can answer. In the ACP profile, `ask` goes to the editor's own permission prompt, and a call approved there is not asked again by the mutating-tool gate. Each decision is audited as `tool.permission` (`denied`, `asked`, `allowed` or `timed-out`, with who answered: `policy`, the user, or `editor`). A call its policy allows outright writes no `tool.permission` event; its `tool_call` event is the record. Waiting holds a thread from the SSE pool (or the request thread for `/api/chat`) until the answer or the timeout. A client that disconnects does not release the wait early, so its call times out to `deny`. A stream lives 10 minutes in all, so a turn with several slow answers can run out of stream before it finishes. `tool.permission` events are written asynchronously, so read them by `callId` rather than relying on their stored order.
 
 ## Authentication and the audit log
 

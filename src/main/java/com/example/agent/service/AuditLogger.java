@@ -165,6 +165,26 @@ public class AuditLogger {
     }
 
     /**
+     * Records a tool-policy decision (#179) as {@code tool.permission} with the tool, the call id,
+     * the outcome ({@code denied} by policy, {@code asked}, then {@code allowed}, {@code denied} or
+     * {@code timed-out}) and who answered ({@code policy} for a standing deny, the user's name for
+     * an answer, null for a timeout); also an INFO line. A call its policy allows outright writes
+     * no event here; its {@code tool_call} event is the record.
+     */
+    @Async
+    public void toolPermission(String userId, String sessionId, String tool, String callId, String outcome, String answeredBy) {
+        String user = normalise(userId);
+        log.info("tool.permission user={} session={} tool={} call={} outcome={} answeredBy={}",
+                user, sessionId, tool, callId, outcome, answeredBy);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("tool", tool);
+        detail.put("callId", callId);
+        detail.put("outcome", outcome);
+        detail.put("answeredBy", answeredBy);
+        saveMemoryEvent(user, sessionId, "tool.permission", detail);
+    }
+
+    /**
      * Records a call to one of the MCP server's tools (#116), as {@code mcp.<tool>} with the project
      * and its outcome ({@code ok}, {@code empty}, {@code refused} or {@code error}); also an INFO line.
      */

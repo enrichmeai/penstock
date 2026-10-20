@@ -169,6 +169,61 @@ class PermissionGateTest {
         assertTrue(result.get().content().contains(toolName));
     }
 
+    @Test
+    void aPolicyAskApprovalCoversThatCallsOwnGateCheck() {
+        PermissionGate gate = gate();
+        stubOutcome(selected("allow_once"));
+
+        assertTrue(gate.ask(sessionId, "c1", "shell", noArgs()).isEmpty());
+        assertTrue(gate.check(sessionId, "c1", "shell", AcpSchema.ToolKind.EXECUTE, "shell echo", List.of(), noArgs()).isEmpty());
+        verify(ctx, times(1)).requestPermission(any());
+
+        // The next call is asked again: the approval was for c1 only.
+        assertTrue(gate.check(sessionId, "c2", "shell", AcpSchema.ToolKind.EXECUTE, "shell echo", List.of(), noArgs()).isEmpty());
+        verify(ctx, times(2)).requestPermission(any());
+    }
+
+    @Test
+    void anApprovedCallThatNeverReachesTheGateLeavesNothingHeld() {
+        PermissionGate gate = gate();
+        stubOutcome(selected("allow_once"));
+        AcpToolApprover approver = new AcpToolApprover(gate);
+        com.example.agent.tools.ToolContext toolCtx = new com.example.agent.tools.ToolContext("alice", sessionId);
+        com.example.agent.model.ToolCall call = new com.example.agent.model.ToolCall("c1", "read_file", noArgs());
+
+        com.example.agent.service.ToolApprover.Answer a = approver.ask(toolCtx, call, p -> {});
+        assertTrue(a.approved());
+        assertTrue(gate.heldApprovals() == 1);
+        approver.finished(toolCtx, call);   // read_file is not gated: check() never ran
+        assertTrue(gate.heldApprovals() == 0);
+
+        // The same id later, on a gated tool, is asked again.
+        gate.check(sessionId, "c1", "shell", AcpSchema.ToolKind.EXECUTE, "shell echo", List.of(), noArgs());
+        verify(ctx, times(2)).requestPermission(any());
+    }
+
+    @Test
+    void withNoPromptContextTheEditorIsNotRecordedAsHavingAnswered() {
+        PermissionGate gate = gate();
+        AcpToolApprover approver = new AcpToolApprover(gate);
+        com.example.agent.service.ToolApprover.Answer a = approver.ask(
+                new com.example.agent.tools.ToolContext("alice", "unknown-session"),
+                new com.example.agent.model.ToolCall("c1", "read_file", noArgs()), p -> {});
+        assertFalse(a.approved());
+        assertTrue(a.answeredBy() == null);
+    }
+
+    @Test
+    void aPolicyAskIsPutToTheEditorWhateverTheToolKind() {
+        PermissionGate gate = gate();
+        stubOutcome(selected("reject_once"));
+
+        Optional<ToolResult> refused = gate.ask(sessionId, "c1", "read_file", noArgs());
+
+        assertTrue(refused.isPresent());
+        verify(ctx, times(1)).requestPermission(any());
+    }
+
     private static java.util.Map<String, Object> noArgs() {
         return java.util.Map.of();
     }

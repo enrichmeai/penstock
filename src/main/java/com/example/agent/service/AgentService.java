@@ -8,6 +8,7 @@ import com.example.agent.memory.ContextAssembler;
 import com.example.agent.memory.PatternCatalog;
 import com.example.agent.model.*;
 import com.example.agent.tools.ToolContext;
+import com.example.agent.tools.ToolPolicy;
 import com.example.agent.tools.ToolRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +51,7 @@ public class AgentService {
     private final SessionStore sessionStore;
     private AuditLogger auditLogger;
     private ContextAssembler contextAssembler;
+    private ToolApprover toolApprover;
 
     public AgentService(LlmProvider llm,
                         ToolRegistry tools,
@@ -71,6 +73,15 @@ public class AgentService {
         this.contextAssembler = contextAssembler;
     }
 
+    /**
+     * Who is asked when a tool's policy is {@code ask} (#179). Absent (some tests), an {@code ask}
+     * is refused with a tool error rather than run unasked.
+     */
+    @Autowired(required = false)
+    public void setToolApprover(ToolApprover toolApprover) {
+        this.toolApprover = toolApprover;
+    }
+
     /** Synchronous: runs the full loop, returns all new messages. */
     public List<ChatMessage> chat(Session session, String userInput) {
         return chat(session, userInput, TurnContext.none());
@@ -83,13 +94,13 @@ public class AgentService {
      */
     public List<ChatMessage> chat(Session session, String userInput, TurnContext turn) {
         List<ChatMessage> produced = new ArrayList<>();
-        runTurn(session, userInput, turn, produced::add, NO_TOKEN);
+        runTurn(session, userInput, turn, produced::add, NO_TOKEN, NO_APPROVAL);
         return produced;
     }
 
     /** Streaming: invokes {@code onMessage} for every message as it's produced. */
     public void chatStreaming(Session session, String userInput, Consumer<ChatMessage> onMessage) {
-        runTurn(session, userInput, TurnContext.none(), onMessage, NO_TOKEN);
+        runTurn(session, userInput, TurnContext.none(), onMessage, NO_TOKEN, NO_APPROVAL);
     }
 
     /**
@@ -102,7 +113,7 @@ public class AgentService {
                               String userInput,
                               Consumer<ChatMessage> onMessage,
                               Consumer<String> onToken) {
-        runTurn(session, userInput, TurnContext.none(), onMessage, onToken);
+        runTurn(session, userInput, TurnContext.none(), onMessage, onToken, NO_APPROVAL);
     }
 
     /** {@link #chatStreaming(Session, String, Consumer, Consumer)} with the inbound request's context. */
@@ -111,16 +122,31 @@ public class AgentService {
                               TurnContext turn,
                               Consumer<ChatMessage> onMessage,
                               Consumer<String> onToken) {
-        runTurn(session, userInput, turn, onMessage, onToken);
+        runTurn(session, userInput, turn, onMessage, onToken, NO_APPROVAL);
+    }
+
+    /**
+     * As above, and {@code onApproval} is told about each tool call that waits for the user's
+     * answer under policy {@code ask} (#179), before the wait starts.
+     */
+    public void chatStreaming(Session session,
+                              String userInput,
+                              TurnContext turn,
+                              Consumer<ChatMessage> onMessage,
+                              Consumer<String> onToken,
+                              Consumer<PendingApproval> onApproval) {
+        runTurn(session, userInput, turn, onMessage, onToken, onApproval);
     }
 
     private static final Consumer<String> NO_TOKEN = s -> {};
+    private static final Consumer<PendingApproval> NO_APPROVAL = p -> {};
 
     private void runTurn(Session session,
                          String userInput,
                          TurnContext turn,
                          Consumer<ChatMessage> emit,
-                         Consumer<String> onToken) {
+                         Consumer<String> onToken,
+                         Consumer<PendingApproval> onApproval) {
         // Everything downstream needs about the caller, resolved here once: the
         // provider gets identity and request ID (never the inbound bearer); tools
         // get the same plus the bearer, for the one mode that forwards it.
@@ -242,7 +268,18 @@ public class AgentService {
             List<ToolResult> results = new ArrayList<>();
             for (ToolCall call : assistant.toolCalls()) {
                 log.info("LLM invoked tool: {} args={}", call.name(), call.arguments());
-                results.add(tools.invoke(call, toolContext));
+                Optional<ToolResult> stopped = permit(call, toolContext, onApproval);
+                if (stopped.isPresent()) {
+                    results.add(stopped.get());
+                } else {
+                    try {
+                        results.add(tools.invoke(call, toolContext));
+                    } finally {
+                        if (toolApprover != null && props.getTools().policyFor(call.name()) == ToolPolicy.ASK) {
+                            toolApprover.finished(toolContext, call);
+                        }
+                    }
+                }
             }
             appendAndEmit(session, ChatMessage.tool(results), emit);
         }
@@ -253,6 +290,50 @@ public class AgentService {
                 "history is kept and the next request starts with a fresh turn and " +
                 "token budget."), emit);
         if (titleUpdated) sessionStore.update(session);
+    }
+
+    /**
+     * Applies {@code agent.tools.policy} (#179) to one call: empty when it may run, otherwise the
+     * result the model sees instead. Every refusal is an error result naming the reason, so the
+     * model does not mistake it for the tool's output.
+     */
+    private Optional<ToolResult> permit(ToolCall call, ToolContext context, Consumer<PendingApproval> onApproval) {
+        ToolPolicy policy = props.getTools().policyFor(call.name());
+        if (policy == ToolPolicy.ALLOW) {
+            return Optional.empty();
+        }
+        String user = context.userId();
+        String sessionId = context.sessionId();
+        if (policy == ToolPolicy.DENY) {
+            auditPermission(user, sessionId, call, "denied", "policy");
+            return Optional.of(ToolResult.error(call.id(),
+                    "Refused: `" + call.name() + "` is denied by this deployment's tool policy (agent.tools.policy)."));
+        }
+        if (toolApprover == null) {
+            auditPermission(user, sessionId, call, "denied", "policy");
+            return Optional.of(ToolResult.error(call.id(),
+                    "Refused: `" + call.name() + "` needs the user's approval, and there is no way to ask in this mode."));
+        }
+        auditPermission(user, sessionId, call, "asked", null);
+        ToolApprover.Answer answer = toolApprover.ask(context, call, onApproval);
+        if (answer.approved()) {
+            auditPermission(user, sessionId, call, "allowed", answer.answeredBy());
+            return Optional.empty();
+        }
+        if (answer.timedOut()) {
+            auditPermission(user, sessionId, call, "timed-out", null);
+            return Optional.of(ToolResult.error(call.id(),
+                    "Refused: nobody approved `" + call.name() + "` in time, so it did not run."));
+        }
+        auditPermission(user, sessionId, call, "denied", answer.answeredBy());
+        return Optional.of(ToolResult.error(call.id(),
+                "Refused: the user did not allow `" + call.name() + "` for this call."));
+    }
+
+    private void auditPermission(String user, String sessionId, ToolCall call, String outcome, String answeredBy) {
+        if (auditLogger != null) {
+            auditLogger.toolPermission(user, sessionId, call.name(), call.id(), outcome, answeredBy);
+        }
     }
 
     private void appendAndEmit(Session session, ChatMessage msg, Consumer<ChatMessage> emit) {

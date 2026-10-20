@@ -4,6 +4,7 @@ import com.example.agent.config.AgentMetrics;
 import com.example.agent.config.CurrentUser;
 import com.example.agent.config.RequestIdFilter;
 import com.example.agent.config.SseEmitterRegistry;
+import com.example.agent.controller.dto.ApprovalDecision;
 import com.example.agent.controller.dto.ChatRequest;
 import com.example.agent.controller.dto.ChatResponse;
 import com.example.agent.controller.dto.SessionSummary;
@@ -11,7 +12,9 @@ import com.example.agent.llm.LlmProvider;
 import com.example.agent.model.ChatMessage;
 import com.example.agent.model.Session;
 import com.example.agent.service.AgentService;
+import com.example.agent.service.PendingApproval;
 import com.example.agent.service.SessionStore;
+import com.example.agent.service.ToolApprovals;
 import com.example.agent.service.TurnContext;
 import com.example.agent.tools.ToolRegistry;
 import com.example.agent.tools.ToolSpec;
@@ -47,6 +50,7 @@ public class AgentController {
     private final AgentMetrics metrics;
     private final SseEmitterRegistry sseRegistry;
     private final CurrentUser currentUser;
+    private final ToolApprovals approvals;
 
     public AgentController(AgentService agent,
                            SessionStore sessions,
@@ -55,7 +59,8 @@ public class AgentController {
                            @Qualifier("sseTaskExecutor") AsyncTaskExecutor streamExecutor,
                            AgentMetrics metrics,
                            SseEmitterRegistry sseRegistry,
-                           CurrentUser currentUser) {
+                           CurrentUser currentUser,
+                           ToolApprovals approvals) {
         this.agent = agent;
         this.sessions = sessions;
         this.tools = tools;
@@ -64,6 +69,7 @@ public class AgentController {
         this.metrics = metrics;
         this.sseRegistry = sseRegistry;
         this.currentUser = currentUser;
+        this.approvals = approvals;
     }
 
     /**
@@ -113,6 +119,7 @@ public class AgentController {
      *
      *   event: session    data: { "sessionId":"...", "title":"..." }
      *   event: message    data: { ...ChatMessage JSON... }
+     *   event: approval   data: { sessionId, callId, tool, arguments, expiresAt }   (policy ask, #179)
      *   event: done       data: { "ok": true }
      *   event: error      data: { "error": "..." }
      *
@@ -161,6 +168,13 @@ public class AgentController {
                         delta -> {
                             try {
                                 emitter.send(SseEmitter.event().name("token").data(Map.of("text", delta)));
+                            } catch (IOException ioe) {
+                                throw new RuntimeException(ioe);
+                            }
+                        },
+                        pending -> {
+                            try {
+                                emitter.send(SseEmitter.event().name("approval").data(pending));
                             } catch (IOException ioe) {
                                 throw new RuntimeException(ioe);
                             }
@@ -224,6 +238,36 @@ public class AgentController {
                 "outputTokens", s.getTotalUsage().outputTokens(),
                 "total", s.getTotalUsage().total()
         );
+    }
+
+    /**
+     * The tool calls in this session waiting for an answer under policy {@code ask} (#179). A
+     * client of the non-streaming {@code /chat}, which sees no {@code approval} event, polls this.
+     */
+    @GetMapping("/sessions/{id}/approvals")
+    public List<PendingApproval> pendingApprovals(@PathVariable String id) {
+        agent.requireSession(id);   // another user's session, or none: 404
+        return approvals.pending(id);
+    }
+
+    /**
+     * Answers one waiting tool call with {@code {"decision":"approve"}} or {@code {"decision":"deny"}}.
+     * 204 when the answer reached the waiting turn; 404 when no such call is waiting (already
+     * answered, timed out, or never asked) or the session is not the caller's.
+     */
+    @PostMapping("/sessions/{id}/approvals/{callId}")
+    public ResponseEntity<Void> answerApproval(@PathVariable String id,
+                                               @PathVariable String callId,
+                                               @Valid @RequestBody ApprovalDecision body) {
+        agent.requireSession(id);
+        boolean approve = switch (body.decision().trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "approve" -> true;
+            case "deny" -> false;
+            default -> throw new IllegalArgumentException("decision must be 'approve' or 'deny'.");
+        };
+        return approvals.answer(id, callId, approve, currentUser.name())
+                ? ResponseEntity.noContent().build()
+                : ResponseEntity.notFound().build();
     }
 
     @DeleteMapping("/sessions/{id}")

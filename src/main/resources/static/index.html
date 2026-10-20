@@ -70,6 +70,8 @@
     .tool-title { color: var(--tool); font-weight: 600; margin-bottom: 4px; }
     .tool-title.error { color: var(--error); }
     .tool-args { color: var(--muted); white-space: pre-wrap; margin-bottom: 4px; font-size: 11px; }
+    .approval-actions { display: flex; gap: 8px; margin-top: 6px; }
+    .approval-actions button { font: inherit; padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; }
     .tool-result { white-space: pre-wrap; color: var(--text); max-height: 400px; overflow-y: auto; }
 
     #composer { padding: 14px 24px 20px; border-top: 1px solid var(--border); background: var(--panel); }
@@ -334,6 +336,41 @@ async function* streamChat(sessionId, message, signal) {
   }
 }
 
+function renderApproval(p) {
+  const node = document.createElement('div');
+  node.className = 'msg role-assistant';
+  node.innerHTML = `<div class="role">Approval needed</div><div class="tool-block">
+      <div class="tool-title">${esc(p.tool)}</div>
+      <div class="tool-args">${esc(JSON.stringify(p.arguments, null, 2))}</div>
+      <div class="approval-actions"><button data-d="approve">Approve</button><button data-d="deny">Deny</button></div>
+      <div class="tool-result"></div></div>`;
+  const status = node.querySelector('.tool-result');
+  node.querySelectorAll('button').forEach(b => b.addEventListener('click', async () => {
+    const buttons = node.querySelectorAll('button');
+    buttons.forEach(x => x.disabled = true);
+    let r;
+    try {
+      r = await fetch('/api/sessions/' + encodeURIComponent(p.sessionId) + '/approvals/' + encodeURIComponent(p.callId), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision: b.dataset.d }),
+      });
+    } catch (e) {
+      status.textContent = 'Could not send the answer: ' + e.message + '. Try again.';
+      buttons.forEach(x => x.disabled = false);
+      return;
+    }
+    if (r.status === 204) {
+      status.textContent = b.dataset.d === 'approve' ? 'Approved.' : 'Denied.';
+    } else if (r.status === 404) {
+      status.textContent = 'The call is no longer waiting: it timed out, so it was denied.';
+    } else {
+      status.textContent = 'Could not send the answer (HTTP ' + r.status + '). Try again.';
+      buttons.forEach(x => x.disabled = false);
+    }
+  }));
+  return node;
+}
+
 function setSending(sending) {
   state.sending = sending;
   if (sending) {
@@ -417,6 +454,11 @@ async function onSend(ev) {
             wireCopyButtons(els.messages);
           }
         }
+        els.messages.scrollTop = els.messages.scrollHeight;
+      } else if (event === 'approval') {
+        // agent.tools.policy.<tool>=ask (#179): the turn waits for this answer.
+        if (!thinkingRemoved) { thinking.remove(); thinkingRemoved = true; }
+        els.messages.appendChild(renderApproval(data));
         els.messages.scrollTop = els.messages.scrollHeight;
       } else if (event === 'error') {
         throw new Error(data.error || 'stream error');

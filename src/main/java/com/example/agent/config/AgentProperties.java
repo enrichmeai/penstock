@@ -1,6 +1,7 @@
 package com.example.agent.config;
 
 import com.example.agent.tools.CredentialMode;
+import com.example.agent.tools.ToolPolicy;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.List;
@@ -270,6 +271,16 @@ public class AgentProperties {
          * to the model nor invocable — not merely hidden from the tool spec list.
          */
         private List<String> enabled = List.of();
+        /**
+         * {@code allow}, {@code ask} or {@code deny} per tool name (#179). A tool with no entry is
+         * {@code allow}, so the empty default changes nothing. Keys are matched to tool names
+         * ignoring case and punctuation, so {@code write_file}, {@code write-file} and
+         * {@code WRITE_FILE} (from {@code AGENT_TOOLS_POLICY_WRITE_FILE}) all name the same tool.
+         */
+        private Map<String, String> policy = Map.of();
+        private Map<String, ToolPolicy> parsedPolicy = Map.of();
+        /** How long an {@code ask} waits for an answer before it counts as a denial. */
+        private int askTimeoutSeconds = 120;
 
         public Shell getShell() { return shell; }
         public void setShell(Shell shell) { this.shell = shell; }
@@ -282,6 +293,41 @@ public class AgentProperties {
         public void setMaxOutputBytes(int maxOutputBytes) { this.maxOutputBytes = maxOutputBytes; }
         public List<String> getEnabled() { return enabled; }
         public void setEnabled(List<String> enabled) { this.enabled = enabled == null ? List.of() : enabled; }
+        public Map<String, String> getPolicy() { return policy; }
+        public void setPolicy(Map<String, String> policy) {
+            Map<String, ToolPolicy> parsed = new java.util.LinkedHashMap<>();
+            if (policy != null) {
+                policy.forEach((tool, value) -> {
+                    try {
+                        ToolPolicy p = ToolPolicy.parse(value);
+                        ToolPolicy earlier = parsed.put(ToolPolicy.normaliseKey(tool), p);
+                        if (earlier != null && earlier != p) {
+                            throw new IllegalArgumentException("two entries name the same tool with different policies ("
+                                    + earlier.name().toLowerCase(java.util.Locale.ROOT) + " and " + value.trim() + ")");
+                        }
+                    } catch (IllegalArgumentException e) {
+                        throw new IllegalArgumentException("agent.tools.policy." + tool + ": " + e.getMessage(), e);
+                    }
+                });
+            }
+            this.policy = policy == null ? Map.of() : Map.copyOf(policy);
+            this.parsedPolicy = Map.copyOf(parsed);
+        }
+        /** The policy for one tool, by its {@code Tool#name()}; {@code ALLOW} when none is set. */
+        public ToolPolicy policyFor(String toolName) {
+            return parsedPolicy.getOrDefault(ToolPolicy.normaliseKey(toolName), ToolPolicy.ALLOW);
+        }
+        /** The normalised tool keys that have a policy entry, for the registry's startup check. */
+        public java.util.Set<String> policyKeys() {
+            return parsedPolicy.keySet();
+        }
+        public int getAskTimeoutSeconds() { return askTimeoutSeconds; }
+        public void setAskTimeoutSeconds(int askTimeoutSeconds) {
+            if (askTimeoutSeconds < 1) {
+                throw new IllegalArgumentException("agent.tools.ask-timeout-seconds must be at least 1, got " + askTimeoutSeconds);
+            }
+            this.askTimeoutSeconds = askTimeoutSeconds;
+        }
     }
 
     public static class Shell {
