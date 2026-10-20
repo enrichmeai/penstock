@@ -169,8 +169,10 @@ agent:
       around it. A green suite you obtained by bending the code to a broken
       test is a failure you have hidden, not work you have finished.
     context:
-      policy: last-n            # none | last-n
+      policy: last-n            # none | last-n | compact (#173: fold older messages into a summary)
       last-n: 50
+      compact-threshold-ratio: 0.6   # compact: fold above this share of max-tokens-per-request
+      compact-keep-recent: 8         # compact: newest messages always sent verbatim
 
     anthropic:
       api-key: ${ANTHROPIC_API_KEY:}

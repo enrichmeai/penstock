@@ -181,6 +181,26 @@ public class AuditLogger {
         saveMemoryEvent(user, sessionId, type, detail);
     }
 
+    /**
+     * Records that a turn's older messages were folded into a summary before a model call (#173),
+     * as {@code context.compacted} with how many messages were folded, the estimated request size
+     * before and after, and the provider that wrote the summary; also an INFO line. The stored
+     * history is unchanged by a compaction: only what the model was sent.
+     */
+    @Async
+    public void contextCompacted(String userId, String sessionId, int folded,
+                                 long tokensBefore, long tokensAfter, String provider) {
+        String user = normalise(userId);
+        log.info("context.compacted user={} session={} folded={} tokensBefore={} tokensAfter={} provider={}",
+                user, sessionId, folded, tokensBefore, tokensAfter, provider);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("folded", folded);
+        detail.put("tokensBefore", tokensBefore);
+        detail.put("tokensAfter", tokensAfter);
+        detail.put("provider", provider);
+        saveMemoryEvent(user, sessionId, "context.compacted", detail);
+    }
+
     private void saveMemoryEvent(String user, String sessionId, String eventType, Map<String, Object> detail) {
         if (repo == null) {
             log.debug("Audit repository not available; skipping {} event", eventType);
