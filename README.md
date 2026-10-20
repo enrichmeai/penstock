@@ -398,6 +398,9 @@ overridden with env vars or `--agent.*=value` command-line flags.
 | `agent.llm.provider` | `copilot` | `AGENT_LLM_PROVIDER` | `copilot` \| `anthropic` \| `openai` \| `ollama`. |
 | `agent.llm.max-turns-per-request` | `25` | `AGENT_LLM_MAX_TURNS_PER_REQUEST` | Safety cap on the tool-use loop per request. See [Turn and token budgets](#turn-and-token-budgets). |
 | `agent.llm.max-tokens-per-request` | `150000` | `AGENT_LLM_MAX_TOKENS_PER_REQUEST` | Token budget for one request. |
+| `agent.llm.context.policy` | `last-n` | `AGENT_LLM_CONTEXT_POLICY` | What the model is sent of a session's history: `none` (all of it), `last-n` (the newest `agent.llm.context.last-n`, default 50), or `compact` (older messages folded into a summary; see [Turn and token budgets](#turn-and-token-budgets)). |
+| `agent.llm.context.compact-threshold-ratio` | `0.6` | `AGENT_LLM_CONTEXT_COMPACTTHRESHOLDRATIO` | `compact`: fold once the estimated request exceeds this share of `max-tokens-per-request`. |
+| `agent.llm.context.compact-keep-recent` | `8` | `AGENT_LLM_CONTEXT_COMPACTKEEPRECENT` | `compact`: the newest messages always sent verbatim. |
 | `agent.llm.max-tokens-per-session` | `600000` | `AGENT_LLM_MAX_TOKENS_PER_SESSION` | Token budget for a whole session. |
 | `agent.llm.copilot.api-key` | — | `GITHUB_COPILOT_TOKEN` / `GITHUB_TOKEN` | GitHub Copilot / GitHub Models token. |
 | `agent.llm.copilot.base-url` | `https://api.githubcopilot.com` | `COPILOT_BASE_URL` | Override for enterprise gateways. |
@@ -617,6 +620,23 @@ Hitting a bound is not an error: the assistant says which one stopped it, the
 session history is kept, and **sending another message continues the work with a
 fresh turn and token budget**. Continuation is deliberately manual — the bounds
 exist so an unattended loop cannot burn tokens indefinitely.
+
+**Compaction (opt-in, `agent.llm.context.policy=compact`, #173).** Once the estimated request
+passes `compact-threshold-ratio` of `max-tokens-per-request` (0.6 by default), the older messages
+are folded into one summary written by the same model: files touched, decisions, open
+sub-tasks and unresolved tool errors. It goes in the system prompt, and the newest
+`compact-keep-recent` messages go verbatim. The stored session history is never changed, only
+what the model is sent; the summary call's tokens count against the budget like any other; a
+line in the summary that looks like a credential is removed before it is sent; and each
+compaction is audited as `context.compacted`. The summary is written by the configured provider
+and model with no tools offered, so it is one extra model call each time it fires;
+`compact-keep-recent` counts messages, not turns; and the size estimate (four characters per token)
+includes the tool schemas sent on every call. The summary lasts for one request: the next message
+in a long session folds the older history again from scratch, one more summary call. If the
+summary call fails or comes back empty, the request goes out unfolded (it may then exceed the
+provider's limit), the failure is audited as a failed model call, and compaction is not tried again
+until the next request. Whether compaction lets the longer task in `docs/real-repo-validation.md`
+finish has not been measured yet.
 
 Lower them for a shared or metered deployment; raise them if you are driving a
 local model where tokens are effectively free.
