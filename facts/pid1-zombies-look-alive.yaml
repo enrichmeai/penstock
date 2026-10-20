@@ -1,0 +1,25 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject and triggers set by the
+# owner's session. The owner promotes it by setting asserted.
+id: pid1-zombies-look-alive
+format: 1
+visibility: public
+statement: Where PID 1 does not reap, a killed orphan stays a zombie and ProcessHandle still reports it
+  alive.
+kind: convention
+subject: runtime/pid1-reaping
+scope: project:penstock
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-20-hooks-owner-code-before-and-after
+  learned: where PID 1 does not reap, a killed orphan stays a zombie and ProcessHandle still reports it
+    alive
+first_seen: 2026-10-20
+last_confirmed: 2026-10-20
+supersedes: null
+superseded_by: null
+triggers:
+- 'zombie'
+- 'PID 1'
+- 'isAlive'
+- 'init: true'

@@ -1,0 +1,25 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject and triggers set by the
+# owner's session. The owner promotes it by setting asserted.
+id: context-window-starts-after-tool-pair
+format: 1
+visibility: public
+statement: A context window may start only after a complete assistant tool call and its result, never
+  with an orphan tool message.
+kind: convention
+subject: agent/context-window-boundary
+scope: project:penstock
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-20-context-compaction-summarise-older-turns-when
+  learned: a context window may start only after a complete assistant tool call and its result, never
+    with an orphan tool message
+first_seen: 2026-10-20
+last_confirmed: 2026-10-20
+supersedes: null
+superseded_by: null
+triggers:
+- 'compaction'
+- 'last-n'
+- 'context window'
+- 'tool call'

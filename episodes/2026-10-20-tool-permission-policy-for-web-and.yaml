@@ -1,0 +1,50 @@
+# Drafted by scripts/write-episode.sh from the task's own evidence; edit before committing.
+# Empty lists and <fill in> placeholders are yours to complete; a learned line is a fact by
+# reference (an account, a secret's *name*, an id), never a value.
+id: 2026-10-20-tool-permission-policy-for-web-and
+format: 1
+visibility: public
+date: 2026-10-20
+project: penstock
+asked: 'Tool permission policy for web and REST mode: allow / ask / deny per tool, with approvals over
+  the API'
+issue: enrichmeai/penstock#179
+built:
+- pr: enrichmeai/penstock#182
+  merged: da643e5
+  files:
+  - README.md
+  - src/main/java/com/example/agent/acp/AcpToolApprover.java
+  - src/main/java/com/example/agent/acp/PermissionGate.java
+  - src/main/java/com/example/agent/config/AgentProperties.java
+  - src/main/java/com/example/agent/controller/AgentController.java
+  - src/main/java/com/example/agent/controller/dto/ApprovalDecision.java
+  - src/main/java/com/example/agent/service/AgentService.java
+  - src/main/java/com/example/agent/service/AuditLogger.java
+  - src/main/java/com/example/agent/service/PendingApproval.java
+  - src/main/java/com/example/agent/service/ToolApprovals.java
+  - src/main/java/com/example/agent/service/ToolApprover.java
+  - src/main/java/com/example/agent/tools/ToolPolicy.java
+  - src/main/java/com/example/agent/tools/ToolRegistry.java
+  - src/main/resources/application.yml
+  - src/main/resources/static/index.html
+  - src/test/java/com/example/agent/acp/PermissionGateTest.java
+  - src/test/java/com/example/agent/controller/ToolApprovalIT.java
+  - src/test/java/com/example/agent/service/ToolPolicyTest.java
+decided:
+- what: no policy entry means allow, so the default leaves every tool as it was
+  why: the issue asked for the defaults to keep behaviour exactly
+- what: in ACP mode ask goes to the editor's own permission prompt, and an approval there covers that call's gate check once
+  why: one policy model for web and ACP, and no double prompt
+- what: two spellings of one tool with different policies fail at startup
+  why: a deny silently overridden by an allow is the failure a policy exists to stop
+refused:
+- what: always-allow memory in web mode, and per-user or per-session overrides
+  why: out of the first slice
+learned:
+- Spring drops characters other than letters, digits, '-' and '.' from an unbracketed map key, and an environment variable turns '_' into '.', so map keys are compared normalised
+- a binding test that stands for environment variables needs a property source named systemEnvironment, or the env-name mapping never applies
+- a wrapper's per-call memory must be cleared when the call ends, not when a downstream check happens to run, or it outlives the call
+open:
+- no cross-user integration test of the approval endpoints; ownership rests on requireSession's 404
+patterns: []

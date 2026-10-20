@@ -1,0 +1,24 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject and triggers set by the
+# owner's session. The owner promotes it by setting asserted.
+id: env-binding-test-system-environment
+format: 1
+visibility: public
+statement: A binding test that stands for environment variables needs a property source named systemEnvironment,
+  or the env-name mapping never applies.
+kind: convention
+subject: java/env-binding-test
+scope: project:penstock
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-20-tool-permission-policy-for-web-and
+  learned: a binding test that stands for environment variables needs a property source named systemEnvironment,
+    or the env-name mapping never applies
+first_seen: 2026-10-20
+last_confirmed: 2026-10-20
+supersedes: null
+superseded_by: null
+triggers:
+- 'SystemEnvironmentPropertySource'
+- 'binding test'
+- 'environment variable'

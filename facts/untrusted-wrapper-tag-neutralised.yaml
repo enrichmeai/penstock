@@ -1,0 +1,25 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject and triggers set by the
+# owner's session. The owner promotes it by setting asserted.
+id: untrusted-wrapper-tag-neutralised
+format: 1
+visibility: public
+statement: The untrusted-content wrapper tag must be neutralised in every case and spacing, after entity
+  decoding.
+kind: convention
+subject: agent/untrusted-content-wrapper
+scope: project:penstock
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-20-web-fetch-and-search-the-governed
+  learned: the untrusted-content wrapper tag must be neutralised in every case and spacing, after entity
+    decoding
+first_seen: 2026-10-20
+last_confirmed: 2026-10-20
+supersedes: null
+superseded_by: null
+triggers:
+- 'untrusted_external_content'
+- 'wrapper tag'
+- 'web_fetch'
+- 'prompt injection'

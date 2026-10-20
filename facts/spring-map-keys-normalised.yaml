@@ -1,0 +1,25 @@
+# Inferred by scripts/consolidate.sh from the episode it cites; kind, subject and triggers set by the
+# owner's session. The owner promotes it by setting asserted.
+id: spring-map-keys-normalised
+format: 1
+visibility: public
+statement: Spring drops characters other than letters, digits, '-' and '.' from an unbracketed map key,
+  and an environment variable turns '_' into '.', so map keys are compared normalised.
+kind: convention
+subject: java/spring-map-key-binding
+scope: project:penstock
+status: inferred
+confidence: 0.7
+provenance:
+- episode: 2026-10-20-tool-permission-policy-for-web-and
+  learned: Spring drops characters other than letters, digits, '-' and '.' from an unbracketed map key,
+    and an environment variable turns '_' into '.', so map keys are compared normalised
+first_seen: 2026-10-20
+last_confirmed: 2026-10-20
+supersedes: null
+superseded_by: null
+triggers:
+- 'agent.tools.policy'
+- 'map key'
+- 'relaxed binding'
+- 'AGENT_TOOLS_POLICY'

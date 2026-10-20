@@ -1,0 +1,49 @@
+# Drafted by scripts/write-episode.sh from the task's own evidence; edit before committing.
+# Empty lists and <fill in> placeholders are yours to complete; a learned line is a fact by
+# reference (an account, a secret's *name*, an id), never a value.
+id: 2026-10-20-web-fetch-and-search-the-governed
+format: 1
+visibility: public
+date: 2026-10-20
+project: penstock
+asked: 'Web fetch and search, the governed way: off by default, host allow-list, untrusted-content marking,
+  exfiltration guard, audited'
+issue: enrichmeai/penstock#176
+built:
+- pr: enrichmeai/penstock#185
+  merged: adc12c6
+  files:
+  - README.md
+  - src/main/java/com/example/agent/acp/AcpGatedTool.java
+  - src/main/java/com/example/agent/acp/AcpToolPermissionConfig.java
+  - src/main/java/com/example/agent/acp/PermissionGate.java
+  - src/main/java/com/example/agent/config/AgentProperties.java
+  - src/main/java/com/example/agent/service/AgentService.java
+  - src/main/java/com/example/agent/service/AuditLogger.java
+  - src/main/java/com/example/agent/tools/Tool.java
+  - src/main/java/com/example/agent/tools/ToolRegistry.java
+  - src/main/java/com/example/agent/tools/WebFetchTool.java
+  - src/main/resources/application.yml
+  - src/test/java/com/example/agent/acp/PermissionGateTest.java
+  - src/test/java/com/example/agent/tools/WebFetchToolTest.java
+decided:
+- what: web_fetch is not registered unless agent.tools.web.enabled is true, and an empty allow-list refuses every URL
+  why: off by default, never allow-all
+- what: one total deadline covers every redirect and the body
+  why: HttpRequest.timeout bounds only the wait for headers; a dripping body would hold the thread
+- what: refusals are audited with host and reason only, and a credential-looking host is recorded as (redacted)
+  why: a refused URL may be the secret the guard stopped
+refused:
+- what: web_search in this slice
+  why: which search provider is the owner's decision
+- what: DNS pinning and workspace-text detection beyond length caps
+  why: out of scope; documented as limits
+learned:
+- java.net.http's request timeout does not cover reading the body; bound the read separately
+- a decorator must forward every method of the interface it wraps, including new default methods, or the wrapped behaviour silently disappears in that profile
+- a lazy regex such as <script.*?</script> or [^>]*> over hostile input can be quadratic; scan linearly
+- the untrusted-content wrapper tag must be neutralised in every case and spacing, after entity decoding
+open:
+- web_search, once the owner picks a provider
+- no Spring-context test of the ACP web_fetch bean wiring
+patterns: []

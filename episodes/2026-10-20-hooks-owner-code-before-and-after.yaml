@@ -1,0 +1,38 @@
+# Drafted by scripts/write-episode.sh from the task's own evidence; edit before committing.
+# Empty lists and <fill in> placeholders are yours to complete; a learned line is a fact by
+# reference (an account, a secret's *name*, an id), never a value.
+id: 2026-10-20-hooks-owner-code-before-and-after
+format: 1
+visibility: public
+date: 2026-10-20
+project: penstock
+asked: 'Hooks: owner code before and after tool calls and turns, stricter-only, audited'
+issue: enrichmeai/penstock#184
+built:
+- pr: enrichmeai/penstock#186
+  merged: '1317165'
+  files:
+  - README.md
+  - src/main/java/com/example/agent/config/AgentProperties.java
+  - src/main/java/com/example/agent/service/AgentService.java
+  - src/main/java/com/example/agent/service/AuditLogger.java
+  - src/main/java/com/example/agent/service/HookRunner.java
+  - src/main/resources/application.yml
+  - src/test/java/com/example/agent/service/HookRunnerTest.java
+decided:
+- what: a pre-tool hook runs only after the tool policy allowed the call, and can only deny
+  why: hooks make the policy stricter, never looser
+- what: a failing pre-tool hook denies; post-tool and turn hooks fail open
+  why: a broken guard must not let a call through
+- what: a hook gets PATH, HOME, LANG and PENSTOCK_HOOK_EVENT only, not Penstock's environment
+  why: shell inherits the whole environment, credentials included; hooks need none of it
+refused:
+- what: hooks loaded from the workspace, and remote webhooks
+  why: a repository must not be able to install code that runs on the owner's machine
+learned:
+- a process's children must be seen while it runs and killed when it ends; after the parent exits, descendants() no longer finds an orphan
+- where PID 1 does not reap, a killed orphan stays a zombie and ProcessHandle still reports it alive
+open:
+- a hook that backgrounds a child and exits at once can leave it running; documented and tested as failing closed
+- consider init true in docker-compose so orphaned hook children are reaped
+patterns: []
