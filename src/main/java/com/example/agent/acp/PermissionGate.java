@@ -57,6 +57,8 @@ public class PermissionGate {
         // Floor: a deployment can widen this, never narrow it below `execute` (CLAUDE.md
         // "Sandboxing invariants" — shell/git must never run unprompted in ACP mode).
         kinds.add(AcpSchema.ToolKind.EXECUTE);
+        // Likewise `fetch`: web_fetch (#176) reaches outside the machine, so it always asks.
+        kinds.add(AcpSchema.ToolKind.FETCH);
         this.requiredKinds = Set.copyOf(kinds);
     }
 

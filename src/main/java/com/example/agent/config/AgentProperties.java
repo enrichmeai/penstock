@@ -283,6 +283,7 @@ public class AgentProperties {
         private File file = new File();
         private Jira jira = new Jira();
         private Cistern cistern = new Cistern();
+        private Web web = new Web();
         private int maxOutputBytes = 16_384;
         /**
          * Allow-list of tool names registered with {@code ToolRegistry}, by {@code Tool#name()}.
@@ -310,6 +311,8 @@ public class AgentProperties {
         public void setFile(File file) { this.file = file; }
         public Jira getJira() { return jira; }
         public Cistern getCistern() { return cistern; }
+        public Web getWeb() { return web; }
+        public void setWeb(Web web) { this.web = web; }
         public void setJira(Jira jira) { this.jira = jira; }
         public int getMaxOutputBytes() { return maxOutputBytes; }
         public void setMaxOutputBytes(int maxOutputBytes) { this.maxOutputBytes = maxOutputBytes; }
@@ -387,6 +390,49 @@ public class AgentProperties {
         public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
         public String getToken() { return token; }
         public void setToken(String token) { this.token = token; }
+    }
+
+    /**
+     * {@code web_fetch} (#176). Off by default; when on, only hosts on {@link #allowedHosts} are
+     * fetched (empty refuses every URL, never "allow all"), GET only, no request body, no
+     * credentials, bounded in size and time, redirects followed only within the list.
+     */
+    public static class Web {
+        private boolean enabled = false;
+        /**
+         * {@code docs.example.com} matches that host on the scheme's default port;
+         * {@code *.example.com} matches its subdomains; {@code host:8443} allows that one port.
+         */
+        private List<String> allowedHosts = List.of();
+        private int maxBytes = 200_000;
+        private int timeoutSeconds = 15;
+        private int maxRedirects = 5;
+        /** A query string longer than this is refused: it could be carrying workspace text out. */
+        private int maxQueryChars = 256;
+        /** A longer path is refused, for the same reason. */
+        private int maxPathChars = 512;
+        /** https only unless set; for tests and a trusted local network. */
+        private boolean allowPlainHttp = false;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public List<String> getAllowedHosts() { return allowedHosts; }
+        public void setAllowedHosts(List<String> allowedHosts) {
+            this.allowedHosts = allowedHosts == null ? List.of()
+                    : allowedHosts.stream().filter(h -> h != null && !h.isBlank()).map(String::trim).toList();
+        }
+        public int getMaxBytes() { return maxBytes; }
+        public void setMaxBytes(int maxBytes) { this.maxBytes = maxBytes; }
+        public int getTimeoutSeconds() { return timeoutSeconds; }
+        public void setTimeoutSeconds(int timeoutSeconds) { this.timeoutSeconds = timeoutSeconds; }
+        public int getMaxRedirects() { return maxRedirects; }
+        public void setMaxRedirects(int maxRedirects) { this.maxRedirects = maxRedirects; }
+        public int getMaxQueryChars() { return maxQueryChars; }
+        public void setMaxQueryChars(int maxQueryChars) { this.maxQueryChars = maxQueryChars; }
+        public int getMaxPathChars() { return maxPathChars; }
+        public void setMaxPathChars(int maxPathChars) { this.maxPathChars = maxPathChars; }
+        public boolean isAllowPlainHttp() { return allowPlainHttp; }
+        public void setAllowPlainHttp(boolean allowPlainHttp) { this.allowPlainHttp = allowPlainHttp; }
     }
 
     /**
