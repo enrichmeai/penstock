@@ -206,6 +206,13 @@ agent:
       model: ${COPILOT_MODEL:gpt-4o}
       max-tokens: 4096
 
+  # Owner hooks (#184): commands run before/after tool calls and at turn start/end. None by
+  # default. pre-tool can only deny (fails closed); the others observe. See README "Safety notes".
+  # hooks:
+  #   pre-tool:
+  #     - command: ["/opt/penstock-hooks/src-only.sh"]
+  #       tools: [write_file, edit_file]
+  #       timeout-seconds: 10
   tools:
     max-output-bytes: 16384
     # allow | ask | deny per tool name (#179); no entry = allow, so the empty default changes nothing.

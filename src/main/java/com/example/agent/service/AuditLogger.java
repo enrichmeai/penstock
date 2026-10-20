@@ -217,6 +217,25 @@ public class AuditLogger {
     }
 
     /**
+     * Records one run of an owner hook (#184) as {@code hook.ran}: the event ({@code pre-tool},
+     * {@code post-tool}, {@code turn-start}, {@code turn-end}), the hook's index in its list, the
+     * tool (tool events only), the outcome ({@code allow}, {@code deny}, {@code pass}, {@code note},
+     * {@code error} or {@code timeout}) and how long it took.
+     */
+    @Async
+    public void hookRan(String userId, String sessionId, String event, int index, String tool, String outcome, long durationMs) {
+        String user = normalise(userId);
+        log.info("hook.ran user={} session={} event={} index={} tool={} outcome={} ms={}", user, sessionId, event, index, tool, outcome, durationMs);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("event", event);
+        detail.put("index", index);
+        detail.put("tool", tool);
+        detail.put("outcome", outcome);
+        detail.put("durationMs", durationMs);
+        saveMemoryEvent(user, sessionId, "hook.ran", detail);
+    }
+
+    /**
      * Records a call to one of the MCP server's tools (#116), as {@code mcp.<tool>} with the project
      * and its outcome ({@code ok}, {@code empty}, {@code refused} or {@code error}); also an INFO line.
      */
