@@ -29,6 +29,14 @@ public interface Tool {
      */
     ToolResult execute(String callId, Map<String, Object> arguments, ToolContext context);
 
+    /**
+     * A line this tool adds to the system prompt while it is registered, or {@code null}. Used by
+     * {@code web_fetch} (#176) to say that fetched content is data, not instructions.
+     */
+    default String systemPromptNote() {
+        return null;
+    }
+
     /** Provider-neutral spec for the LLM. */
     default ToolSpec spec() {
         return new ToolSpec(name(), description(), inputSchema());

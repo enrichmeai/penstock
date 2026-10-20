@@ -96,7 +96,7 @@ user](#acting-as-the-signed-in-user).
 
 - **Pluggable LLM layer**: `copilot` (default), `anthropic`, `openai`, `ollama` — switch via config. Automatic retry with exponential backoff on 429 / 5xx, respecting `Retry-After`.
 - **Tool use loop**: the agent calls tools, receives results, and iterates until done.
-- **Ten built-in tools**: `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`, `shell`, `git`, `pod` and `jira_search` (both are registered by default, and every call returns an error until they are configured; `--acp` leaves out `jira_search`).
+- **Ten built-in tools**: `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`, `shell`, `git`, `pod` and `jira_search` (both are registered by default, and every call returns an error until they are configured; `--acp` leaves out `jira_search`). An eleventh, `web_fetch`, is off by default and registered only with `agent.tools.web.enabled=true` (see [Safety notes](#safety-notes)).
 - **Streaming responses** over Server-Sent Events — assistant turns, tool calls, and tool results stream to the UI as they happen.
 - **Token usage tracking** — per-call usage is accumulated per session and exposed via the API and UI.
 - **Pluggable persistence**: in-memory (default), SQLite, or Postgres via JPA/Hibernate. Switch with one env var.
@@ -424,6 +424,13 @@ overridden with env vars or `--agent.*=value` command-line flags.
 | `agent.tools.file.max-bytes` | `1048576` | — | Max size for a single `read_file`. |
 | `agent.tools.policy.<tool>` | none (every tool `allow`) | `AGENT_TOOLS_POLICY_<TOOL>` (e.g. `AGENT_TOOLS_POLICY_WRITE_FILE=ask`) | `allow`, `ask` or `deny` for one tool, by its name (#179). See [Safety notes](#safety-notes). An entry naming no registered tool logs a warning at startup. |
 | `agent.tools.ask-timeout-seconds` | `120` | `AGENT_TOOLS_ASK_TIMEOUT_SECONDS` | How long an `ask` waits for the user before it counts as denied. |
+| `agent.tools.web.enabled` | `false` | `AGENT_TOOLS_WEB_ENABLED` | Registers `web_fetch` (#176). Off: the tool does not exist. |
+| `agent.tools.web.allowed-hosts` | empty | `AGENT_TOOLS_WEB_ALLOWED_HOSTS` (comma-separated) | The only hosts `web_fetch` may reach: `docs.example.com` exactly (on the default port), `*.example.com` for its subdomains, or `host:8443` for one other port. Empty refuses every URL. |
+| `agent.tools.web.max-bytes` | `200000` | — | Bytes read from one response; the rest is cut off and the result says `truncated`. |
+| `agent.tools.web.timeout-seconds` | `15` | — | The whole fetch, every redirect and the body included; a slower response is cut off. |
+| `agent.tools.web.max-redirects` | `5` | — | Redirects followed, each checked against the allow-list. |
+| `agent.tools.web.max-query-chars` | `256` | — | A longer query string is refused. |
+| `agent.tools.web.max-path-chars` | `512` | — | A longer path is refused. |
 | `agent.memory.enabled` | `false` | `AGENT_MEMORY_ENABLED` | "Retrieve before reason" (#73) and "recall in the turn" (#88): load matching `facts/`, the episodes those facts were learned from (their `provenance`, however old, #152), the project's latest `episodes/`, and matching `patterns/` + `references/` into the turn's system prompt before the first model call, in that order under one 12 000-character cap (entries dropped whole from the end, so patterns go first; no episode twice). Each load is audited (`fact.loaded`, `episode.loaded` with `reason: provenance` or `latest`, `pattern.loaded`). Off by default — these folders are this project's own build memory. |
 | `agent.memory.root` | `${user.dir}` | `AGENT_MEMORY_ROOT` | Directory containing `patterns/`, `requests/`, `references/`, `facts/` and `episodes/`. |
 | `agent.memory.signature-depth` | `8` | `AGENT_MEMORY_SIGNATURE_DEPTH` | Max depth of the per-turn workspace walk used for signature matching; a file nested deeper is never considered. |
@@ -514,6 +521,22 @@ as it's produced, which the SSE controller relays to the client.
 - The agent is restricted to `agent.workspace`; attempts to access paths outside are rejected with a `SecurityException`.
 - The `shell` tool runs inside the workspace and applies the `blocked-patterns` regex list. **Treat it like giving the LLM shell access on your machine** — start with a throwaway directory.
 - `git` is whitelisted to a small set of safe subcommands (no `push`, no `reset --hard`, no `rebase`).
+- **Web fetch (#176).** `web_fetch(url)` is off by default. When it is on:
+  - It reaches only hosts on `agent.tools.web.allowed-hosts`, on the default port unless an entry names another (`host:port`; an IPv6 literal can be listed only on its default port). An empty list refuses every URL; it never means "allow all".
+  - It sends GET only, over https only: no body, no cookies, no credentials.
+  - Each redirect is checked against the same list.
+  - The whole fetch, body included, is bounded by `timeout-seconds`.
+  - It reads text types only (HTML has its scripts, styles and comments stripped), up to `max-bytes`.
+  - It refuses a URL that carries a user name or password, or a path or query string over its length cap.
+  - It refuses a URL with anything credential-shaped anywhere in it, checked as given and decoded once and twice. The shapes are `draft_episode`'s detector plus key-like parameters (`api_key=`, `key=`, `sig=` …), Slack, GitHub fine-grained and Google key prefixes, and JWTs. It over-matches on purpose, so a harmless `?page_token=…`, `?key=…` or `?session=…` is refused too; a docs site that needs such a parameter cannot be fetched.
+  - The result is wrapped in `<untrusted_external_content url="…">…</untrusted_external_content>`. Any spelling of that tag inside the page (any case or spacing, or entity-encoded) is neutralised, so a page cannot close the wrapper early. While the tool is registered, the system prompt tells the model that this content is data, not instructions. That holds in ACP mode too.
+  - Every request that went out, each redirect hop included, is audited as `web.fetched` (URL asked, URL fetched, status, bytes), and every refusal as `web.refused` (host and reason only, never the URL; a host that itself looks like a credential is recorded as `(redacted)`).
+  - In the ACP profile, every call goes through the editor's permission prompt (kind `fetch`, which always asks). In web and REST mode, set `agent.tools.policy.web_fetch=ask` to approve each call.
+
+  What it does not do:
+  - It does not pin DNS: an allow-listed host is trusted to resolve where it should.
+  - The length caps are the only check for workspace text leaving in a URL, so a short piece can still go out. Keep the list to hosts you trust.
+  - There is no search yet. `web_search` waits for a provider choice.
 - **Tool policy (#179).** `agent.tools.policy.<tool>` sets each tool to `allow`, `ask` or `deny`. With no entry a tool is `allow`, so by default every registered tool runs unasked in web and REST mode, `write_file`, `edit_file`, `shell`, `git` and `pod` writes included, exactly as before the setting existed. `deny` never runs the call and tells the model why. `ask` pauses the turn: the chat stream sends an `approval` event, `GET /api/sessions/{id}/approvals` lists the waiting calls (for clients of the non-streaming `/api/chat`), and `POST /api/sessions/{id}/approvals/{callId}` with `approve` or `deny` resumes it. No answer within `agent.tools.ask-timeout-seconds` (120) counts as a denial. Every `ask` asks; nothing is remembered between calls. Only the session's owner can answer. In the ACP profile, `ask` goes to the editor's own permission prompt, and a call approved there is not asked again by the mutating-tool gate. Each decision is audited as `tool.permission` (`denied`, `asked`, `allowed` or `timed-out`, with who answered: `policy`, the user, or `editor`). A call its policy allows outright writes no `tool.permission` event; its `tool_call` event is the record. Waiting holds a thread from the SSE pool (or the request thread for `/api/chat`) until the answer or the timeout. A client that disconnects does not release the wait early, so its call times out to `deny`. A stream lives 10 minutes in all, so a turn with several slow answers can run out of stream before it finishes. `tool.permission` events are written asynchronously, so read them by `callId` rather than relying on their stored order.
 
 ## Authentication and the audit log

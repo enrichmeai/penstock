@@ -5,8 +5,10 @@ import com.example.agent.tools.CisternTool;
 import com.example.agent.tools.EditFileTool;
 import com.example.agent.tools.GitTool;
 import com.example.agent.tools.ShellTool;
+import com.example.agent.tools.WebFetchTool;
 import com.example.agent.tools.WorkspacePath;
 import com.example.agent.tools.WriteFileTool;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -66,6 +68,18 @@ class AcpToolPermissionConfig {
         return new AcpGatedTool(delegate, gate, AcpSchema.ToolKind.EDIT,
                 args -> "write".equals(stringOf(args, "type")),
                 args -> title("pod", pathOf(args)),
+                args -> List.of());
+    }
+
+    /**
+     * {@code web_fetch} (#176), present only with {@code agent.tools.web.enabled=true}: every call
+     * is put to the editor, as kind {@code fetch} (which {@link PermissionGate} always asks about).
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "agent.tools.web", name = "enabled", havingValue = "true")
+    AcpGatedTool acpGatedWebFetchTool(WebFetchTool delegate, PermissionGate gate) {
+        return new AcpGatedTool(delegate, gate, AcpSchema.ToolKind.FETCH, args -> true,
+                args -> title("web_fetch", stringOf(args, "url")),
                 args -> List.of());
     }
 

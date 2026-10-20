@@ -170,6 +170,10 @@ public class AgentService {
         // retrieved memory. Off by default (agent.memory.enabled); a no-op ContextAssembler
         // (flag off, or no match) leaves the system prompt byte-identical.
         String systemPromptForTurn = props.getLlm().getSystemPrompt();
+        String toolNotes = tools.systemPromptNotes();
+        if (!toolNotes.isEmpty()) {
+            systemPromptForTurn = systemPromptForTurn + "\n\n" + toolNotes;
+        }
         if (contextAssembler != null) {
             if (auditLogger != null) {
                 // Which sections this turn could draw from, and which were kept out (#112).

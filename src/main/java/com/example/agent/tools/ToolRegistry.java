@@ -66,6 +66,13 @@ public class ToolRegistry {
 
     public Collection<Tool> all() { return tools.values(); }
 
+    /** The registered tools' {@link Tool#systemPromptNote()} lines, joined; empty when none has one. */
+    public String systemPromptNotes() {
+        return tools.values().stream().map(Tool::systemPromptNote)
+                .filter(n -> n != null && !n.isBlank())
+                .collect(java.util.stream.Collectors.joining("\n"));
+    }
+
     public List<ToolSpec> specs() {
         return tools.values().stream().map(Tool::spec).toList();
     }

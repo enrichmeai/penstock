@@ -48,6 +48,7 @@ final class AcpGatedTool implements Tool, PermissionGatedTool {
     @Override public String description() { return delegate.description(); }
     @Override public Map<String, Object> inputSchema() { return delegate.inputSchema(); }
     @Override public ToolSpec spec() { return delegate.spec(); }
+    @Override public String systemPromptNote() { return delegate.systemPromptNote(); }
 
     @Override
     public ToolResult execute(String callId, Map<String, Object> arguments, ToolContext context) {

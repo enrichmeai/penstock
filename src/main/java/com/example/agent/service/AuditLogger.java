@@ -185,6 +185,38 @@ public class AuditLogger {
     }
 
     /**
+     * Records one {@code web_fetch} that went out (#176) as {@code web.fetched}: the URL as
+     * requested, the final URL after redirects, the HTTP status and the bytes read. This is the
+     * owner's record of exactly what left the machine.
+     */
+    @Async
+    public void webFetched(String userId, String sessionId, String url, String finalUrl, int status, int bytes) {
+        String user = normalise(userId);
+        log.info("web.fetched user={} session={} url={} final={} status={} bytes={}", user, sessionId, url, finalUrl, status, bytes);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("url", url);
+        detail.put("finalUrl", finalUrl);
+        detail.put("status", status);
+        detail.put("bytes", bytes);
+        saveMemoryEvent(user, sessionId, "web.fetched", detail);
+    }
+
+    /**
+     * Records a {@code web_fetch} refused before or during the request (#176) as {@code web.refused}:
+     * the host and the reason. The URL itself is not recorded, since a refused URL may be the very
+     * credential the guard stopped.
+     */
+    @Async
+    public void webRefused(String userId, String sessionId, String host, String reason) {
+        String user = normalise(userId);
+        log.info("web.refused user={} session={} host={} reason={}", user, sessionId, host, reason);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("host", host);
+        detail.put("reason", reason);
+        saveMemoryEvent(user, sessionId, "web.refused", detail);
+    }
+
+    /**
      * Records a call to one of the MCP server's tools (#116), as {@code mcp.<tool>} with the project
      * and its outcome ({@code ok}, {@code empty}, {@code refused} or {@code error}); also an INFO line.
      */
