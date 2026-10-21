@@ -270,6 +270,12 @@ public class AgentController {
                 : ResponseEntity.notFound().build();
     }
 
+    /** The agent's plan for this session (#174): steps with status and note; empty when it has none. */
+    @GetMapping("/sessions/{id}/plan")
+    public List<com.example.agent.model.PlanItem> plan(@PathVariable String id) {
+        return agent.requireSession(id).getPlan();
+    }
+
     @DeleteMapping("/sessions/{id}")
     public ResponseEntity<Void> delete(@PathVariable String id) {
         // Ownership check first — cross-user or unknown → 404.

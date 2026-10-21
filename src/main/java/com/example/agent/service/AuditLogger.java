@@ -236,6 +236,22 @@ public class AuditLogger {
     }
 
     /**
+     * Records a change to the agent's plan (#174) as {@code plan.updated}: the operation
+     * ({@code set} or {@code update}), how many steps the plan has and how many are done. The
+     * steps' text is not copied into the audit; it is kept on the session.
+     */
+    @Async
+    public void planUpdated(String userId, String sessionId, String operation, int items, int done) {
+        String user = normalise(userId);
+        log.info("plan.updated user={} session={} operation={} items={} done={}", user, sessionId, operation, items, done);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("operation", operation);
+        detail.put("items", items);
+        detail.put("done", done);
+        saveMemoryEvent(user, sessionId, "plan.updated", detail);
+    }
+
+    /**
      * Records a call to one of the MCP server's tools (#116), as {@code mcp.<tool>} with the project
      * and its outcome ({@code ok}, {@code empty}, {@code refused} or {@code error}); also an INFO line.
      */

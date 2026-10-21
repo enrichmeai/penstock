@@ -16,6 +16,8 @@ public class Session {
     private String title;
     private String userId = "anonymous";
     private volatile TokenUsage totalUsage = TokenUsage.ZERO;
+    /** The agent's plan (#174), replaced whole on each change so readers never see it half-written. */
+    private volatile List<PlanItem> plan = List.of();
     private final Object usageLock = new Object();
 
     public Session() {
@@ -45,4 +47,7 @@ public class Session {
     }
 
     public void add(ChatMessage m) { history.add(m); }
+
+    public List<PlanItem> getPlan() { return plan; }
+    public void setPlan(List<PlanItem> plan) { this.plan = plan == null ? List.of() : List.copyOf(plan); }
 }

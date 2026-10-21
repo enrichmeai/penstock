@@ -96,7 +96,7 @@ user](#acting-as-the-signed-in-user).
 
 - **Pluggable LLM layer**: `copilot` (default), `anthropic`, `openai`, `ollama` — switch via config. Automatic retry with exponential backoff on 429 / 5xx, respecting `Retry-After`.
 - **Tool use loop**: the agent calls tools, receives results, and iterates until done.
-- **Ten built-in tools**: `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`, `shell`, `git`, `pod` and `jira_search` (both are registered by default, and every call returns an error until they are configured; `--acp` leaves out `jira_search`). Three more are off by default: `web_fetch`, registered only with `agent.tools.web.enabled=true` (see [Safety notes](#safety-notes)), and the read-only `list_patterns` and `load_pattern`, the agent's on-demand skills (#175), registered only with `agent.memory.enabled=true`.
+- **Eleven built-in tools**: `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`, `shell`, `git`, `pod`, `jira_search` (`pod` and `jira_search` are registered by default, and every call returns an error until they are configured; `--acp` leaves out `jira_search`) and `plan`, the agent's to-do list for a multi-step task (#174): `set`, `update` (one step `in_progress` at a time) and `read`. The plan is kept with the session (in SQLite and Postgres too) and shown in the system prompt of every later call, so a session continued after a budget stop starts from it. It is shown under the conversation in the web UI, at `GET /api/sessions/{id}/plan`, and in the editor as an ACP plan; each change is audited as `plan.updated`. Three more are off by default: `web_fetch`, registered only with `agent.tools.web.enabled=true` (see [Safety notes](#safety-notes)), and the read-only `list_patterns` and `load_pattern`, the agent's on-demand skills (#175), registered only with `agent.memory.enabled=true`.
 - **Streaming responses** over Server-Sent Events — assistant turns, tool calls, and tool results stream to the UI as they happen.
 - **Token usage tracking** — per-call usage is accumulated per session and exposed via the API and UI.
 - **Pluggable persistence**: in-memory (default), SQLite, or Postgres via JPA/Hibernate. Switch with one env var.
@@ -456,6 +456,7 @@ overridden with env vars or `--agent.*=value` command-line flags.
 | `GET` | `/api/sessions/{id}/usage` | — | Token usage summary for a session |
 | `DELETE` | `/api/sessions/{id}` | — | Delete a session |
 | `GET` | `/api/sessions/{id}/export.md` | — | The session's transcript as Markdown |
+| `GET` | `/api/sessions/{id}/plan` | — | The agent's plan for the session (#174): `[{text, status, note}]`, empty when it has none |
 | `GET` | `/api/sessions/{id}/approvals` | — | Tool calls waiting for an answer under policy `ask`: `[{sessionId, callId, tool, arguments, expiresAt}]` |
 | `POST` | `/api/sessions/{id}/approvals/{callId}` | `{ "decision": "approve" \| "deny" }` | Answer one waiting call. `204` when it reached the turn; `404` when nothing with that id is waiting (answered, timed out, never asked) or the session is not yours. |
 | `POST` | `/api/sessions/import` | Markdown transcript (`text/markdown`) | Create a new session owned by the caller from an exported transcript |

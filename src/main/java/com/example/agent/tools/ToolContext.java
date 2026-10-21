@@ -1,6 +1,7 @@
 package com.example.agent.tools;
 
 import com.example.agent.model.BearerToken;
+import com.example.agent.model.Session;
 
 import java.util.Optional;
 
@@ -22,9 +23,13 @@ import java.util.Optional;
  *       when they authenticated with one. A tool configured to act as the signed-in user
  *       forwards it; every other tool ignores it. {@link BearerToken#toString()} is
  *       redacted, so this record is safe to log.</li>
+ *   <li>{@link #session()} — the session this turn is running on, for the one tool that acts on
+ *       the session itself ({@code plan}, #174). Each turn passes its own instance, so two turns
+ *       on one session never write into each other's; empty outside the agent loop.</li>
  * </ul>
  */
-public record ToolContext(String userId, String sessionId, String requestId, Optional<BearerToken> bearer) {
+public record ToolContext(String userId, String sessionId, String requestId, Optional<BearerToken> bearer,
+                          Optional<Session> session) {
 
     public static final String ANONYMOUS = "anonymous";
 
@@ -32,6 +37,12 @@ public record ToolContext(String userId, String sessionId, String requestId, Opt
         userId = (userId == null || userId.isBlank()) ? ANONYMOUS : userId;
         requestId = (requestId == null || requestId.isBlank()) ? null : requestId;
         bearer = bearer == null ? Optional.empty() : bearer;
+        session = session == null ? Optional.empty() : session;
+    }
+
+    /** Without a running session: every caller outside the agent loop. */
+    public ToolContext(String userId, String sessionId, String requestId, Optional<BearerToken> bearer) {
+        this(userId, sessionId, requestId, bearer, Optional.empty());
     }
 
     /** Identity only — no request ID and no inbound bearer. */

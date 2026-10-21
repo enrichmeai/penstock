@@ -62,4 +62,36 @@ class AcpStreamAdapterTest {
         assertEquals(AcpSchema.ToolKind.EDIT, AcpStreamAdapter.kindOf("pod", Map.of("type", "write")));
         assertEquals(AcpSchema.ToolKind.FETCH, AcpStreamAdapter.kindOf("pod", Map.of()));
     }
+
+    @Test
+    void aPlanToolResultAlsoSendsTheEditorAPlanUpdate() {
+        com.agentclientprotocol.sdk.agent.SyncPromptContext ctx = org.mockito.Mockito.mock(com.agentclientprotocol.sdk.agent.SyncPromptContext.class);
+        java.util.List<com.example.agent.model.PlanItem> plan = java.util.List.of(
+                new com.example.agent.model.PlanItem("a", "done", null),
+                new com.example.agent.model.PlanItem("b", "in_progress", null),
+                new com.example.agent.model.PlanItem("c", "pending", null));
+        AcpStreamAdapter adapter = new AcpStreamAdapter(ctx, "s1", () -> false, () -> plan);
+
+        adapter.onMessage(com.example.agent.model.ChatMessage.assistant("", java.util.List.of(
+                new com.example.agent.model.ToolCall("p1", "plan", java.util.Map.of("operation", "update", "item", 2, "status", "in_progress")),
+                new com.example.agent.model.ToolCall("p2", "plan", java.util.Map.of("operation", "read")),
+                new com.example.agent.model.ToolCall("r1", "read_file", java.util.Map.of("path", "x")))));
+        adapter.onMessage(com.example.agent.model.ChatMessage.tool(java.util.List.of(
+                com.example.agent.model.ToolResult.ok("p1", "plan"),
+                com.example.agent.model.ToolResult.ok("p2", "plan"),
+                com.example.agent.model.ToolResult.ok("r1", "file"))));
+
+        org.mockito.ArgumentCaptor<com.agentclientprotocol.sdk.spec.AcpSchema.SessionUpdate> sent =
+                org.mockito.ArgumentCaptor.forClass(com.agentclientprotocol.sdk.spec.AcpSchema.SessionUpdate.class);
+        org.mockito.Mockito.verify(ctx, org.mockito.Mockito.atLeastOnce()).sendUpdate(org.mockito.ArgumentMatchers.eq("s1"), sent.capture());
+        java.util.List<com.agentclientprotocol.sdk.spec.AcpSchema.Plan> plans = sent.getAllValues().stream()
+                .filter(u -> u instanceof com.agentclientprotocol.sdk.spec.AcpSchema.Plan)
+                .map(u -> (com.agentclientprotocol.sdk.spec.AcpSchema.Plan) u).toList();
+        org.junit.jupiter.api.Assertions.assertEquals(1, plans.size(), "one plan update: for the change, not the read or the other tool");
+        org.junit.jupiter.api.Assertions.assertEquals(java.util.List.of(
+                com.agentclientprotocol.sdk.spec.AcpSchema.PlanEntryStatus.COMPLETED,
+                com.agentclientprotocol.sdk.spec.AcpSchema.PlanEntryStatus.IN_PROGRESS,
+                com.agentclientprotocol.sdk.spec.AcpSchema.PlanEntryStatus.PENDING),
+                plans.get(0).entries().stream().map(com.agentclientprotocol.sdk.spec.AcpSchema.PlanEntry::status).toList());
+    }
 }
