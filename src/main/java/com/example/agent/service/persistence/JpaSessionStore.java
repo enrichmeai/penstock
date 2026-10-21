@@ -1,5 +1,7 @@
 package com.example.agent.service.persistence;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.example.agent.config.CurrentUser;
 import com.example.agent.controller.dto.SessionSummary;
 import com.example.agent.model.ChatMessage;
@@ -28,6 +30,8 @@ import java.util.Optional;
 @Component
 @Conditional(JpaSessionStoreCondition.class)
 public class JpaSessionStore implements SessionStore {
+
+    private static final Logger log = LoggerFactory.getLogger(JpaSessionStore.class);
 
     private final SessionRepository sessionRepo;
     private final MessageRepository messageRepo;
@@ -121,6 +125,12 @@ public class JpaSessionStore implements SessionStore {
         // already enforced when the session was loaded on the request thread.
         sessionRepo.findByIdAndUserId(session.getId(), session.getUserId()).ifPresent(e -> {
             e.setTitle(session.getTitle());
+            try {
+                e.setPlanJson(session.getPlan().isEmpty() ? null : mapper.writeValueAsString(session.getPlan()));
+            } catch (Exception ex) {
+                // A plan that cannot be written is not worth failing the turn over; it lives on in memory.
+                log.warn("Could not save the plan for session {}: {}", session.getId(), ex.toString());
+            }
             sessionRepo.save(e);
         });
     }
@@ -138,6 +148,14 @@ public class JpaSessionStore implements SessionStore {
 
     private Session hydrate(SessionEntity e) {
         Session s = RestoredSession.from(e.getId(), e.getTitle(), e.getCreatedAt(), e.getUserId());
+        if (e.getPlanJson() != null && !e.getPlanJson().isBlank()) {
+            try {
+                s.setPlan(java.util.Arrays.asList(mapper.readValue(e.getPlanJson(), com.example.agent.model.PlanItem[].class)));
+            } catch (Exception ex) {
+                // An unreadable plan is dropped, not fatal: the history still loads.
+                log.warn("Could not read the stored plan for session {}: {}", e.getId(), ex.toString());
+            }
+        }
         for (MessageEntity m : messageRepo.findBySessionIdOrderByPositionAsc(e.getId())) {
             try {
                 ChatMessage cm = mapper.readValue(m.getPayloadJson(), ChatMessage.class);

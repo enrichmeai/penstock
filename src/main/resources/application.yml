@@ -339,6 +339,7 @@ agent:
       - git
       - pod
       - web_fetch     # registered only with agent.tools.web.enabled=true; every call asks (#176)
+      - plan          # the agent's to-do list, shown in the editor as an ACP plan (#174)
       - list_patterns # on-demand skills, read-only; registered only with agent.memory.enabled=true (#175)
       - load_pattern
     cistern:

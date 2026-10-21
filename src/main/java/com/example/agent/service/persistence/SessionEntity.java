@@ -21,6 +21,10 @@ public class SessionEntity {
     @Column(name = "user_id", nullable = false, length = 128)
     private String userId;
 
+    /** The agent's plan (#174) as JSON; null when there is none. */
+    @Column(name = "plan_json")
+    private String planJson;
+
     protected SessionEntity() {}
 
     public SessionEntity(String id, String title, Instant createdAt, String userId) {
@@ -36,4 +40,7 @@ public class SessionEntity {
     public Instant getCreatedAt() { return createdAt; }
     public String getUserId() { return userId; }
     public void setUserId(String userId) { this.userId = userId; }
+
+    public String getPlanJson() { return planJson; }
+    public void setPlanJson(String planJson) { this.planJson = planJson; }
 }

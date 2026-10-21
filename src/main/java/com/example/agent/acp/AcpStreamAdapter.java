@@ -8,8 +8,13 @@ import com.example.agent.model.ToolCall;
 import com.example.agent.model.ToolResult;
 import com.example.agent.service.AgentService;
 
+import com.example.agent.model.PlanItem;
+
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 /**
  * Bridges one {@code AgentService.chatStreaming} turn onto ACP {@code session/update}
@@ -29,11 +34,19 @@ final class AcpStreamAdapter {
     private final String sessionId;
     private final BooleanSupplier cancelled;
     private volatile AcpSchema.StopReason stopReason = AcpSchema.StopReason.END_TURN;
+    private final Supplier<List<PlanItem>> plan;
+    /** Ids of {@code plan} tool calls in flight, so their results also send the editor a {@code plan} update. */
+    private final Set<String> planCalls = ConcurrentHashMap.newKeySet();
 
     AcpStreamAdapter(SyncPromptContext ctx, String sessionId, BooleanSupplier cancelled) {
+        this(ctx, sessionId, cancelled, List::of);
+    }
+
+    AcpStreamAdapter(SyncPromptContext ctx, String sessionId, BooleanSupplier cancelled, Supplier<List<PlanItem>> plan) {
         this.ctx = ctx;
         this.sessionId = sessionId;
         this.cancelled = cancelled;
+        this.plan = plan;
     }
 
     AcpSchema.StopReason stopReason() {
@@ -51,6 +64,11 @@ final class AcpStreamAdapter {
         if (message.role() == Role.ASSISTANT) {
             stopReason = classify(message.text());
             for (ToolCall call : message.toolCalls()) {
+                // A plan change (set or update) refreshes the editor's plan; a read changes nothing.
+                if ("plan".equals(call.name()) && call.arguments() != null
+                        && !"read".equals(String.valueOf(call.arguments().get("operation")))) {
+                    planCalls.add(call.id());
+                }
                 ctx.sendUpdate(sessionId, new AcpSchema.ToolCall(
                         "tool_call", call.id(), call.name(), kindOf(call.name(), call.arguments()),
                         AcpSchema.ToolCallStatus.IN_PROGRESS, List.of(), List.of(),
@@ -63,8 +81,23 @@ final class AcpStreamAdapter {
                         result.isError() ? AcpSchema.ToolCallStatus.FAILED : AcpSchema.ToolCallStatus.COMPLETED,
                         List.of(new AcpSchema.ToolCallContentBlock("content", new AcpSchema.TextContent(result.content()))),
                         List.of(), null, result.content(), null));
+                if (planCalls.remove(result.callId()) && !result.isError()) {
+                    sendPlan();
+                }
             }
         }
+    }
+
+    /** The session's plan (#174) as ACP's own {@code plan} update, which editors show as a checklist. */
+    private void sendPlan() {
+        List<AcpSchema.PlanEntry> entries = plan.get().stream()
+                .map(i -> new AcpSchema.PlanEntry(i.text(), AcpSchema.PlanEntryPriority.MEDIUM, switch (i.status()) {
+                    case PlanItem.DONE -> AcpSchema.PlanEntryStatus.COMPLETED;
+                    case PlanItem.IN_PROGRESS -> AcpSchema.PlanEntryStatus.IN_PROGRESS;
+                    default -> AcpSchema.PlanEntryStatus.PENDING;
+                }))
+                .toList();
+        ctx.sendUpdate(sessionId, new AcpSchema.Plan("plan", entries));
     }
 
     private void checkCancelled() {

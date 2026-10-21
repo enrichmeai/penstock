@@ -67,6 +67,23 @@ class JpaSessionStoreTest {
     }
 
     @Test
+    void thePlanIsSavedWithTheSessionAndLoadedBack() {
+        Session s = store.create();
+        s.setPlan(List.of(new com.example.agent.model.PlanItem("one", "done", "noted"),
+                new com.example.agent.model.PlanItem("two", "pending", null)));
+        store.update(s);
+
+        assertThat(store.get(s.getId()).orElseThrow().getPlan()).containsExactly(
+                new com.example.agent.model.PlanItem("one", "done", "noted"),
+                new com.example.agent.model.PlanItem("two", "pending", null));
+
+        s.setPlan(List.of());
+        store.update(s);
+        assertThat(store.get(s.getId()).orElseThrow().getPlan()).isEmpty();
+        assertThat(sessionRepo.findById(s.getId()).orElseThrow().getPlanJson()).isNull();
+    }
+
+    @Test
     void updateTitle() {
         Session s = store.create();
         s.setTitle("My chat");

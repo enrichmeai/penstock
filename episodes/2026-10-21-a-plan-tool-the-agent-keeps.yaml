@@ -1,0 +1,50 @@
+# Drafted by scripts/write-episode.sh from the task's own evidence; edit before committing.
+# Empty lists and <fill in> placeholders are yours to complete; a learned line is a fact by
+# reference (an account, a secret's *name*, an id), never a value.
+id: 2026-10-21-a-plan-tool-the-agent-keeps
+format: 1
+visibility: public
+date: 2026-10-21
+project: penstock
+asked: 'A plan tool: the agent keeps a to-do list on the session, shown again when a session continues'
+issue: enrichmeai/penstock#174
+built:
+- pr: enrichmeai/penstock#193
+  files:
+  - README.md
+  - src/main/java/com/example/agent/acp/AcpMode.java
+  - src/main/java/com/example/agent/acp/AcpStreamAdapter.java
+  - src/main/java/com/example/agent/controller/AgentController.java
+  - src/main/java/com/example/agent/model/PlanItem.java
+  - src/main/java/com/example/agent/model/Session.java
+  - src/main/java/com/example/agent/service/AgentService.java
+  - src/main/java/com/example/agent/service/AuditLogger.java
+  - src/main/java/com/example/agent/service/persistence/JpaSessionStore.java
+  - src/main/java/com/example/agent/service/persistence/SessionEntity.java
+  - src/main/java/com/example/agent/tools/PlanTool.java
+  - src/main/java/com/example/agent/tools/ToolContext.java
+  - src/main/resources/application.yml
+  - src/main/resources/db/migration/postgres/V5__session_plan.sql
+  - src/main/resources/db/migration/sqlite/V5__session_plan.sql
+  - src/main/resources/static/index.html
+  - src/test/java/com/example/agent/acp/AcpStreamAdapterTest.java
+  - src/test/java/com/example/agent/service/persistence/JpaSessionStoreTest.java
+  - src/test/java/com/example/agent/service/persistence/SqliteMigrationsTest.java
+  - src/test/java/com/example/agent/tools/PlanToolTest.java
+decided:
+- what: the plan travels in ToolContext, not a registry keyed by session id
+  why: two turns on one session hold different Session objects under the database store; a registry keyed by id let one overwrite the other
+- what: the plan is shown in every call's system prompt as the agent's own notes, flattened to one line per step
+  why: model-written text must not gain system authority or forge a heading
+refused:
+- what: an integration test through the SQLite store for the continued session
+  why: covered in pieces (AgentService-level continuation, JPA round trip, real migrations); the deviation is on the PR for the owner
+learned:
+- the SQLite integration tests build their schema with Flyway off, so no test ran the migrations until
+  SqliteMigrationsTest
+open:
+- the Postgres V5 migration was not run here (its test needs Docker)
+- two concurrent turns on a database store keep the last plan saved
+patterns: []
+commits:
+- '5eca5af feat: plan tool: the agent keeps a to-do list on the session, shown again when it continues'

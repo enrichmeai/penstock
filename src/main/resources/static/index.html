@@ -70,6 +70,10 @@
     .tool-title { color: var(--tool); font-weight: 600; margin-bottom: 4px; }
     .tool-title.error { color: var(--error); }
     .tool-args { color: var(--muted); white-space: pre-wrap; margin-bottom: 4px; font-size: 11px; }
+    #plan { border-top: 1px solid var(--border); padding: 8px 16px; font-size: 13px; color: var(--muted); max-height: 160px; overflow-y: auto; }
+    #plan ol { margin: 4px 0 0 18px; padding: 0; }
+    #plan li.done { text-decoration: line-through; }
+    #plan li.in_progress { color: var(--text); font-weight: 600; }
     .approval-actions { display: flex; gap: 8px; margin-top: 6px; }
     .approval-actions button { font: inherit; padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; }
     .tool-result { white-space: pre-wrap; color: var(--text); max-height: 400px; overflow-y: auto; }
@@ -122,6 +126,7 @@
         </span>
       </div>
       <div id="messages"></div>
+      <div id="plan" hidden></div>
       <div id="composer">
         <form id="chat-form">
           <textarea id="input" placeholder="Ask the agent… (Cmd/Ctrl+Enter to send)" rows="1"></textarea>
@@ -301,6 +306,7 @@ async function loadSession(id) {
   renderUsage(data.usage);
   renderAll(data.history);
   await refreshSessions();
+  refreshPlan();
 }
 
 /** Stream SSE frames from POST /api/chat/stream. Yields {event, data}. */
@@ -371,6 +377,21 @@ function renderApproval(p) {
   return node;
 }
 
+// The agent's plan for this session (#174), shown under the conversation while it has one.
+async function refreshPlan() {
+  const box = document.getElementById('plan');
+  if (!state.sessionId) { box.hidden = true; return; }
+  let items = [];
+  try {
+    const r = await fetch('/api/sessions/' + encodeURIComponent(state.sessionId) + '/plan');
+    if (r.ok) items = await r.json();
+  } catch (e) { /* the plan is a convenience; the conversation still works without it */ }
+  if (!items.length) { box.hidden = true; box.innerHTML = ''; return; }
+  box.innerHTML = '<strong>Plan</strong><ol>' + items.map(i =>
+      `<li class="${esc(i.status)}">${esc(i.text)}${i.note ? ' <em>(' + esc(i.note) + ')</em>' : ''}</li>`).join('') + '</ol>';
+  box.hidden = false;
+}
+
 function setSending(sending) {
   state.sending = sending;
   if (sending) {
@@ -432,6 +453,7 @@ async function onSend(ev) {
       } else if (event === 'message') {
         if (!thinkingRemoved) { thinking.remove(); thinkingRemoved = true; }
         if (data.role === 'USER') continue;
+        if (data.role === 'TOOL') refreshPlan();
         // Close out the live bubble (if any). If the final assistant message has
         // text we keep the bubble and replace its content with rendered markdown.
         // If it has only tool calls (no text), drop the now-empty live bubble.
@@ -465,6 +487,7 @@ async function onSend(ev) {
       }
     }
     await refreshSessions();
+    refreshPlan();
   } catch (e) {
     const aborted = e.name === 'AbortError';
     const msg = aborted ? 'Stopped.' : ('Error: ' + e.message);
@@ -504,6 +527,7 @@ els.newBtn.addEventListener('click', async () => {
   els.title.textContent = 'New session';
   els.messages.innerHTML = '';
   renderUsage(null);
+  refreshPlan();
   els.input.focus();
 });
 
