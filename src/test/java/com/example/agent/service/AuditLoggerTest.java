@@ -103,6 +103,22 @@ public class AuditLoggerTest {
     }
 
     @Test
+    public void testPatternLoadedOnDemandStoresTheReason() {
+        auditLogger.patternLoaded("alice", "session-1", "stdio-json-rpc-agent", "1", "on-demand");
+
+        assertEquals(1, mockRepo.saved.size());
+        assertEquals("pattern.loaded", mockRepo.saved.get(0).getEventType());
+        assertTrue(mockRepo.saved.get(0).getDetailJson().contains("\"reason\":\"on-demand\""));
+    }
+
+    @Test
+    public void testPatternLoadedByRecallHasNoReasonField() {
+        auditLogger.patternLoaded("alice", "session-1", "stdio-json-rpc-agent", "1");
+
+        assertFalse(mockRepo.saved.get(0).getDetailJson().contains("reason"));
+    }
+
+    @Test
     public void testFactAndEpisodeLoaded_Success() {
         auditLogger.factLoaded("alice", "session-1", "gcp-console-account", "asserted", 1.0);
         auditLogger.episodeLoaded("alice", "session-1", "2026-10-02-memory-1", "2026-10-02", "provenance");

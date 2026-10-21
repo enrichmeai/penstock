@@ -339,6 +339,8 @@ agent:
       - git
       - pod
       - web_fetch     # registered only with agent.tools.web.enabled=true; every call asks (#176)
+      - list_patterns # on-demand skills, read-only; registered only with agent.memory.enabled=true (#175)
+      - load_pattern
     cistern:
       # `pod` is a single tool with a read/list/write/receipts operation argument, so the
       # allow-list above (per tool name) can't exclude just its write operation. Part 1 set

@@ -1,0 +1,38 @@
+# Drafted by scripts/write-episode.sh from the task's own evidence; edit before committing.
+# Empty lists and <fill in> placeholders are yours to complete; a learned line is a fact by
+# reference (an account, a secret's *name*, an id), never a value.
+id: 2026-10-20-on-demand-skills-list-patterns-load
+format: 1
+visibility: public
+date: 2026-10-20
+project: penstock
+asked: 'On-demand skills: list_patterns / load_pattern tools, under project audiences, every load audited'
+issue: enrichmeai/penstock#175
+built:
+- pr: enrichmeai/penstock#191
+  files:
+  - README.md
+  - patterns/README.md
+  - src/main/java/com/example/agent/service/AuditLogger.java
+  - src/main/java/com/example/agent/tools/PatternTools.java
+  - src/main/resources/application.yml
+  - src/test/java/com/example/agent/service/AuditLoggerTest.java
+  - src/test/java/com/example/agent/tools/PatternToolsTest.java
+decided:
+- what: unknown and out-of-audience ids return the same refusal, so existence elsewhere is not revealed
+  why: a public project must not learn that a private pattern exists
+- what: list_patterns and load_pattern read the same catalogue as recall, and are registered only with memory enabled
+  why: one audience rule for every way a pattern reaches the model
+refused:
+- what: letting the agent write or edit a pattern
+  why: promotion stays promote-pattern.sh, by PR
+learned:
+- PatternCatalog applies audiences only on a sectioned root that declares projects; other layouts load
+  everything
+open:
+- a flat or undeclared root applies no audience filter, for these tools as for recall
+- no test that the acp enabled list includes the two tools
+patterns: []
+commits:
+- 'b90ca7d feat: on-demand skills: list_patterns and load_pattern, under project audiences, every load
+  audited'

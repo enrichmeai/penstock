@@ -58,8 +58,14 @@ mechanisms keep it honest:
   labelled `pattern-stale` with the failing output, and closes it with a
   comment once a later run is green again — so a pattern that silently stopped
   working, or was last checked against an old release, cannot sit quietly here.
+- **On demand (#175).** With `agent.memory.enabled=true` the agent also has
+  `list_patterns` and `load_pattern`, so it can pull a pattern part-way through a
+  task when recall's trigger words did not match. Both read the same catalogue
+  recall uses, so a project sees only what its audience allows (#112). The agent
+  never writes a pattern: proposing one stays `/promote-pattern`, by PR.
 - **Use.** Every turn that loads a pattern into its system prompt audits a
-  `pattern.loaded` event (`AuditLogger.patternLoaded`). `GET /api/audit/patterns`
+  `pattern.loaded` event (`AuditLogger.patternLoaded`), and so does every
+  `load_pattern` call, with `reason: on-demand`. `GET /api/audit/patterns`
   aggregates those into loads, last-loaded time and versions seen, per pattern
   id — including every id in this directory that has never been loaded, listed
   last. `GET /api/audit/recall` is the same aggregate over facts and episodes

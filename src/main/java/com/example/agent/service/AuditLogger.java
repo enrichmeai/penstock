@@ -297,8 +297,17 @@ public class AuditLogger {
      */
     @Async
     public void patternLoaded(String userId, String sessionId, String patternId, String version) {
+        patternLoaded(userId, sessionId, patternId, version, null);
+    }
+
+    /**
+     * As above, with why it was loaded: {@code on-demand} when the model asked for it with
+     * {@code load_pattern} (#175); null (no {@code reason} field) for recall before the first call.
+     */
+    @Async
+    public void patternLoaded(String userId, String sessionId, String patternId, String version, String reason) {
         String user = normalise(userId);
-        log.info("pattern.loaded user={} session={} patternId={} version={}", user, sessionId, patternId, version);
+        log.info("pattern.loaded user={} session={} patternId={} version={} reason={}", user, sessionId, patternId, version, reason);
 
         if (repo == null) {
             log.debug("Audit repository not available; skipping pattern.loaded event");
@@ -309,6 +318,9 @@ public class AuditLogger {
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("patternId", patternId);
             detail.put("version", version);
+            if (reason != null) {
+                detail.put("reason", reason);
+            }
 
             String detailJson = mapper.writeValueAsString(detail);
             AuditEventEntity event = new AuditEventEntity(
