@@ -1,0 +1,32 @@
+# Asserted by the owner on 2026-10-21 ("Penstock server is still the product but having an ide helps.
+# We don't want to spend investing in ide"; "having an ide means people who used penstock for coding
+# can get benefits").
+id: ide-support-through-open-protocols-only
+format: 1
+visibility: public
+statement: 'The Penstock server is the product. IDEs are supported because people who code with Penstock
+  benefit from it where they already work, but only through open protocols: ACP for an editor to drive
+  the agent, MCP for an assistant to reach the record. No IDE-specific plugin is built; an editor that
+  does not speak ACP waits until it does. Compiler-level code intelligence comes from standard language
+  servers (#190) and verification (#189), not from owning an IDE. The browser UI stays a front door, not
+  an add-on.'
+kind: decision
+subject: decision/ide-support
+scope: project:penstock
+status: asserted
+confidence: 1.0
+provenance:
+- owner: 2026-10-21
+first_seen: 2026-10-21
+last_confirmed: 2026-10-21
+supersedes: null
+superseded_by: null
+triggers:
+- ide
+- eclipse
+- theia
+- jetbrains
+- vscode
+- plugin
+- ide plugin
+- acp
