@@ -2,6 +2,7 @@
 format: 1
 visibility: private
 layout: sectioned
+stack: { language: java21-spring-boot, cloud: gcp-cloud-run }
 projects:
-  oss-lib: { audience: public }
+  oss-lib: { audience: public, stack: { language: java21-spring-boot } }
   product: { audience: private, personal: none, uses: [oss-lib] }

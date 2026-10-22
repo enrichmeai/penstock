@@ -4,7 +4,9 @@
                                              block, or the default list when there is none
     memory_projects.py check <memory.yaml>   FAIL lines for a malformed block; exit 1 if any
 
-A project entry is `<name>: { audience: public|private, personal: all|shareable|none, uses: [...] }`.
+A project entry is `<name>: { audience: public|private, personal: all|shareable|none, uses: [...],
+stack: {...} }`. A `stack:` (at the top level, or a project's own) maps a global-memory category to
+the one layer id it loads, e.g. `{ language: java21-spring-boot, cloud: gcp-cloud-run }` (#195).
 A project may use only a declared project whose audience is at least as wide as its own: a public
 project's output is seen by everyone, so it never uses a private one. Penstock enforces the same
 rule when it loads cards (PatternCatalog); this check stops the mistake before then.
@@ -36,13 +38,33 @@ def names(path):
     return list(block) if isinstance(block, dict) and block else list(DEFAULT)
 
 
+def stack_problem(stack):
+    """None if `stack` is a mapping of plain category name to plain layer id, else why not."""
+    if isinstance(stack, dict) and all(NAME.match(str(k)) and isinstance(v, str) and NAME.match(v)
+                                       for k, v in stack.items()):
+        return None
+    return "stack must map a category to one layer id (plain names)"
+
+
+def top_level_stack(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            cfg = yaml.safe_load(fh) or {}
+    except (OSError, yaml.YAMLError):
+        return None
+    return cfg.get("stack") if isinstance(cfg, dict) else None
+
+
 def problems(path):
+    out = []
+    top = top_level_stack(path)
+    if top is not None and stack_problem(top):
+        out.append(f"memory.yaml {stack_problem(top)}, got {top!r}")
     block = load(path)
     if block is None:
-        return []
+        return out
     if not isinstance(block, dict) or not block:
-        return ["memory.yaml projects: must be a mapping of project name to { audience: ... }"]
-    out = []
+        return out + ["memory.yaml projects: must be a mapping of project name to { audience: ... }"]
     for name, entry in block.items():
         name = str(name)
         if not NAME.match(name) or name == "estate":
@@ -51,11 +73,13 @@ def problems(path):
         if not isinstance(entry, dict):
             out.append(f"memory.yaml project '{name}' needs {{ audience: public|private }}")
             continue
-        unknown = sorted(set(entry) - {"audience", "personal", "uses"})
+        unknown = sorted(set(entry) - {"audience", "personal", "uses", "stack"})
         if unknown:
             out.append(f"memory.yaml project '{name}' has unknown keys {unknown}")
         if entry.get("audience") not in AUDIENCES:
             out.append(f"memory.yaml project '{name}' audience must be one of {list(AUDIENCES)}, got {entry.get('audience')!r}")
+        if "stack" in entry and stack_problem(entry["stack"]):
+            out.append(f"memory.yaml project '{name}' {stack_problem(entry['stack'])}, got {entry['stack']!r}")
         if "personal" in entry and entry["personal"] not in PERSONAL:
             out.append(f"memory.yaml project '{name}' personal must be one of {list(PERSONAL)}, got {entry['personal']!r}")
         uses = entry.get("uses", [])

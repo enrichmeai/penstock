@@ -528,6 +528,8 @@ public class AgentProperties {
         private String project = "";
         /** Workspace directory name → project, for the derivation ({@code enrichmeai.github.io} → {@code site}). */
         private Map<String, String> projectAliases = new java.util.LinkedHashMap<>();
+        /** A checkout of global memory (#195): public patterns under patterns/<category>/<id>/. Empty: none. */
+        private String globalRoot = "";
 
         public boolean isEnabled() { return enabled; }
         public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -543,6 +545,8 @@ public class AgentProperties {
         public void setProject(String project) { this.project = project; }
         public Map<String, String> getProjectAliases() { return projectAliases; }
         public void setProjectAliases(Map<String, String> projectAliases) { this.projectAliases = projectAliases; }
+        public String getGlobalRoot() { return globalRoot; }
+        public void setGlobalRoot(String globalRoot) { this.globalRoot = globalRoot == null ? "" : globalRoot; }
     }
 
     public static class Storage {

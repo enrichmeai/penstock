@@ -67,9 +67,12 @@ public class PatternCatalog {
         }
     }
 
-    /** One project as the root's memory.yaml declares it. */
-    private record Project(String audience, String personal, List<String> uses) {
+    /** One project as the root's memory.yaml declares it; stack (#195) chooses its global layers. */
+    private record Project(String audience, String personal, List<String> uses, Map<String, String> stack) {
     }
+
+    /** Global memory admits public cards only: everyone may load it, so it may hold nothing else. */
+    private static final java.util.Set<String> PUBLIC_ONLY = java.util.Set.of("public");
 
     public PatternCatalog(AgentProperties props) {
         this.props = props;
@@ -153,6 +156,7 @@ public class PatternCatalog {
             fs.addAll(loadFacts(section, section.dir().resolve("facts")));
             es.addAll(loadEpisodes(section, section.dir().resolve("episodes")));
         }
+        ps.addAll(loadGlobalPatterns(root, ps, decisions));
         fs.sort(Comparator.comparing(FactCard::id));
         es.sort(Comparator.comparing(EpisodeCard::date).thenComparing(EpisodeCard::id).reversed());
         patterns = List.copyOf(ps);
@@ -273,7 +277,157 @@ public class PatternCatalog {
                         name, audience.isEmpty() ? "<none>" : audience, personal);
                 continue;
             }
-            out.put(name, new Project(audience, personal == null ? null : personal.toString(), stringList(entry.get("uses"))));
+            out.put(name, new Project(audience, personal == null ? null : personal.toString(), stringList(entry.get("uses")),
+                    stackOf(entry.get("stack"))));
+        }
+        return out;
+    }
+
+    /**
+     * Global memory (#195): {@code agent.memory.global-root}, a checkout of public patterns under
+     * {@code patterns/<category>/<id>/}. It loads below the owner's root, so a pattern of the owner's
+     * with the same id wins and only it is offered. Only public cards load. When memory.yaml
+     * declares a {@code stack:} (category to layer id; a declared project's own stack wins over the
+     * root's), only those layers load, one per category named; without one, every layer does.
+     */
+    private List<PatternManifest> loadGlobalPatterns(Path root, List<PatternManifest> own, List<SectionDecision> decisions) {
+        String configured = props.getMemory().getGlobalRoot();
+        if (configured == null || configured.isBlank()) {
+            return List.of();
+        }
+        Path patternsDir = Paths.get(configured).resolve("patterns");
+        if (!Files.isDirectory(patternsDir)) {
+            decisions.add(new SectionDecision("global", false, "no patterns/ under " + configured));
+            return List.of();
+        }
+        Map<String, String> stack = stack(root);
+        if (stack == null) {
+            decisions.add(new SectionDecision("global", false, "memory.yaml could not be read, so its stack is unknown"));
+            return List.of();
+        }
+        java.util.Set<String> ownIds = new java.util.HashSet<>();
+        own.forEach(p -> ownIds.add(p.id()));
+        List<PatternManifest> out = new ArrayList<>();
+        List<String> overridden = new ArrayList<>();
+        Map<String, String> unmatched = new java.util.TreeMap<>(stack);
+        try {
+            Path realPatterns = patternsDir.toRealPath();
+            for (Path category : confinedDirs(patternsDir, realPatterns)) {
+                String chosen = stack.get(category.getFileName().toString());
+                if (!stack.isEmpty() && chosen == null) {
+                    continue;
+                }
+                for (Path patternDir : confinedDirs(category, realPatterns)) {
+                    PatternManifest p = readGlobalPattern(patternDir);
+                    if (p == null || (chosen != null && !chosen.equals(p.id()))) {
+                        continue;
+                    }
+                    unmatched.remove(category.getFileName().toString());
+                    if (ownIds.contains(p.id())) {
+                        overridden.add(p.id());
+                    } else {
+                        out.add(p);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            log.warn("Failed to list global patterns {}: {}", patternsDir, e.getMessage());
+        }
+        out.sort(Comparator.comparing(PatternManifest::id));
+        StringBuilder why = new StringBuilder(out.size() + " patterns"
+                + (stack.isEmpty() ? " (no stack: every layer)" : " (stack " + stack + ")"));
+        if (!overridden.isEmpty()) {
+            why.append("; overridden by your own: ").append(String.join(", ", overridden));
+        }
+        if (!stack.isEmpty() && !unmatched.isEmpty()) {
+            List<String> missing = new ArrayList<>();
+            unmatched.forEach((k, v) -> missing.add(k + "=" + v));
+            why.append("; no layer for ").append(String.join(", ", missing));
+        }
+        decisions.add(new SectionDecision("global", true, why.toString()));
+        return out;
+    }
+
+    /**
+     * The sub-directories of {@code dir} that are real directories inside the global checkout: a
+     * symbolic link is never followed, so nothing outside the checkout reaches a prompt.
+     */
+    private static List<Path> confinedDirs(Path dir, Path realPatterns) throws IOException {
+        List<Path> out = new ArrayList<>();
+        try (DirectoryStream<Path> entries = Files.newDirectoryStream(dir)) {
+            for (Path p : entries) {
+                if (!Files.isSymbolicLink(p) && Files.isDirectory(p, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                        && p.toRealPath().startsWith(realPatterns)) {
+                    out.add(p);
+                }
+            }
+        }
+        out.sort(Comparator.naturalOrder());
+        return out;
+    }
+
+    /** One global pattern, or null: not public, unreadable, or any of its files a symbolic link. */
+    private PatternManifest readGlobalPattern(Path patternDir) {
+        Path manifestFile = patternDir.resolve("manifest.yaml");
+        for (Path f : List.of(manifestFile, patternDir.resolve("PATTERN.md"), patternDir.resolve("skeleton"))) {
+            if (Files.isSymbolicLink(f)) {
+                log.warn("Skipping global pattern {}: {} is a symbolic link", patternDir, f.getFileName());
+                return null;
+            }
+        }
+        if (!Files.isRegularFile(manifestFile, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            return null;
+        }
+        try {
+            if (!new Section(patternDir, PUBLIC_ONLY).admits(readYamlMapping(manifestFile))) {
+                return null;
+            }
+            return readManifest(patternDir, manifestFile);
+        } catch (Exception e) {
+            log.warn("Skipping invalid global pattern manifest {}: {}", manifestFile, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * The stack in force (#195): the workspace's declared project's, else the root memory.yaml's;
+     * empty when none is declared, null when memory.yaml cannot be read (then no global layer loads).
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, String> stack(Path root) {
+        Path file = root.resolve("memory.yaml");
+        if (!Files.isRegularFile(file)) {
+            return Map.of();
+        }
+        try {
+            Map<String, Object> data = readYamlMapping(file);
+            String workspace = props.getWorkspace();
+            String project = ContextAssembler.resolveProject(
+                    workspace == null || workspace.isBlank() ? null : Paths.get(workspace).toAbsolutePath().normalize(), props);
+            Project declared = PROJECT_NAME.matcher(project).matches() ? declaredProjects(root).get(project) : null;
+            if (declared != null && !declared.stack().isEmpty()) {
+                return declared.stack();
+            }
+            return stackOf(data.get("stack"));
+        } catch (Exception e) {
+            log.warn("Could not read the stack from {}: {}; loading no global layer", file, e.getMessage());
+            return null;
+        }
+    }
+
+    /** A stack: block, category to layer id; anything that is not a plain name is left out. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, String> stackOf(Object block) {
+        if (!(block instanceof Map)) {
+            return Map.of();
+        }
+        Map<String, String> out = new java.util.TreeMap<>();
+        for (Map.Entry<Object, Object> e : ((Map<Object, Object>) block).entrySet()) {
+            String category = String.valueOf(e.getKey());
+            String id = String.valueOf(e.getValue());
+            if (PROJECT_NAME.matcher(category).matches() && PROJECT_NAME.matcher(id).matches()) {
+                out.put(category, id);
+            }
         }
         return out;
     }
