@@ -1,0 +1,7 @@
+# Test fixture for #195: a stack maps a category to one layer id, both plain names.
+format: 1
+visibility: private
+layout: sectioned
+stack: { language: "Java 21" }
+projects:
+  oss-lib: { audience: public, stack: [java21-spring-boot] }

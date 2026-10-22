@@ -124,6 +124,10 @@ agent:
     # The project the workspace belongs to (the `project` of episodes/ and the `project:<p>`
     # scope of facts/). Empty: derived from the workspace directory's name through the aliases.
     project: ${AGENT_MEMORY_PROJECT:}
+    # Global memory (#195): a checkout of enrichmeai/global-memory, public patterns under
+    # patterns/<category>/<id>/. Loaded below the root (your pattern with the same id wins); the
+    # root's memory.yaml stack: picks one layer per category. Empty: no global memory.
+    global-root: ${AGENT_MEMORY_GLOBAL_ROOT:}
     project-aliases:
       penstock: penstock
       cistern: cistern

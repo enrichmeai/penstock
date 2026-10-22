@@ -85,6 +85,40 @@ A card loads into a project only if everyone who sees that project's output may 
   reaches this project only as the source of one of its facts that a turn loaded (#152), and only
   from a section the table above already admits.
 
+## Global memory (#195)
+
+Global memory is the third tier: free, public patterns everyone can load, kept in their own
+repository, [enrichmeai/global-memory](https://github.com/enrichmeai/global-memory). Point
+`agent.memory.global-root` (`AGENT_MEMORY_GLOBAL_ROOT`) at a checkout of it.
+
+| Tier | Where | Whose | Wins over |
+|---|---|---|---|
+| project | `projects/<name>/` | this project's | the estate and global |
+| estate | `estate/` | the owner's, across projects | global |
+| global | `agent.memory.global-root` | everyone's, public | nothing |
+
+- Its patterns sit in category folders, `patterns/<category>/<id>/` (`language`, `architecture`,
+  `cloud`, `ci`). Only cards marked `visibility: public` load from it, and a symbolic link in the
+  checkout is never followed, so nothing outside it reaches a prompt.
+- It is turned on by `agent.memory.global-root` alone. A `uses: [global]` entry in `memory.yaml`
+  is not read yet.
+- A pattern of yours with the same id overrides the global one, and only yours is offered.
+- `stack:` in the root's `memory.yaml` picks one layer per category. A declared project's own
+  `stack:` wins over the root's. Without a stack, every layer is offered, and they compete with
+  your own patterns for the few that join a turn, so declare one. A stack entry that matches no
+  layer is named in the audit decision. A `memory.yaml` that cannot be read loads no global
+  layer. For example:
+
+  ```yaml
+  stack: { language: java21-spring-boot, architecture: rest-service, cloud: gcp-cloud-run, ci: github-actions-gradle }
+  ```
+- The agent reads global memory and never writes it. It changes only by a reviewed PR to its own
+  repository.
+- What loaded, the stack it used and what yours overrode are recorded as the `global` section
+  decision, beside the others in the audit log.
+- Not yet: staleness for a global pattern is still measured against Penstock's release tag, not
+  the tool versions in its `verified-against`.
+
 ## Writing into a root
 
 | Tool | Sectioned root |

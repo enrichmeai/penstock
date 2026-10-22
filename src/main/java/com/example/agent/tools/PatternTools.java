@@ -179,7 +179,7 @@ public class PatternTools {
                 sb.append(md).append('\n');
             }
             if (!p.skeletonFiles().isEmpty()) {
-                sb.append("\nSkeleton files (in patterns/").append(p.id()).append("/skeleton/):\n");
+                sb.append("\nSkeleton files (in its skeleton/ folder):\n");
                 p.skeletonFiles().stream().limit(MAX_LISTED).forEach(f -> sb.append("- ").append(f).append('\n'));
                 if (p.skeletonFiles().size() > MAX_LISTED) {
                     sb.append("(").append(p.skeletonFiles().size() - MAX_LISTED).append(" more files)\n");

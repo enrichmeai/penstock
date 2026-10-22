@@ -174,4 +174,43 @@ class PatternToolsTest {
                     verify(ctx.getBean(AuditLogger.class)).patternLoaded("alice", "s1", "p1", "3", "on-demand");
                 });
     }
+
+    // --- #195: global memory through the tools --------------------------------------------
+
+    @TempDir Path global;
+
+    private void globalLayer(String category, String id) throws IOException {
+        Path dir = global.resolve("patterns").resolve(category).resolve(id);
+        Files.createDirectories(dir.resolve("skeleton"));
+        Files.writeString(dir.resolve("manifest.yaml"), "id: " + id + "\nformat: 1\nvisibility: public\nversion: 1\n"
+                + "triggers: [x]\nverified-against: { tag: t, date: 2026-10-21 }\n");
+        Files.writeString(dir.resolve("PATTERN.md"), "# " + id + "\n\nThe " + id + " layer.\n");
+        Files.writeString(dir.resolve("skeleton").resolve("build.gradle"), "// skeleton\n");
+    }
+
+    @Test
+    void listPatternsForAJavaGcpGithubActionsStackListsThoseFourAndNoOthers() throws IOException {
+        Path flat = root.resolve("flat");
+        Files.createDirectories(flat);
+        Files.writeString(flat.resolve("memory.yaml"), "format: 1\nvisibility: private\nstack: { language: java21-spring-boot, "
+                + "architecture: rest-service, cloud: gcp-cloud-run, ci: github-actions-gradle }\n");
+        for (String[] l : new String[][]{{"language", "java21-spring-boot"}, {"language", "python-fastapi"},
+                {"architecture", "rest-service"}, {"cloud", "gcp-cloud-run"}, {"cloud", "aws-lambda"},
+                {"ci", "github-actions-gradle"}, {"ci", "gitlab-ci"}}) {
+            globalLayer(l[0], l[1]);
+        }
+        AgentProperties props = new AgentProperties();
+        props.getMemory().setEnabled(true);
+        props.getMemory().setRoot(flat.toString());
+        props.getMemory().setGlobalRoot(global.toString());
+        PatternCatalog catalog = PatternCatalog.loadedNow(props);
+
+        ToolResult listed = call(new PatternTools().listPatternsTool(catalog), Map.of());
+        assertThat(listed.content()).contains("java21-spring-boot (v1)", "rest-service (v1)", "gcp-cloud-run (v1)",
+                "github-actions-gradle (v1)").doesNotContain("python-fastapi", "aws-lambda", "gitlab-ci");
+        assertThat(listed.content().lines().filter(l -> l.startsWith("- "))).hasSize(4);
+
+        ToolResult loaded = call(new PatternTools().loadPatternTool(catalog), Map.of("id", "gcp-cloud-run"));
+        assertThat(loaded.content()).contains("The gcp-cloud-run layer.").contains("Skeleton files (in its skeleton/ folder)");
+    }
 }

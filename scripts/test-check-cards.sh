@@ -395,6 +395,8 @@ sect_fail declared-undeclared-folder "FAIL: projects/valuedocs is not a known pr
 sect_fail public-uses-private "FAIL: memory.yaml project 'oss-lib' is public but uses 'product', which is private" "a public project using a private one fails"
 sect_fail bad-audience "FAIL: memory.yaml project 'oss-lib' audience must be one of ['public', 'private'], got 'everyone'" "an unknown audience fails"
 sect_fail uses-undeclared "FAIL: memory.yaml project 'oss-lib' uses 'ghost', which is not declared" "a uses entry naming no declared project fails"
+sect_fail bad-stack "FAIL: memory.yaml stack must map a category to one layer id (plain names), got {'language': 'Java 21'}" "a stack whose layer is not a plain id fails (#195)"
+sect_fail bad-stack "FAIL: memory.yaml project 'oss-lib' stack must map a category to one layer id (plain names)" "a project stack that is not a mapping fails (#195)"
 if MEMORY_PROJECTS_YAML=scripts/test/cards/sectioned/declared/memory.yaml bash scripts/check-cards.sh --root scripts/test/cards/sectioned/unknown-project >"$out" 2>&1; then
     echo "FAIL: MEMORY_PROJECTS_YAML in the caller's environment widened the known projects"; cat "$out"; status=1
 else echo "PASS: the caller's environment cannot add a project"; fi
