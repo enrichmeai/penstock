@@ -287,6 +287,7 @@ public class AgentProperties {
         private Jira jira = new Jira();
         private Cistern cistern = new Cistern();
         private Web web = new Web();
+        private Lsp lsp = new Lsp();
         private int maxOutputBytes = 16_384;
         /**
          * Allow-list of tool names registered with {@code ToolRegistry}, by {@code Tool#name()}.
@@ -316,6 +317,8 @@ public class AgentProperties {
         public Cistern getCistern() { return cistern; }
         public Web getWeb() { return web; }
         public void setWeb(Web web) { this.web = web; }
+        public Lsp getLsp() { return lsp; }
+        public void setLsp(Lsp lsp) { this.lsp = lsp; }
         public void setJira(Jira jira) { this.jira = jira; }
         public int getMaxOutputBytes() { return maxOutputBytes; }
         public void setMaxOutputBytes(int maxOutputBytes) { this.maxOutputBytes = maxOutputBytes; }
@@ -393,6 +396,47 @@ public class AgentProperties {
         public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
         public String getToken() { return token; }
         public void setToken(String token) { this.token = token; }
+    }
+
+    /**
+     * Language servers (#190): the compiler's view of the code, through the Language Server
+     * Protocol. Off by default; with no server configured the tools are absent.
+     */
+    public static class Lsp {
+        private boolean enabled = false;
+        /** Per language: the argv that starts its server, and the file extensions it serves. */
+        private Map<String, Server> servers = new java.util.LinkedHashMap<>();
+        /** How long one request may take; a server still indexing answers slowly. */
+        private int timeoutSeconds = 60;
+        /** How long diagnostics(path) waits for the server to publish after the file is synced. */
+        private int diagnosticsWaitSeconds = 20;
+        /** At most this many locations or symbols are returned. */
+        private int maxResults = 50;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public Map<String, Server> getServers() { return servers; }
+        public void setServers(Map<String, Server> servers) { this.servers = servers == null ? new java.util.LinkedHashMap<>() : servers; }
+        public int getTimeoutSeconds() { return timeoutSeconds; }
+        public void setTimeoutSeconds(int timeoutSeconds) { this.timeoutSeconds = timeoutSeconds; }
+        public int getDiagnosticsWaitSeconds() { return diagnosticsWaitSeconds; }
+        public void setDiagnosticsWaitSeconds(int diagnosticsWaitSeconds) { this.diagnosticsWaitSeconds = diagnosticsWaitSeconds; }
+        public int getMaxResults() { return maxResults; }
+        public void setMaxResults(int maxResults) { this.maxResults = maxResults; }
+
+        public static class Server {
+            private List<String> command = List.of();
+            private List<String> extensions = List.of();
+            /** Variables passed to the server besides PATH, HOME and LANG (e.g. JAVA_HOME). */
+            private List<String> env = List.of();
+
+            public List<String> getCommand() { return command; }
+            public void setCommand(List<String> command) { this.command = command == null ? List.of() : List.copyOf(command); }
+            public List<String> getExtensions() { return extensions; }
+            public void setExtensions(List<String> extensions) { this.extensions = extensions == null ? List.of() : List.copyOf(extensions); }
+            public List<String> getEnv() { return env; }
+            public void setEnv(List<String> env) { this.env = env == null ? List.of() : List.copyOf(env); }
+        }
     }
 
     /**

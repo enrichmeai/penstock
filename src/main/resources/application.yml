@@ -252,6 +252,14 @@ agent:
     file:
       enabled: true
       max-bytes: 1048576
+    # Language servers (#190): diagnostics, definition, references and symbols from the compiler,
+    # not grep. Off by default; the tools exist only when this is on and a server has a command, e.g.
+    #   servers.java.command: [jdtls, -data, /tmp/jdtls-workspace]   servers.java.extensions: [.java]
+    lsp:
+      enabled: ${AGENT_TOOLS_LSP_ENABLED:false}
+      timeout-seconds: 60
+      diagnostics-wait-seconds: 20
+      max-results: 50
     # web_fetch (#176): off by default. When on, only these hosts are fetched; empty refuses all.
     web:
       enabled: ${AGENT_TOOLS_WEB_ENABLED:false}
