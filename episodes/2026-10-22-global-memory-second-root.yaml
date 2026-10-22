@@ -1,0 +1,49 @@
+# Drafted by scripts/write-episode.sh from the task's own evidence; edit before committing.
+# Empty lists and <fill in> placeholders are yours to complete; a learned line is a fact by
+# reference (an account, a secret's *name*, an id), never a value.
+id: 2026-10-22-global-memory-second-root
+format: 1
+visibility: public
+date: 2026-10-22
+project: penstock
+asked: 'Global memory: free starter patterns by language, architecture, cloud and CI, verified and loaded
+  on demand'
+issue: enrichmeai/penstock#195
+built:
+- pr: enrichmeai/penstock#197
+  files:
+  - README.md
+  - docs/memory-root.md
+  - scripts/lib/memory_projects.py
+  - scripts/test-check-cards.sh
+  - scripts/test/cards/sectioned/bad-stack/estate/facts/estate-shell-fixture.yaml
+  - scripts/test/cards/sectioned/bad-stack/memory.yaml
+  - scripts/test/cards/sectioned/bad-stack/projects/oss-lib/facts/oss-lib-fixture.yaml
+  - scripts/test/cards/sectioned/declared/memory.yaml
+  - src/main/java/com/example/agent/config/AgentProperties.java
+  - src/main/java/com/example/agent/memory/PatternCatalog.java
+  - src/main/java/com/example/agent/tools/PatternTools.java
+  - src/main/resources/application.yml
+  - src/test/java/com/example/agent/memory/GlobalMemoryTest.java
+  - src/test/java/com/example/agent/tools/PatternToolsTest.java
+decided:
+- what: global memory is a second root set by agent.memory.global-root, read below the owner's root, so the owner's pattern with the same id wins
+  why: the narrower tier wins (owner, 2026-10-21); a separate public repository is versioned and usable without Penstock
+- what: only public cards load from it, and no symbolic link in it is followed
+  why: it is a third-party checkout changed by PR; a link to a credentials file would otherwise reach the prompt
+- what: 'the stack key in memory.yaml picks one layer per category, a declared project''s own stack winning; an unreadable memory.yaml loads no global layer'
+  why: layers compose instead of one pattern per combination; failing closed keeps an unknown stack from loading everything
+refused:
+- what: uses [global] in memory.yaml as the switch
+  why: the config key is enough for the first slice; noted in docs/memory-root.md
+- what: a vector store for selecting memory
+  why: selection stays deterministic and explainable (#85 invariant 4); a code-search index may be measured later under #141
+learned:
+- penstock's pattern.schema.json allows no extra manifest keys, so a pattern's sources live in global-memory's own sources.yaml
+open:
+- staleness of a global pattern is still measured against Penstock's release tag, not the tool versions in its verified-against
+- memory.yaml is parsed twice per reload (a doubled warning for an invalid project entry)
+patterns: []
+commits:
+- 'a800984 feat: global memory: load public patterns from a second root, below your own, chosen by stack:
+  (#195)'
