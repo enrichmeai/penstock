@@ -1,0 +1,41 @@
+# Drafted by scripts/write-episode.sh from the task's own evidence; edit before committing.
+# Empty lists and <fill in> placeholders are yours to complete; a learned line is a fact by
+# reference (an account, a secret's *name*, an id), never a value.
+id: 2026-10-22-language-server-tools
+format: 1
+visibility: public
+date: 2026-10-22
+project: penstock
+asked: 'Code intelligence for the agent: language-server tools (diagnostics, definition, references, symbols)
+  beside grep'
+issue: enrichmeai/penstock#190
+built:
+- pr: enrichmeai/penstock#202
+  merged: '8816357'
+  files:
+  - README.md
+  - src/main/java/com/example/agent/config/AgentProperties.java
+  - src/main/java/com/example/agent/lsp/LspClient.java
+  - src/main/java/com/example/agent/lsp/LspManager.java
+  - src/main/java/com/example/agent/lsp/LspTools.java
+  - src/main/resources/application.yml
+  - src/test/java/com/example/agent/lsp/FakeLspServer.java
+  - src/test/java/com/example/agent/lsp/LspToolsTest.java
+decided:
+- what: a small LSP client written here, not lsp4j
+  why: no new dependency, and Maven Central rate-limited this sandbox; LSP is the same framed JSON-RPC Penstock already speaks for ACP
+- what: the language server gets PATH, HOME and LANG plus named variables only, and its process tree is killed on close or a failed start
+  why: it is a third-party process in the workspace; review found it inheriting Penstock's model keys and leaking on a slow initialize
+- what: diagnostics are matched to the version of the file just synced
+  why: a busy server can publish for the previous version after an edit, which would report fixed errors as still there
+refused:
+- what: claiming jdtls works
+  why: Eclipse's download site was in a temporary shutdown, so the slice is tested against a scripted LSP server only
+learned:
+- a leak test that searched processes by command line passed even with the cleanup removed; counting the test JVM's live children catches it
+open:
+- the diagnostics summary after write_file and edit_file, the symbol argument, a real jdtls test with the overload case, and the real-repo measure (#190)
+patterns: []
+commits:
+- '71280db feat: language-server tools: diagnostics, definition, references and symbols from the compiler,
+  not grep (#190)'
