@@ -1,0 +1,33 @@
+# Drafted by scripts/write-episode.sh from the task's own evidence; edit before committing.
+# Empty lists and <fill in> placeholders are yours to complete; a learned line is a fact by
+# reference (an account, a secret's *name*, an id), never a value.
+id: 2026-10-23-jdtls-integration-test
+format: 1
+visibility: public
+date: 2026-10-23
+project: penstock
+asked: 'Code intelligence for the agent: language-server tools (diagnostics, definition, references, symbols)
+  beside grep'
+issue: enrichmeai/penstock#190
+built:
+- pr: enrichmeai/penstock#205
+  files:
+  - .github/workflows/build.yml
+  - src/test/java/com/example/agent/lsp/JdtlsIT.java
+decided:
+- 'Pin a jdtls milestone (1.63.0) by sha256, not a snapshot: snapshots are pruned from download.eclipse.org.'
+- 'Run jdtls on Java 25 through the launcher''s --java-executable (JDTLS_JAVA) and keep Gradle on 21.'
+- 'Fail the CI step unless the report shows 3 run and 0 skipped, so a skipped test cannot read as a pass.'
+refused:
+- 'Retrying the diagnostics call until an error shows: it would hide a real early answer; a warm-up definition call waits for the import instead.'
+learned:
+- 'jdtls 1.63.0 and the 1.64.0 snapshot both need Java 25: 14 OSGi bundles require osgi.ee JavaSE 25, and on Java 21 the server exits before answering initialize.'
+- 'jdtls takes a loose file''s own folder as its source root, so a file under src/demo/ with package demo gets a package-mismatch error; test fixtures sit at the root in the default package.'
+- 'Gradle does not treat environment variables as test inputs: a run with only JDTLS_HOME changed is UP-TO-DATE and leaves the old report; use --rerun.'
+- 'A filtered --rerun replaces build/test-results/test (87 files became 1), so it runs after the suite''s report upload and uploads its own.'
+open:
+- 'The step has not yet run on a GitHub runner; PR #205''s CI is its first run.'
+- '#190 still open: the symbol argument and the measure on a real repo.'
+patterns: []
+commits:
+- '86ef1ed test: the language-server tools against a real jdtls in CI (#190)'
