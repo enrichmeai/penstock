@@ -153,6 +153,27 @@ public class LspTools {
         return sb.toString();
     }
 
+    /** One line per diagnostic, {@code path:line:column severity: message}; errors only when asked. */
+    static List<String> diagnosticLines(Path workspace, String rel, JsonNode ds, boolean errorsOnly) {
+        List<String> lines = new ArrayList<>();
+        for (JsonNode d : ds) {
+            int level = d.path("severity").asInt(1);
+            if (errorsOnly && level != 1) {
+                continue;
+            }
+            String severity = switch (level) {
+                case 1 -> "error";
+                case 2 -> "warning";
+                case 3 -> "info";
+                default -> "hint";
+            };
+            JsonNode start = d.path("range").path("start");
+            lines.add(rel + ":" + (start.path("line").asInt() + 1) + ":" + (start.path("character").asInt() + 1)
+                    + " " + severity + ": " + scrubPaths(workspace, d.path("message").asText().replace('\n', ' ')));
+        }
+        return lines;
+    }
+
     private static String messageOf(Exception e) {
         return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
     }
@@ -197,18 +218,7 @@ public class LspTools {
                     return ToolResult.ok(callId, "The language server published no diagnostics for " + rel
                             + " within " + lsp.props().getDiagnosticsWaitSeconds() + " s (it may still be indexing).");
                 }
-                List<String> lines = new ArrayList<>();
-                for (JsonNode d : ds) {
-                    String severity = switch (d.path("severity").asInt(1)) {
-                        case 1 -> "error";
-                        case 2 -> "warning";
-                        case 3 -> "info";
-                        default -> "hint";
-                    };
-                    JsonNode start = d.path("range").path("start");
-                    lines.add(rel + ":" + (start.path("line").asInt() + 1) + ":" + (start.path("character").asInt() + 1)
-                            + " " + severity + ": " + scrubPaths(lsp.workspace(), d.path("message").asText().replace('\n', ' ')));
-                }
+                List<String> lines = diagnosticLines(lsp.workspace(), rel, ds, false);
                 return ToolResult.ok(callId, bounded(lines, lsp.props().getMaxResults(), rel + ": no errors or warnings."));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();

@@ -1,0 +1,40 @@
+# Drafted by scripts/write-episode.sh from the task's own evidence; edit before committing.
+# Empty lists and <fill in> placeholders are yours to complete; a learned line is a fact by
+# reference (an account, a secret's *name*, an id), never a value.
+id: 2026-10-23-after-edit-diagnostics
+format: 1
+visibility: public
+date: 2026-10-23
+project: penstock
+asked: 'Code intelligence for the agent: language-server tools (diagnostics, definition, references, symbols)
+  beside grep'
+issue: enrichmeai/penstock#190
+built:
+- pr: enrichmeai/penstock#204
+  files:
+  - README.md
+  - src/main/java/com/example/agent/config/AgentProperties.java
+  - src/main/java/com/example/agent/lsp/AfterEditDiagnostics.java
+  - src/main/java/com/example/agent/lsp/LspManager.java
+  - src/main/java/com/example/agent/lsp/LspTools.java
+  - src/main/java/com/example/agent/tools/AfterToolCall.java
+  - src/main/java/com/example/agent/tools/ToolRegistry.java
+  - src/main/resources/application.yml
+  - src/test/java/com/example/agent/lsp/AfterEditDiagnosticsTest.java
+  - src/test/java/com/example/agent/lsp/FakeLspServer.java
+decided:
+- what: a general after-call hook in ToolRegistry, used by the language server after write_file and edit_file
+  why: the edit tools stay unaware of LSP, and a failure in the hook can never fail the edit
+- what: one deadline covers the whole lookup, starting the server included, and a failed start is not retried for a minute
+  why: review found the first edit could block for the 60 s start timeout, on every edit if the server never started
+refused:
+- what: a test for an empty publication followed by a later error
+  why: the scripted server publishes once per sync; the wording says no errors reported, and the README states the caveat
+learned:
+- a bound on the wait for an answer is not a bound on the call when getting a client can itself take the start timeout
+open:
+- the symbol argument, a real jdtls test with the overload case, and the real-repo measure (#190)
+patterns: []
+commits:
+- 'e345cb9 feat: after write_file or edit_file, the language server''s errors come back with the result
+  (#190)'

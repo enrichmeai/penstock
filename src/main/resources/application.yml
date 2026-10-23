@@ -260,6 +260,8 @@ agent:
       timeout-seconds: 60
       diagnostics-wait-seconds: 20
       max-results: 50
+      # after write_file / edit_file on a served file, append its errors; 0 turns it off
+      after-edit-wait-seconds: 5
     # web_fetch (#176): off by default. When on, only these hosts are fetched; empty refuses all.
     web:
       enabled: ${AGENT_TOOLS_WEB_ENABLED:false}

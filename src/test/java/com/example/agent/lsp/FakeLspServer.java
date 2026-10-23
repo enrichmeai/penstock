@@ -36,6 +36,8 @@ public class FakeLspServer {
         }
         boolean mute = flags.contains("--mute");
         boolean garbage = flags.contains("--garbage");
+        int slowInit = flags.indexOf("--slow-init");
+        long initDelayMs = slowInit >= 0 ? Long.parseLong(args[slowInit + 1]) : 0;
         out = System.out;
         InputStream in = System.in;
         while (true) {
@@ -57,6 +59,9 @@ public class FakeLspServer {
                     JsonNode reply = read(in);
                     if (reply == null || !"srv-1".equals(reply.path("id").asText()) || !reply.has("result")) {
                         System.exit(3); // the client did not answer our request
+                    }
+                    if (initDelayMs > 0) {
+                        try { Thread.sleep(initDelayMs); } catch (InterruptedException e) { return; }
                     }
                     reply(msg, JSON.createObjectNode().set("capabilities", JSON.createObjectNode()));
                     if (garbage) {
