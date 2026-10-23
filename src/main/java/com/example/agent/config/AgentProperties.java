@@ -412,6 +412,8 @@ public class AgentProperties {
         private int diagnosticsWaitSeconds = 20;
         /** At most this many locations or symbols are returned. */
         private int maxResults = 50;
+        /** After write_file or edit_file on a served file, wait this long for its errors (0: off). */
+        private int afterEditWaitSeconds = 5;
 
         public boolean isEnabled() { return enabled; }
         public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -423,6 +425,8 @@ public class AgentProperties {
         public void setDiagnosticsWaitSeconds(int diagnosticsWaitSeconds) { this.diagnosticsWaitSeconds = diagnosticsWaitSeconds; }
         public int getMaxResults() { return maxResults; }
         public void setMaxResults(int maxResults) { this.maxResults = maxResults; }
+        public int getAfterEditWaitSeconds() { return afterEditWaitSeconds; }
+        public void setAfterEditWaitSeconds(int afterEditWaitSeconds) { this.afterEditWaitSeconds = afterEditWaitSeconds; }
 
         public static class Server {
             private List<String> command = List.of();

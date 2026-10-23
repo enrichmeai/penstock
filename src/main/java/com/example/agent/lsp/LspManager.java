@@ -28,6 +28,9 @@ public class LspManager {
     private final AgentProperties.Lsp props;
     private final Path workspace;
     private final Map<String, LspClient> clients = new ConcurrentHashMap<>();
+    /** When a server last failed to start: it is not started again for {@link #RETRY_AFTER}. */
+    private final Map<String, Long> failedAt = new ConcurrentHashMap<>();
+    private static final java.time.Duration RETRY_AFTER = java.time.Duration.ofMinutes(1);
 
     public LspManager(AgentProperties props, Path agentWorkspace) {
         this.props = props.getTools().getLsp();
@@ -76,8 +79,19 @@ public class LspManager {
         if (server == null || server.getCommand().isEmpty()) {
             throw new IOException("no language server is configured for " + language);
         }
+        Long failed = failedAt.get(language);
+        if (failed != null && System.nanoTime() - failed < RETRY_AFTER.toNanos()) {
+            throw new IOException("the " + language + " language server failed to start less than "
+                    + RETRY_AFTER.toMinutes() + " min ago; not retried yet");
+        }
         log.info("Starting the {} language server", language);
-        c = new LspClient(server.getCommand(), workspace, Duration.ofSeconds(props.getTimeoutSeconds()), server.getEnv());
+        try {
+            c = new LspClient(server.getCommand(), workspace, Duration.ofSeconds(props.getTimeoutSeconds()), server.getEnv());
+        } catch (IOException | RuntimeException e) {
+            failedAt.put(language, System.nanoTime());
+            throw e;
+        }
+        failedAt.remove(language);
         clients.put(language, c);
         return c;
     }

@@ -29,6 +29,7 @@ public class ToolRegistry {
     private final AgentProperties props;
     private AgentMetrics metrics;
     private AuditLogger auditLogger;
+    private List<AfterToolCall> afterCall = List.of();
 
     public ToolRegistry(List<Tool> discovered, AgentProperties props) {
         this.props = props;
@@ -62,6 +63,11 @@ public class ToolRegistry {
     @Autowired(required = false)
     public void setAuditLogger(AuditLogger auditLogger) {
         this.auditLogger = auditLogger;
+    }
+
+    @Autowired(required = false)
+    public void setAfterCall(List<AfterToolCall> afterCall) {
+        this.afterCall = afterCall == null ? List.of() : List.copyOf(afterCall);
     }
 
     public Collection<Tool> all() { return tools.values(); }
@@ -131,6 +137,21 @@ public class ToolRegistry {
             if (auditLogger != null) {
                 int contentBytes = r.content() == null ? 0 : r.content().getBytes(StandardCharsets.UTF_8).length;
                 auditLogger.toolCall(userId, sessionId, call.name(), call.arguments() == null ? Map.of() : call.arguments(), !r.isError(), contentBytes);
+            }
+
+            // Additions after a successful call (#190); never allowed to fail it
+            if (!r.isError()) {
+                for (AfterToolCall a : afterCall) {
+                    try {
+                        java.util.Optional<String> extra = a.after(call.name(),
+                                call.arguments() == null ? Map.of() : call.arguments(), r);
+                        if (extra.isPresent() && !extra.get().isBlank()) {
+                            r = ToolResult.ok(r.callId(), (r.content() == null ? "" : r.content()) + "\n\n" + extra.get());
+                        }
+                    } catch (RuntimeException e) {
+                        log.warn("After {}: {} failed: {}", call.name(), a.getClass().getSimpleName(), e.toString());
+                    }
+                }
             }
 
             // Check if output needs truncation
