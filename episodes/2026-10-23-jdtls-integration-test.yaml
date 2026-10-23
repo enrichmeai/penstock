@@ -15,11 +15,15 @@ built:
   - .github/workflows/build.yml
   - src/test/java/com/example/agent/lsp/JdtlsIT.java
 decided:
-- 'Pin a jdtls milestone (1.63.0) by sha256, not a snapshot: snapshots are pruned from download.eclipse.org.'
-- 'Run jdtls on Java 25 through the launcher''s --java-executable (JDTLS_JAVA) and keep Gradle on 21.'
-- 'Fail the CI step unless the report shows 3 run and 0 skipped, so a skipped test cannot read as a pass.'
+- what: pin jdtls milestone 1.63.0 by sha256, cached on that hash
+  why: snapshots are pruned from download.eclipse.org, and a pinned hash refuses a changed download
+- what: jdtls runs on Java 25 through the launcher's --java-executable (JDTLS_JAVA), Gradle stays on 21
+  why: jdtls 1.63 needs Java 25, the project builds on 21
+- what: the CI step fails unless the report shows 3 run and 0 skipped
+  why: a skipped test must never read as a pass
 refused:
-- 'Retrying the diagnostics call until an error shows: it would hide a real early answer; a warm-up definition call waits for the import instead.'
+- what: retrying the diagnostics call until an error shows
+  why: it would hide a real early answer; a warm-up definition call waits for the project import instead
 learned:
 - 'jdtls 1.63.0 and the 1.64.0 snapshot both need Java 25: 14 OSGi bundles require osgi.ee JavaSE 25, and on Java 21 the server exits before answering initialize.'
 - 'jdtls takes a loose file''s own folder as its source root, so a file under src/demo/ with package demo gets a package-mismatch error; test fixtures sit at the root in the default package.'
