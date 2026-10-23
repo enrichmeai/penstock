@@ -30,7 +30,11 @@ jobs:
         uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: ${{ matrix.java }}
+          # 25 for jdtls only (its 1.63 bundles require Java 25); the last listed is the default,
+          # so Gradle and the tests run on ${{ matrix.java }} and jdtls finds 25 at JAVA_HOME_25_X64.
+          java-version: |
+            25
+            ${{ matrix.java }}
 
       - name: Cache Gradle
         uses: actions/cache@v6
@@ -125,6 +129,44 @@ jobs:
             !build/libs/*-plain.jar
           # 90 days on main: products' release workflow takes the jar from the commit it releases (#150).
           retention-days: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 90 || 7 }}
+
+      - name: Cache the pinned jdtls
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/jdtls
+          key: jdtls-b1f2abe0b3cccb462cf64fb4a5587c7d09df60cf8be7748b152cbd89d018bdc4
+
+      - name: The LSP tools against a real jdtls (JdtlsIT)
+        # #190: overloads, references and a type error, answered by Eclipse jdtls rather than the
+        # scripted server. A pinned milestone, refused unless its sha256 matches. --rerun because the
+        # environment is not a Gradle input, and the result must show 3 run, 0 skipped: a skip here
+        # would read as a pass. After the uploads above: a filtered run replaces build/test-results/test.
+        timeout-minutes: 8
+        env:
+          JDTLS_VERSION: 1.63.0
+          JDTLS_FILE: jdt-language-server-1.63.0-202610191322.tar.gz
+          JDTLS_SHA256: b1f2abe0b3cccb462cf64fb4a5587c7d09df60cf8be7748b152cbd89d018bdc4
+        run: |
+          mkdir -p ~/.cache/jdtls "$RUNNER_TEMP/jdtls"
+          TARBALL=~/.cache/jdtls/$JDTLS_FILE
+          [ -f "$TARBALL" ] || curl -fsSL --retry 3 -o "$TARBALL" \
+            "https://download.eclipse.org/jdtls/milestones/$JDTLS_VERSION/$JDTLS_FILE"
+          echo "$JDTLS_SHA256  $TARBALL" | sha256sum -c -
+          tar -xzf "$TARBALL" -C "$RUNNER_TEMP/jdtls"
+          JDTLS_HOME="$RUNNER_TEMP/jdtls" JDTLS_JAVA="$JAVA_HOME_25_X64/bin/java" \
+            ./gradlew --no-daemon test --tests 'com.example.agent.lsp.JdtlsIT' --rerun
+          grep -q 'tests="3" skipped="0" failures="0" errors="0"' \
+            build/test-results/test/TEST-com.example.agent.lsp.JdtlsIT.xml \
+            || { echo "::error::JdtlsIT did not run all 3 tests"; exit 1; }
+
+      - name: Upload the JdtlsIT report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jdtls-report-jdk${{ matrix.java }}
+          path: build/test-results/test/TEST-com.example.agent.lsp.JdtlsIT.xml
+          if-no-files-found: ignore
+          retention-days: 7
 
   # #150: on every merge to main, publish the image this commit builds, tagged by commit, so
   # enrichmeai/products can test it with Cistern and release it later by retagging the same digest
