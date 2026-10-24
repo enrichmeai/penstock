@@ -347,6 +347,7 @@ agent:
       - list_dir
       - glob
       - grep
+      - test_results  # the build's JUnit XML reports, summarised; read-only (#200)
       - write_file
       - edit_file
       - shell
