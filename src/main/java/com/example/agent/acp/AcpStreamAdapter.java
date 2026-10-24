@@ -133,7 +133,7 @@ final class AcpStreamAdapter {
      */
     static AcpSchema.ToolKind kindOf(String toolName, java.util.Map<String, Object> arguments) {
         return switch (toolName) {
-            case "read_file", "list_dir" -> AcpSchema.ToolKind.READ;
+            case "read_file", "list_dir", "test_results" -> AcpSchema.ToolKind.READ;
             case "glob", "grep" -> AcpSchema.ToolKind.SEARCH;
             case "write_file", "edit_file" -> AcpSchema.ToolKind.EDIT;
             case "shell", "git" -> AcpSchema.ToolKind.EXECUTE;

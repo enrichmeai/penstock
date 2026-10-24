@@ -104,7 +104,7 @@ out of the Air entry above; Air only takes `command`/`args`/`env`.
 
 ## What the permission prompt means
 
-Reading tools (`read_file`, `list_dir`, `glob`, `grep`, and the `pod` tool's
+Reading tools (`read_file`, `list_dir`, `glob`, `grep`, `test_results`, and the `pod` tool's
 read/list/receipts operations) run without asking. Everything that changes
 something — `write_file`, `edit_file`, `shell`, `git`, and the `pod` tool's
 `write` operation — goes through ACP's `session/request_permission` first:
