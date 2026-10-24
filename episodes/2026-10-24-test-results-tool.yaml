@@ -1,0 +1,42 @@
+# Drafted by scripts/write-episode.sh from the task's own evidence; edit before committing.
+# Empty lists and <fill in> placeholders are yours to complete; a learned line is a fact by
+# reference (an account, a secret's *name*, an id), never a value.
+id: 2026-10-24-test-results-tool
+format: 1
+visibility: public
+date: 2026-10-24
+project: penstock
+asked: 'test_results: the agent reads JUnit XML reports (failures, messages, stack tops) instead of the
+  console log'
+issue: enrichmeai/penstock#200
+built:
+- pr: enrichmeai/penstock#206
+  files:
+  - README.md
+  - docs/ide-agents.md
+  - src/main/java/com/example/agent/acp/AcpStreamAdapter.java
+  - src/main/java/com/example/agent/tools/TestResultsTool.java
+  - src/main/resources/application.yml
+  - src/test/java/com/example/agent/acp/AcpStreamAdapterTest.java
+  - src/test/java/com/example/agent/tools/TestResultsToolTest.java
+  - src/test/resources/test-results/TEST-demo.DTest.xml
+decided:
+- what: count every test case, and list a failure followed by a passing entry with the same name, with a note
+  why: a report cannot tell a retry from two tests sharing a name (a parameterised case, a DisplayName); hiding the failure reads a red build as green
+- what: frames outside the JDK and the test libraries, with loader and module prefixes stripped
+  why: real Gradle frames read app//org.junit... and java.base@21/..., so prefix matching on the raw text showed JUnit's frames and dropped the test's line
+- what: the fixture is a real Gradle report, not a hand-written one
+  why: the hand-written fixture had no app// prefixes and used error, which Gradle never writes, so it could not catch either defect
+refused:
+- what: deduplicating reruns by class and name, last result wins
+  why: it turned real failures into passes; Gradle's mergeReruns and Maven's flakyFailure already merge real retries
+learned:
+- Gradle writes every exception as a failure, never an error; only Maven's surefire reports separate errors
+- Gradle's XML frames carry the class loader and module (app//, java.base@21.0.10/) because traces cross the test worker by serialisation
+- a pairwise scan for a later passing entry is quadratic; 30,000 failures took 30 s, a map of last passes made 50,000 take 0.47 s
+open:
+- feeding this summary to verify when the configured check fails (#189, not built)
+- the real path is checked just before a report is opened, not atomically with the open
+patterns: []
+commits:
+- 'ebf3626 feat: test_results reads the build''s JUnit XML reports instead of the console log (#200)'
