@@ -46,6 +46,7 @@ class AcpStreamAdapterTest {
     void toolKindMapping() {
         assertEquals(AcpSchema.ToolKind.READ, AcpStreamAdapter.kindOf("read_file", Map.of()));
         assertEquals(AcpSchema.ToolKind.READ, AcpStreamAdapter.kindOf("list_dir", Map.of()));
+        assertEquals(AcpSchema.ToolKind.READ, AcpStreamAdapter.kindOf("test_results", Map.of()));
         assertEquals(AcpSchema.ToolKind.SEARCH, AcpStreamAdapter.kindOf("glob", Map.of()));
         assertEquals(AcpSchema.ToolKind.SEARCH, AcpStreamAdapter.kindOf("grep", Map.of()));
         assertEquals(AcpSchema.ToolKind.EDIT, AcpStreamAdapter.kindOf("write_file", Map.of()));
