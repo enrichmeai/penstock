@@ -41,8 +41,8 @@ here and in `enrichmeai/cistern` (each shaped to its own build), and is carried 
    Copilot/Ollama APIs, the Cistern pod, GitHub Actions, …) is checked against the official docs
    with WebFetch **before** the code is written, at the version `build.gradle` resolves. Never
    guess a signature, field or version. Start from § "Pinned docs".
-2. **Done means green.** The fast gates below locally, the full `./gradlew build` in CI `build`
-   (cite the run and the real test totals). A gate that could not run is reported as not run,
+2. **Done means green.** The fast gates below and the full local gate (§ "CI only when needed")
+   locally, with the real test totals cited. A gate that could not run is reported as not run,
    never as passing. A green test proves nothing until you have checked it was not bent to fit
    (§ Gotchas: the agent will make a failing test green by editing production code).
 3. **Three attempts, then stop.** After 3 failed fix attempts at the same gate or reviewer finding,
@@ -57,7 +57,7 @@ here and in `enrichmeai/cistern` (each shaped to its own build), and is carried 
 | a Flyway migration | a sibling with the same version in both `db/migration/sqlite/` and `db/migration/postgres/` (the Stop hook checks it) |
 | threading, config or startup | an IT across the real boundary (`IdentityPropagationIT`, `MemoryModeStartupIT`), not a stub-injected unit test |
 | `.claude/hooks/**`, `.claude/settings.json` | `.claude/hooks/test-hooks.sh` (add a case for every new guard, and prove it RED first) |
-| full build | CI `build` on the PR (`./gradlew --no-daemon build` on Java 21) |
+| full build | the local gate in § "CI only when needed"; CI `build` runs once, on the release PR |
 
 **Hooks (`.claude/settings.json`, scripts in `.claude/hooks/`):**
 - **Before a Read or a bare `cat`:** `read-gate.sh` refuses a whole read of a text file over 350 lines
@@ -181,6 +181,23 @@ Tools receive the same identity as an explicit `ToolContext(userId, sessionId, r
 - `JpaSessionStoreTest` — JPA slice against H2 (SQLite schema is validated via Flyway in prod only; H2 is used in tests).
 - `SecurityConfigTest` — nested Spring Boot tests for auth on/off.
 - `RateLimitFilterTest`, `RequestIdFilterTest`, `ErrorAdviceTest`, `LlmProviderHealthIndicatorTest`, `AgentMetricsTest`, `AuditLoggerTest` — cross-cutting concerns.
+
+## CI only when needed (owner, 2026-10-25)
+
+Actions minutes cost money in the org's private repos (about $250 in October 2026), so CI runs only
+when it is needed: **once per release, never on every branch or PR push.** Testing happens locally.
+- **Feature PRs target `release/next`**, not `main`. `build.yml` runs only on PRs and pushes to `main`,
+  so nothing runs for them. The owner says "merge N", and it is squash-merged into `release/next`.
+- **The local gate**, before each merge:
+  - `./gradlew build` (cite the totals);
+  - `JdtlsIT` with `JDTLS_HOME`/`JDTLS_JAVA` set, as in `build.yml`;
+  - every `scripts/*.sh` step `build.yml` runs.
+
+  A gate that could not run is reported as not run.
+- **A release** is one PR from `release/next` to `main`: CI `build` runs once, and the push to `main`
+  builds the `sha-<commit>` image and the jar that `enrichmeai/products` releases from.
+- **Pushing to `main` without CI** happens only when the owner asks. `[skip ci]` goes in the newest
+  commit's message, and that commit then has no image or jar until the next CI run on `main`.
 
 ## Releasing
 
