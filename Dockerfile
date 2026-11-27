@@ -19,7 +19,7 @@
 # the fixes the v0.5.0 scan listed for 8.14.5's distribution (#120). The image carries this
 # distribution twice, as /opt/gradle and as the wrapper's in the seed, so the tag and
 # gradle-wrapper.properties move together.
-FROM --platform=$BUILDPLATFORM gradle:8.14.6-jdk21 AS build
+FROM --platform=$BUILDPLATFORM gradle:8.14.7-jdk21 AS build
 WORKDIR /workspace
 
 # Populate a Gradle home we can ship: the wrapper distribution plus every
